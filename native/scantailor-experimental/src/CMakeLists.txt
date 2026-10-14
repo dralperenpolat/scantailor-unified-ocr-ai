@@ -221,7 +221,7 @@ TARGET_LINK_LIBRARIES(
     dewarping zones interaction imageproc math foundation
     ${EXTRA_LIBS}
 )
-SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.4.4" CACHE STRING "GUI executable name")
+SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.4.5" CACHE STRING "GUI executable name")
 SET_TARGET_PROPERTIES(
     scantailor-experimental PROPERTIES
     OUTPUT_NAME "${STOU_GUI_OUTPUT_NAME}"

@@ -14,6 +14,10 @@ import re
 import uuid
 
 import fitz
+from PIL import Image
+
+IMPORT_PIPELINE = 'native-scan-v2'
+MAX_PIXELS = 40_000_000
 
 
 def digest(path):
@@ -30,19 +34,100 @@ def save_json(path, value):
     temp.replace(path)
 
 
-def import_pdf(source, destination, dpi=300, notify=lambda value: None):
+def native_scan(page):
+    """Return one verified scan at its native pixel scale, or use page rendering.
+
+    Resource lists alone also contain unused images. Require one actual image,
+    no visible text / drawing overlays, and a simple upright placement. Compare
+    every pixel with a full page render at the native scale before accepting it:
+    clipping, transparency, colour transforms and page rotation must all agree.
+    White PDF margins are retained without resampling the embedded scan.
+    """
+    info = page.get_image_info()
+    if len(info) != 1:
+        return None
+    item = info[0]
+    if item['width'] * item['height'] > MAX_PIXELS:
+        return None
+    resources = page.get_images(full=True)
+    if len(resources) != 1 or resources[0][1]:
+        return None  # masks and composite pages need the complete page renderer
+    if page.first_annot is not None or page.first_widget is not None:
+        return None
+    if any(entry[0] not in ('fill-image', 'ignore-text') for entry in page.get_bboxlog()):
+        return None
+    a, b, c, d, _, _ = item['transform']
+    if a <= 0 or d <= 0 or abs(b) > .001 or abs(c) > .001:
+        return None
+    bounds = page.rect * page.derotation_matrix
+    box = fitz.Rect(item['bbox'])
+    if box.is_empty or not (bounds + (-.01, -.01, .01, .01)).contains(box):
+        return None
+    scale = item['width'] / box.width
+    if abs(item['height'] / box.height / scale - 1) > .001:
+        return None
+    width, height = math.ceil(bounds.width * scale), math.ceil(bounds.height * scale)
+    if width * height > MAX_PIXELS or min(width, height) < 1:
+        return None
+    pix = fitz.Pixmap(page.parent, resources[0][0])
+    if pix.alpha or pix.colorspace is None or pix.n not in (1, 3):
+        return None
+    if (pix.width, pix.height) != (item['width'], item['height']):
+        return None
+    mode = 'L' if pix.n == 1 else 'RGB'
+    scan = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
+    canvas = Image.new(mode, (width, height), 255 if mode == 'L' else (255, 255, 255))
+    x, y = round((box.x0 - bounds.x0) * scale), round((box.y0 - bounds.y0) * scale)
+    if x < 0 or y < 0 or x + scan.width > width or y + scan.height > height:
+        return None
+    canvas.paste(scan, (x, y))
+    if page.rotation:
+        canvas = canvas.transpose({90: Image.Transpose.ROTATE_270,
+                                   180: Image.Transpose.ROTATE_180,
+                                   270: Image.Transpose.ROTATE_90}[page.rotation])
+    # No approximate visual match: extraction is used only if native pixels
+    # and the PDF's actual visible page agree exactly.
+    rendered = page.get_pixmap(matrix=fitz.Matrix(scale, scale),
+                               colorspace=fitz.csGRAY if mode == 'L' else fitz.csRGB,
+                               alpha=False)
+    if canvas.size != (rendered.width, rendered.height) or canvas.tobytes() != rendered.samples:
+        return None
+    return canvas, {'method': 'extracted', 'effective_dpi': scale * 72,
+                    'pixels': list(canvas.size), 'image_xref': resources[0][0],
+                    'native_pixels_verified': True}
+
+
+def render_page(page, dpi, number):
+    area = page.rect.width * page.rect.height
+    if not math.isfinite(area) or area <= 0:
+        raise ValueError(f'Geçersiz sayfa boyutu: {number}')
+    if area * .25 > MAX_PIXELS:
+        raise ValueError(f'Sayfa güvenli işleme sınırını aşıyor: {number}')
+    effective = min(float(dpi), math.sqrt(MAX_PIXELS / area) * 72.)
+    pix = page.get_pixmap(dpi=max(36, int(effective)), colorspace=fitz.csRGB, alpha=False)
+    if pix.width * pix.height > 42_000_000:
+        raise ValueError(f'Sayfa çok büyük: {number}')
+    return pix, {'method': 'rendered', 'effective_dpi': int(effective),
+                 'pixels': [pix.width, pix.height], 'native_pixels_verified': False}
+
+
+def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strategy='auto'):
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if dpi not in (150, 200, 300, 400, 600): raise ValueError('Geçersiz PDF çözünürlüğü.')
+    if strategy not in ('auto', 'render'): raise ValueError('Geçersiz PDF içe aktarma yöntemi.')
     stamp = digest(source)
     name = re.sub(r'[^\w .-]', '_', source.stem)[:70].strip(' .') or 'PDF'
-    folder = destination / f'{name}_{stamp[:12]}_{dpi}dpi'
+    folder = destination / f'{name}_{stamp[:12]}_{strategy}_{dpi}dpi_v2'
     images = folder/'sayfalar'
-    images.mkdir(parents=True, exist_ok=True)
     with fitz.open(source) as doc:
+        if not doc.is_pdf: raise ValueError('Kaynak dosya PDF değil.')
         if doc.needs_pass: raise ValueError('PDF şifreli. Önce erişilebilir bir kopyasını açın.')
         if not len(doc): raise ValueError('PDF boş.')
-        manifest = {'schema': 1, 'source': str(source), 'source_sha256': stamp,
+        images.mkdir(parents=True, exist_ok=True)
+        manifest = {'schema': 2, 'pipeline': IMPORT_PIPELINE, 'strategy': strategy,
+                    'source': str(source), 'source_sha256': stamp,
                     'dpi': dpi, 'pages': len(doc), 'completed': 0, 'images': str(images),
+                    'extracted': 0, 'rendered': 0, 'complete': False,
                     'text_policy': 'source text retained separately; corrected geometry receives fresh OCR'}
         save_json(folder/'import.json', manifest)
         for number, page in enumerate(doc, 1):
@@ -54,28 +139,44 @@ def import_pdf(source, destination, dpi=300, notify=lambda value: None):
             reuse = False
             try:
                 receipt = json.loads(receipt_path.read_text('utf8'))
-                reuse = receipt['source'] == stamp and receipt['dpi'] == dpi and receipt['image'] == digest(image_path) and receipt['text'] == digest(text_path)
+                reuse = (receipt['source'] == stamp and receipt['dpi'] == dpi
+                         and receipt['pipeline'] == IMPORT_PIPELINE and receipt['strategy'] == strategy
+                         and receipt['method'] in ('extracted', 'rendered')
+                         and receipt['image'] == digest(image_path) and receipt['text'] == digest(text_path))
             except (OSError, KeyError, ValueError): pass
             if not reuse:
-                area = page.rect.width*page.rect.height
-                if not math.isfinite(area) or area <= 0: raise ValueError(f'Geçersiz sayfa boyutu: {number}')
-                if area*.25 > 40_000_000: raise ValueError(f'Sayfa güvenli işleme sınırını aşıyor: {number}')
-                effective = min(float(dpi), math.sqrt(40_000_000/area)*72.)
-                pix = page.get_pixmap(dpi=max(36, int(effective)), colorspace=fitz.csRGB, alpha=False)
-                if pix.width*pix.height > 42_000_000: raise ValueError(f'Sayfa çok büyük: {number}')
+                native = native_scan(page) if strategy == 'auto' else None
+                pix, metadata = native if native is not None else render_page(page, dpi, number)
                 temporary = images/f'.{number}-{uuid.uuid4().hex}.png'
-                pix.save(temporary)
-                temporary.replace(image_path)
+                try:
+                    if isinstance(pix, Image.Image):
+                        pix.save(temporary, dpi=(metadata['effective_dpi'], metadata['effective_dpi']))
+                    else:
+                        pix.save(temporary)
+                    temporary.replace(image_path)
+                finally:
+                    temporary.unlink(missing_ok=True)
                 words = page.get_text('words')
                 save_json(text_path, {'page': number, 'rect': list(page.rect), 'rotation': page.rotation,
-                                     'effective_dpi': int(effective), 'pixels': [pix.width, pix.height],
+                                     **metadata,
                                      'text': page.get_text(), 'words': words})
-                save_json(receipt_path, {'source': stamp, 'dpi': dpi, 'image': digest(image_path), 'text': digest(text_path)})
+                receipt = {'source': stamp, 'dpi': dpi, 'pipeline': IMPORT_PIPELINE,
+                           'strategy': strategy, 'method': metadata['method'],
+                           'image': digest(image_path), 'text': digest(text_path)}
+                save_json(receipt_path, receipt)
             manifest['completed'] = number
+            manifest[receipt['method']] += 1
             save_json(folder/'import.json', manifest)
-            notify({'stage': 'PDF sayfaları hazırlanıyor', 'page': number, 'total': len(doc), 'cached': reuse})
+            notify({'stage': 'Tarama resmi çıkarılıyor' if receipt['method'] == 'extracted' else 'PDF sayfası görüntüye çevriliyor',
+                    'page': number, 'total': len(doc), 'cached': reuse, 'method': receipt['method']})
             fitz.TOOLS.store_shrink(100)
-    return {'ok': True, 'mode': 'import', 'source': str(source), 'folder': str(images), 'pages': manifest['pages'], 'text_folder': str(folder)}
+    if digest(source) != stamp:
+        raise ValueError('İçe aktarma sırasında kaynak PDF değişti; yeniden başlatın.')
+    manifest['complete'] = True
+    save_json(folder/'import.json', manifest)
+    return {'ok': True, 'mode': 'import', 'source': str(source), 'source_sha256': stamp,
+            'folder': str(images), 'pages': manifest['pages'], 'text_folder': str(folder),
+            'strategy': strategy, 'extracted': manifest['extracted'], 'rendered': manifest['rendered']}
 
 
 def compact_pdf(source, destination, notify=lambda value: None):
@@ -120,10 +221,11 @@ def main():
     parser.add_argument('source', type=Path)
     parser.add_argument('destination', type=Path)
     parser.add_argument('--dpi', type=int, default=300)
+    parser.add_argument('--strategy', choices=['auto', 'render'], default='auto')
     args = parser.parse_args()
     def emit(value): print('STOUPDF '+json.dumps(value, ensure_ascii=False), flush=True)
     try:
-        result = (import_pdf(args.source, args.destination, args.dpi, emit) if args.mode == 'import'
+        result = (import_pdf(args.source, args.destination, args.dpi, emit, strategy=args.strategy) if args.mode == 'import'
                   else compact_pdf(args.source, args.destination, emit))
         emit(result)
     except Exception as error:

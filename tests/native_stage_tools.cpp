@@ -51,7 +51,7 @@ int main(int argc,char** argv)
         panel.setAppearance("soft_local");panel.setCleanupEnabled(false);
         bindUnifiedOutputTools(&panel,options);
         auto timing=child<QComboBox>(options,"stageOcrTiming");timing->setCurrentIndex(timing->findData("after"));check(panel.ocrTiming()=="after","Output OCR timing updates worker setting");panel.setOcrTiming("none");check(timing->currentData()=="none","OCR timing synchronized both ways");panel.setOcrTiming("during");
-        child<QPushButton>(options,"stagePdfCompact")->click();auto tools=child<QDialog>(&panel,"unifiedPdfTools");check(child<QComboBox>(tools,"pdfToolsMode")->currentData()=="compact","Output opens lossless compression directly");tools->close();
+        child<QPushButton>(options,"stagePdfCompact")->click();auto tools=child<QWidget>(&panel,"unifiedPdfTools");check(child<QComboBox>(tools,"pdfToolsMode")->currentData()=="compact","Output opens lossless compression directly");panel.showToolsTab(0);
         auto profile=child<QComboBox>(options,"stagePdfAppearance");
         auto cleanup=child<QCheckBox>(options,"stagePdfCleanup");
         auto preview=child<QPushButton>(options,"stagePdfPreview");

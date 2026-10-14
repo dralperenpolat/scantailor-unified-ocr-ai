@@ -57,7 +57,7 @@ def main():
     # CCITT (binary) and Flate (gray/color) are lossless and require no optional
     # external JBIG2 encoder. Native experimental binarizers remain available.
     (dest/'local-tools.json').write_text(json.dumps({'tessdata':'resources/tessdata_best','jbig2':None,'uvdoc':'resources/UVDoc'}),'utf8')
-    (dest/'release.json').write_text(json.dumps({'version':'0.4.4','platform':'windows-x64','cpu_bundled':True,'python':'3.12.15','native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli.exe').read_bytes()).hexdigest()},indent=2),'utf8')
+    (dest/'release.json').write_text(json.dumps({'version':'0.4.5','platform':'windows-x64','cpu_bundled':True,'python':'3.12.15','native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli.exe').read_bytes()).hexdigest()},indent=2),'utf8')
     (dest/'resources/paddle-cpu-ready.json').write_text(json.dumps({'ok':True,'device':'cpu','paddle':'3.3.0','paddleocr':'3.7.0','bundled':True}),'utf8')
     copy(ROOT/'LICENSE',dest/'LICENSE')
     copy(ROOT/'native/scantailor-experimental/LICENSE',dest/'licenses/ScanTailor-GPL-3.0.txt')

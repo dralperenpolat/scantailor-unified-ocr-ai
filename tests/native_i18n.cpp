@@ -6,17 +6,22 @@
 #include "UnifiedStageReviewBar.h"
 #include "UnifiedOcrOptions.h"
 #include "UnifiedPanel.h"
+#include "UnifiedPdfToolsDialog.h"
 #include <QAction>
 #include <QTemporaryDir>
 #include <QJsonArray>
 #include <QFontDatabase>
+#include <QTabWidget>
+#include <QScrollArea>
+#include <QElapsedTimer>
+#include <QThread>
 #include <iostream>
 
 static void check(bool ok,char const* why){if(!ok)throw std::runtime_error(why);}
 int main(int argc,char** argv){
     Application app(argc,argv);app.setOrganizationName("Scan Tailor Tests");app.setApplicationName("Language test");
     QTemporaryDir temp;QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());
-    qputenv("STOU_ROOT",temp.path().toUtf8());qputenv("STOU_DATA",temp.path().toUtf8());qputenv("STOU_QUEUE_PATH",(temp.path()+"/queue.json").toUtf8());qunsetenv("STOU_MONITOR_REQUEST");qunsetenv("STOU_UI_LANGUAGE");
+    qputenv("STOU_ROOT",argc>2?QByteArray(argv[2]):temp.path().toUtf8());qputenv("STOU_DATA",temp.path().toUtf8());qputenv("STOU_QUEUE_PATH",(temp.path()+"/queue.json").toUtf8());qunsetenv("STOU_MONITOR_REQUEST");qunsetenv("STOU_UI_LANGUAGE");
     CommandLine::set(CommandLine(QStringList{},true));
     if(argc>1)QDir().mkpath(QString::fromLocal8Bit(argv[1]));
     try {
@@ -48,7 +53,8 @@ int main(int argc,char** argv){
         if(argc>1)check(bar.grab().save(QString::fromLocal8Bit(argv[1])+"/language-en-stage.png"),"English stage screenshot");
         UnifiedOcrOptions ocr(temp.path());auto opts=ocr.options();check(opts.value("language")=="deu+eng"&&opts.value("paddle_language")=="de","interface language preserves OCR language codes");
         const QJsonObject queuedJob{{"id","language-test"},{"title",QString::fromUtf8("Türkçe %2 Kitap")},{"status",QString::fromUtf8("Sayfa hazır")},{"detail",QString::fromUtf8("12/50 · 1450 OCR karakteri · kontrol edin")}};
-        const auto queueBytes=QJsonDocument(QJsonObject{{"schema",1},{"jobs",QJsonArray{queuedJob}}}).toJson();
+        const QString outputRoot=temp.path()+"/selected-output-drive";
+        const auto queueBytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",outputRoot},{"jobs",QJsonArray{queuedJob}}}).toJson();
         QFile queue(temp.path()+"/queue.json");check(queue.open(QIODevice::WriteOnly),"write synthetic queue");queue.write(queueBytes);queue.close();
         MainWindow window;window.resize(1280,900);window.show();
         auto languageEn=window.findChild<QAction*>("unifiedLanguage_en"),languageTr=window.findChild<QAction*>("unifiedLanguage_tr");
@@ -67,8 +73,61 @@ int main(int argc,char** argv){
         check(row->text(1)=="Page ready"&&row->text(2)=="12/50 · 1450 OCR characters · review required","queue messages translated at display boundary");
         check(queue.open(QIODevice::ReadOnly)&&queue.readAll()==queueBytes,"language selection leaves queue bytes unchanged");queue.close();
         if(argc>1)check(window.grab().save(QString::fromLocal8Bit(argv[1])+"/language-en-window.png"),"English window screenshot");
+        panel->openPdfTools();QApplication::processEvents();
+        auto tabs=panel->findChild<QTabWidget*>("unifiedToolTabs");
+        check(tabs->tabText(tabs->currentIndex())=="Import PDF","dedicated English PDF import tab");
+        auto pdf=static_cast<UnifiedPdfToolsDialog*>(panel->findChild<QWidget*>("unifiedPdfTools"));check(pdf,"embedded PDF tools exist");
+        check(!pdf->isWindow(),"PDF tools stay in the main window");
+        check(pdf->findChild<QLineEdit*>("pdfToolsDestination")->text()==outputRoot+"/PDFImports","PDF preparation follows the selected output drive");
+        check(pdf->findChild<QComboBox*>("pdfImportStrategy")->currentData()=="auto","native image extraction is the default");
+        check(pdf->findChild<QComboBox*>("pdfImportSplit")->currentData()=="1","imported PDF pages are not split twice by default");
+        check(window.findChild<QAction*>("unifiedImportPdfAction"),"PDF entry in menu");
+        panel->setPanelHeight(650);QApplication::processEvents();
+        if(argc>1)check(window.grab().save(QString::fromLocal8Bit(argv[1])+"/pdf-import-en.png"),"English PDF tab screenshot");
+        if(argc>3){
+            const QString source=QString::fromLocal8Bit(argv[3]);
+            CommandLine cli(QStringList{"test",source},true);check(cli.projectFile()==source,"PDF command line routes to importer");
+            const auto title=window.windowTitle();
+            window.openProject(source); // same entry used by File/Open and startup
+            auto start=pdf->findChild<QPushButton*>("pdfToolsStart");
+            check(pdf->running()&&!start->isEnabled(),"opening PDF automatically prepares its images");
+            check(!pdf->selectSource(source),"second import cannot overwrite active import state");
+            check(!pdf->findChild<QLineEdit*>("pdfToolsSource")->isEnabled(),"active source cannot change");
+            QElapsedTimer elapsed;elapsed.start();
+            while(!start->isEnabled()&&elapsed.elapsed()<60000){app.processEvents();QThread::msleep(20);}
+            check(start->isEnabled(),"PDF process finished");
+            check(books->topLevelItemCount()==2,"prepared PDF added as one book");
+            check(window.windowTitle()==title,"PDF import preserves editor project");
+            check(queue.open(QIODevice::ReadOnly),"read imported queue");auto imported=QJsonDocument::fromJson(queue.readAll()).object().value("jobs").toArray();queue.close();
+            check(imported.at(0).toObject()==queuedJob,"existing queue job preserved");
+            const auto job=imported.at(1).toObject();
+            check(job.value("split")=="1"&&QFileInfo(job.value("source_pdf").toString()).canonicalFilePath()==QFileInfo(source).canonicalFilePath(),"source PDF and layout retained");
+            check(job.value("pdf_import").toObject().value("pages").toInt()==2,"two PDF pages imported in order");
+            check(QFileInfo::exists(job.value("folder").toString()+"/page-00002.png"),"last imported page exists");
+            if(argc>1)check(window.grab().save(QString::fromLocal8Bit(argv[1])+"/pdf-import-complete-en.png"),"completed PDF tab screenshot");
+            // Retrying an existing import must preserve its prior layout choice.
+            pdf->findChild<QComboBox*>("pdfImportSplit")->setCurrentIndex(1);window.openProject(source);
+            elapsed.restart();while(!start->isEnabled()&&elapsed.elapsed()<60000){app.processEvents();QThread::msleep(20);}
+            check(queue.open(QIODevice::ReadOnly),"read repeated import");imported=QJsonDocument::fromJson(queue.readAll()).object().value("jobs").toArray();queue.close();
+            check(imported.size()==2&&imported.at(1).toObject()==job,"duplicate import leaves edited job untouched");
+            // A busy queue can reject insertion without losing prepared images.
+            bool accept=false,added=false;UnifiedPdfToolsDialog deferred(QString::fromLocal8Bit(argv[2]),nullptr);
+            deferred.importReady=[&](QJsonObject const& r){added=accept&&r.value("split")=="2";return added;};
+            deferred.findChild<QComboBox*>("pdfImportSplit")->setCurrentIndex(1);
+            deferred.selectSource(source);elapsed.restart();
+            while(deferred.running()&&elapsed.elapsed()<60000){app.processEvents();QThread::msleep(20);}
+            app.processEvents();auto add=deferred.findChild<QPushButton*>("pdfImportAddReady");
+            check(!added&&!add->isHidden(),"prepared import retained when queue is busy");accept=true;add->click();
+            check(added&&add->isHidden(),"retry queues prepared pages with selected two-page layout");
+        }
         window.close();app.removeTranslator(&english);
         check(unified_i18n::text("▶ Hazırla")==QString::fromUtf8("▶ Hazırla"),"Turkish text restored without translator");
+        {
+            UnifiedPanel turkish;turkish.resize(1100,650);turkish.show();turkish.openPdfTools();app.processEvents();
+            auto trTabs=turkish.findChild<QTabWidget*>("unifiedToolTabs");
+            check(trTabs->tabText(trTabs->currentIndex())==QString::fromUtf8("PDF’den içe aktar"),"Turkish PDF tab");
+            if(argc>1)check(turkish.grab().save(QString::fromLocal8Bit(argv[1])+"/pdf-import-tr.png"),"Turkish PDF tab screenshot");
+        }
         std::cout<<"PASS English/Turkish selection, persistence, separate play buttons, placeholders, filenames, OCR codes and queue controls\n";
         return 0;
     }catch(std::exception const& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}

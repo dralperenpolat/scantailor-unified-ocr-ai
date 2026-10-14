@@ -1,3 +1,0 @@
-[console_scripts]
-scantailor-ocr-unified = scantailor_ocr_unified.cli:main
-scantailor-ocr-unified-gui = scantailor_ocr_unified.gui:main

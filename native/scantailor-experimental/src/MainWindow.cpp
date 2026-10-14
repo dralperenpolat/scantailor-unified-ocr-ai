@@ -18,6 +18,9 @@
 
 #include "UnifiedI18n.h"
 #include <QActionGroup>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include "UnifiedRuntime.h"
 #include "MainWindow.h"
 #include "UnifiedPanel.h"
@@ -226,6 +229,14 @@ MainWindow::MainWindow()
         });
     }
     auto unifiedMenu = menuBar()->addMenu(unified_i18n::text("OCR / Kitaplar"));
+    setAcceptDrops(true);
+    auto importPdfAction=unifiedMenu->addAction(unified_i18n::text("PDF’den kitap ekle…"));
+    importPdfAction->setObjectName("unifiedImportPdfAction");menuFile->addAction(importPdfAction);
+    connect(importPdfAction,&QAction::triggered,this,[this]{
+        const auto path=QFileDialog::getOpenFileName(this,unified_i18n::text("İşlenecek PDF"),{},"PDF (*.pdf *.PDF)");
+        if(!path.isEmpty())m_unified->importPdf(path);
+    });
+    connect(m_unified,&UnifiedPanel::toolsRequested,this,[this]{m_unifiedDock->show();m_unifiedDock->raise();});
     unifiedMenu->addAction(unified_i18n::text("Kitap düzenine göre içerik denetimi…"),this,&MainWindow::reviewBookContent);
     auto aiAction=unifiedMenu->addAction(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni…"),this,&MainWindow::reviewAiContent);
     auto geometryAction=unifiedMenu->addAction(unified_i18n::text("Eğriliği karşılaştır · AI dahil…"),this,&MainWindow::reviewGeometry);geometryAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
@@ -242,6 +253,9 @@ MainWindow::MainWindow()
     connect(viewMenu->addAction(unified_i18n::text("Açık proje görüntüsüne dön")),&QAction::triggered,this,&MainWindow::returnToProjectView);
     unifiedMenu->addAction(m_unifiedDock->toggleViewAction());
     for(int tab:{0,1}){auto b=new QPushButton(unified_i18n::text(tab==0?"Kitaplar ▴":"PDF / OCR ▴"));b->setToolTip(unified_i18n::text("Alt paneli bu bölümde aç. Aynı düğmeye tekrar basınca gizle."));QMainWindow::statusBar()->addPermanentWidget(b);connect(b,&QPushButton::clicked,[this,tab]{auto tabs=m_unified->findChild<QTabWidget*>("unifiedToolTabs");if(m_unifiedDock->isVisible()&&tabs&&tabs->currentIndex()==tab)m_unifiedDock->hide();else{m_unified->showToolsTab(tab);m_unifiedDock->show();m_unifiedDock->raise();}});}
+    auto pdfImportButton=new QPushButton(unified_i18n::text("PDF içe aktar ▴"));pdfImportButton->setObjectName("unifiedPdfImportShortcut");
+    QMainWindow::statusBar()->addPermanentWidget(pdfImportButton);
+    connect(pdfImportButton,&QPushButton::clicked,this,[this]{m_unified->openPdfTools();});
     auto audit=new UnifiedPageAudit(this);
     auto auditDock=new QDockWidget(unified_i18n::text("Sayfa ayarları / uygulama kapsamı"),this);
     auditDock->setObjectName("unifiedPageAuditDock");auditDock->setWidget(audit);
@@ -1754,18 +1768,13 @@ MainWindow::newProjectCreated(ProjectCreationContext* context)
 void
 MainWindow::openProject()
 {
-    if (!closeProjectInteractive())
-    {
-        return;
-    }
-
     QSettings settings;
     QString const project_dir(settings.value("project/lastDir").toString());
 
     QString const project_file(
         QFileDialog::getOpenFileName(
             this, tr("Open Project"), project_dir,
-            tr("Scan Tailor Projects")+" (*.ScanTailor)"
+            tr("Scan Tailor Projects")+" / PDF (*.ScanTailor *.pdf *.PDF);;"+tr("Scan Tailor Projects")+" (*.ScanTailor);;PDF (*.pdf *.PDF)"
         )
     );
     if (project_file.isEmpty())
@@ -1774,12 +1783,31 @@ MainWindow::openProject()
         return;
     }
 
+    // Importing a PDF adds a book; it must not close an unsaved editor project.
+    if(QFileInfo(project_file).suffix().compare("pdf",Qt::CaseInsensitive)!=0&&!closeProjectInteractive())return;
     openProject(project_file);
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+    const auto urls=event->mimeData()->urls();
+    if(urls.size()==1&&urls.front().isLocalFile()&&QFileInfo(urls.front().toLocalFile()).suffix().compare("pdf",Qt::CaseInsensitive)==0)
+        event->acceptProposedAction();
+    else QMainWindow::dragEnterEvent(event);
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+    const auto urls=event->mimeData()->urls();
+    if(urls.size()==1&&urls.front().isLocalFile()&&QFileInfo(urls.front().toLocalFile()).suffix().compare("pdf",Qt::CaseInsensitive)==0){
+        m_unified->importPdf(urls.front().toLocalFile());event->acceptProposedAction();
+    }else QMainWindow::dropEvent(event);
 }
 
 void
 MainWindow::openProject(QString const& project_file)
 {
+    if(QFileInfo(project_file).suffix().compare("pdf",Qt::CaseInsensitive)==0){m_unified->importPdf(project_file);return;}
     QFile file(project_file);
     if (!file.open(QIODevice::ReadOnly))
     {
@@ -2126,7 +2154,7 @@ MainWindow::updateWindowTitle()
         project_name = QFileInfo(m_projectFile).baseName();
     }
     QString const version(unified_i18n::text(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.4.4 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.4.5 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2721,7 +2749,7 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.4.4"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.4.5"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectRow(3);goToPage(page);}};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_content::collect(*m_ptrPages,*stages):std::vector<unified_content::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,QRectF const* applied){return m_ptrStages==stages&&unified_content::matchesCurrent(sample,*stages,applied);};

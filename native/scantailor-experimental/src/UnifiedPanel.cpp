@@ -91,8 +91,8 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
         }
     });
     button("Kayıtlı ScanTailor projesini ekle","Diskten bir .ScanTailor dosyası seçer; kayıtlı bölme, geometri, içerik ve kenar ayarlarıyla kuyruğa ekler.",[this]{if(busy()){m_status->setText(trU("Yeni kitap eklemek için önce kuyruğu durdurun."));return;}for(auto p:QFileDialog::getOpenFileNames(this,trU("Kayıtlı ScanTailor projeleri"),{},"ScanTailor (*.ScanTailor)"))addProject(QFileInfo(p).baseName(),p,{});});
-    button("PDF çıktı klasörünü seç","Yeni PDF dosyalarının kaydedileceği klasör. Kaynak fotoğrafları değiştirmez.",[this]{if(busy())return;auto f=QFileDialog::getExistingDirectory(this,trU("Kitap çıktıları"),m_output);if(!f.isEmpty()){m_output=f;saveQueue();m_status->setText(f);}});
-    button("Mevcut PDF’leri işle","PDF’den sayfaları ve metni çıkar; düzeltme kuyruğuna ekle veya görüntüyü değiştirmeden sıkıştır.",[this]{
+    button("PDF çıktı klasörünü seç","Yeni PDF dosyalarının kaydedileceği klasör. Kaynak fotoğrafları değiştirmez.",[this]{if(busy())return;auto f=QFileDialog::getExistingDirectory(this,trU("Kitap çıktıları"),m_output);if(!f.isEmpty()){m_output=f;m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));saveQueue();m_status->setText(f);}});
+    button("PDF’den kitap ekle","PDF’den sayfaları ve metni çıkar; düzeltme kuyruğuna ekle veya görüntüyü değiştirmeden sıkıştır.",[this]{
         openPdfTools();
     })->setObjectName("unifiedExistingPdfTools");
     m_books=new QTreeWidget;m_books->setHeaderLabels({trU("Kitap"),trU("Durum"),trU("Son işlem / hata")});m_books->setRootIsDecorated(false);m_books->setMaximumHeight(145);
@@ -151,6 +151,9 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto scope=new QLabel(trU("Kapsam: bu PDF ayarları kuyruktaki bütün kitapların bütün sayfalarına uygulanır.\nDeğişiklik yalnız sonraki oluşturmayı etkiler; önceki PDF dosyaları değişmez.\nMevcut projelerin elle ayarlanmış geometri ve alanları korunur."));scope->setWordWrap(true);form->addRow(scope);
     auto note=new QLabel(trU("Mevcut .ScanTailor projesinin bölme, geometri, içerik, kenar ve çıktı ayarları kullanılır.\nOCR, eşiklemeden önce kaydedilen gri kopyadan yapılır. Görünür sayfa ayrı tutulur.\nRenk modu sayfa geometrisini değiştirmez. Yumuşak çıktı, 1 bit çıktıya göre daha büyük olabilir.\nParmak: Output → Fill Zones / Parmak temizle. Metin üstünü beyazla silmeyin."));note->setWordWrap(true);form->addRow(note);
 
+    m_pdfTools=new UnifiedPdfToolsDialog(m_root,this);
+    m_pdfTools->importReady=[this](QJsonObject const& result){return addImportedPdf(result);};
+    m_pdfToolsTab=tabs->addTab(m_pdfTools,trU("PDF’den içe aktar"));
     m_ocr=new UnifiedOcrOptions(m_root);tabs->addTab(m_ocr,trU("OCR motoru / dil paketleri"));
     auto resources=new QWidget;auto rf=new QFormLayout(resources);rf->setRowWrapPolicy(QFormLayout::WrapLongRows);tabs->addTab(resources,trU("CPU / GPU ve yük sınırları"));
     QSettings settings;
@@ -191,6 +194,7 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto layoutChanged=[this]{auto v=pdfLayoutOptions();QSettings s;s.setValue("unified/pdf_paper",v.value("paper").toString());s.setValue("unified/pdf_margin",v.value("margin_mm").toDouble());s.setValue("unified/pdf_text_height",v.value("target_x_mm").toDouble());s.setValue("unified/pdf_content_fit",v.value("content_fit").toBool());emit pdfLayoutSettingsChanged(v);};
     connect(m_paper,qOverload<int>(&QComboBox::currentIndexChanged),this,layoutChanged);connect(m_margin,qOverload<double>(&QDoubleSpinBox::valueChanged),this,layoutChanged);connect(m_targetText,qOverload<double>(&QDoubleSpinBox::valueChanged),this,layoutChanged);connect(m_fitContent,&QCheckBox::toggled,this,layoutChanged);
     loadQueue();refreshBooks();applyResources();
+    m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));
     m_monitorRequest=qEnvironmentVariable("STOU_MONITOR_REQUEST");
     if(!m_monitorRequest.isEmpty()){
         QFile request(m_monitorRequest);
@@ -470,7 +474,30 @@ void UnifiedPanel::setOutputFinish(QJsonObject const& value){if(m_outputFinish==
 void UnifiedPanel::setOcrTiming(QString const& mode){int i=m_ocrTiming->findData(mode);if(i>=0)m_ocrTiming->setCurrentIndex(i);}
 void UnifiedPanel::showToolsTab(int index){if(auto tabs=findChild<QTabWidget*>("unifiedToolTabs"))tabs->setCurrentIndex(qBound(0,index,tabs->count()-1));}
 void UnifiedPanel::openPdfTools(QString const& mode){
-    if(auto existing=findChild<QDialog*>("unifiedPdfTools")){static_cast<UnifiedPdfToolsDialog*>(existing)->setMode(mode);existing->show();existing->raise();return;}
-    auto d=new UnifiedPdfToolsDialog(m_root,this);d->setMode(mode);d->importReady=[this](QJsonObject const& result){if(busy())return false;QString folder=result.value("folder").toString();addFolder(folder);for(int i=0;i<m_jobs.size();++i){auto job=m_jobs[i].toObject();if(job.value("folder").toString()==QFileInfo(folder).absoluteFilePath()){job.insert("title",QFileInfo(result.value("source").toString()).completeBaseName());job.insert("split","1");job.insert("source_pdf",result.value("source"));job.insert("source_text",result.value("text_folder"));m_jobs[i]=job;}}saveQueue();refreshBooks();return true;};d->show();
+    m_pdfTools->setMode(mode);showToolsTab(m_pdfToolsTab);emit toolsRequested();
+}
+void UnifiedPanel::importPdf(QString const& path){
+    openPdfTools("import");m_pdfTools->selectSource(path,true);
+}
+bool UnifiedPanel::addImportedPdf(QJsonObject const& result){
+    if(busy())return false;
+    const QString folder=result.value("folder").toString();
+    if(folder.isEmpty()||!QFileInfo(folder).isDir()||result.value("pages").toInt()<1)return false;
+    if(QDir(folder).entryList({"page-*.png"},QDir::Files).size()!=result.value("pages").toInt())return false;
+    // Re-importing the same receipt must not reset an already edited book.
+    loadQueue();
+    for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(folder).absoluteFilePath())return true;
+    QString split=result.value("split").toString("1");if(split!="1"&&split!="2"&&split!="auto")split="1";
+    const QString id=uid();
+    auto updated=m_jobs;
+    updated.append(QJsonObject{{"id",id},{"title",QFileInfo(result.value("source").toString()).completeBaseName()},
+        {"folder",QFileInfo(folder).absoluteFilePath()},{"split",split},{"status",QString::fromUtf8("Bekliyor")},
+        {"source_pdf",result.value("source")},{"source_text",result.value("text_folder")},
+        {"source_pdf_sha256",result.value("source_sha256")},{"pdf_import",result}});
+    QDir().mkpath(QFileInfo(m_queuePath).absolutePath());QSaveFile file(m_queuePath);
+    if(!file.open(QIODevice::WriteOnly))return false;
+    const auto bytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",m_output},{"jobs",updated}}).toJson();
+    if(file.write(bytes)!=bytes.size()||!file.commit())return false;
+    m_jobs=updated;refreshBooks();previewBook(id);return true;
 }
 void UnifiedPanel::setCleanupEnabled(bool enabled){m_cleanup->setChecked(enabled);}

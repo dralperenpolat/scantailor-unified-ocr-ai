@@ -36,7 +36,7 @@ public:
     std::function<bool(unified_geometry::Sample const&,unified_geometry::Candidate const*)> matches;
     UnifiedGeometryReviewDialog(std::vector<unified_geometry::Sample> samples,PageId selected,QString root,QWidget* parent,QString project={})
         :QDialog(parent),m_samples(std::move(samples)),m_root(std::move(root)) {
-        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · metin / kenar / UVDoc · 0.4.4"));resize(1320,850);
+        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · metin / kenar / UVDoc · 0.4.5"));resize(1320,850);
         m_directory=unified_review::directory(m_root,project,"geometry-v1");if(m_directory.isEmpty())m_directory=m_temp.path();
         for(auto const& s:m_samples)m_stamps.push_back(unified_review::sourceStamp(s.page));
         auto outer=new QVBoxLayout(this);auto controls=new QGridLayout;outer->addLayout(controls);

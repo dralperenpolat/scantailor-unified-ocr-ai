@@ -16,6 +16,7 @@
 #include <QSlider>
 #include <QHash>
 class UnifiedOcrOptions;
+class UnifiedPdfToolsDialog;
 class QTimer;
 class UnifiedPanel : public QWidget {
     Q_OBJECT
@@ -35,6 +36,7 @@ public:
     QJsonObject pdfLayoutOptions() const;
     void setPdfLayoutOptions(QJsonObject const& value);
     void openPdfTools(QString const& mode="import");
+    void importPdf(QString const& path);
     void showToolsTab(int index);
     QString ocrTiming()const;
     void setOcrTiming(QString const& mode);
@@ -49,6 +51,7 @@ public:
     bool submitRevision(QJsonObject const& binding, QString const& snapshot);
     void previewBook(QString const& id, int page=0);
 signals:
+    void toolsRequested();
     void ocrTimingChanged(QString const& mode);
     void outputFinishChanged(QJsonObject const& value);
     void pdfLayoutSettingsChanged(QJsonObject const& value);
@@ -62,6 +65,9 @@ signals:
     void selectionPreviewRequested(QString const& title, QJsonArray const& images, QString const& path);
     void selectionPreviewUpdated(QString const& title, QJsonArray const& images, QString const& path);
 private:
+    UnifiedPdfToolsDialog* m_pdfTools=nullptr;
+    int m_pdfToolsTab=2;
+    bool addImportedPdf(QJsonObject const& result);
     void adoptJobRevision(QJsonObject const& before, QJsonObject const& after);
     friend class UnifiedQueueSelectionTest;
     QString m_root, m_queuePath, m_requestPath, m_controlPath, m_output;

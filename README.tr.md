@@ -1,4 +1,4 @@
-# ScanTailor OCR Unified · 0.4.4
+# ScanTailor OCR Unified · 0.4.5
 
 [English](README.md) | **Türkçe**
 
@@ -16,8 +16,8 @@ Dağıtım dosyaları GitHub deposunun **Releases** bölümüne yüklenir. Kayna
 
 | Sistem | Dosya ve kullanım |
 | --- | --- |
-| Windows x64 | `scantailor-ocr-unified-0.4.4-windows-x64-setup.exe` dosyasını çalıştırın. Python, Qt, CPU OCR ve AI modelleri dahildir; ayrıca Python kurmayın. Başlat menüsünden açın. |
-| Linux x64 | `scantailor-ocr-unified-0.4.4-linux-x64.tar.gz` arşivini açın. İçindeki `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. |
+| Windows x64 | `scantailor-ocr-unified-0.4.5-windows-x64-setup.exe` dosyasını çalıştırın. Python, Qt, CPU OCR ve AI modelleri dahildir; ayrıca Python kurmayın. Başlat menüsünden açın. |
+| Linux x64 | `scantailor-ocr-unified-0.4.5-linux-x64.tar.gz` arşivini açın. İçindeki `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. |
 
 Windows paketi Windows 10 2004 ve sonrası / Windows 11 x64 için hazırlanmıştır. Linux paketi Ubuntu 22.04 x64 üzerinde derlenmiş ve sınanmıştır; glibc 2.35 veya yenisi gerekir. Eski Linux, Alpine/musl, 32 bit, ARM ve macOS bu paketin kapsamı dışındadır. Diğer dağıtımlardaki masaüstü entegrasyonu ayrıca denenmelidir.
 
@@ -44,6 +44,16 @@ Paket Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini, Lati
 - **Adayın yanındaki ▶ Uygula:** seçili adayı bu sayfaya uygular. Başka bir geometri adayı seçilirse öncekinin yerine geçer; geri alma önceki adayı geri getirir. Toplu kapsamda her sayfanın kendi önerilen adayı kullanılır.
 
 **Seçili** ve **Bu sayfada uygulanan** ayrı gösterilir. Sonradan geometri, yön, bölme veya içerik değişirse ilgili eski öneri **yeniden hesaplanmalı** olur. Güvenilir içerik önerisi bulunamazsa **Öneri yok** yazılır ve uygulama düğmesi kapanır. Elle yapılan yeni değişiklikler eski öneriyle ezilmez.
+
+## PDF’den başlama
+
+**PDF’den içe aktar** sekmesinde **PDF seç ve hazırla** düğmesini kullanın. PDF’yi **Dosya → Aç** ile açmak, ana pencereye tek PDF sürüklemek veya başlatıcıya PDF yolu vermek de aynı hazırlık adımını başlatır. Kaynak PDF değişmez.
+
+**Otomatik**, uygun tarama resmini özgün piksel boyutuyla çıkarır; beyaz kenarları ve sayfa dönüşünü korur. Çıkarma ancak bütün pikseller PDF’nin o ölçekteki görünümüyle aynıysa kabul edilir. Görünür metin, çizim, maske, açıklama veya birden çok resim bulunan sayfalarda sayfanın tamamı seçilen DPI ile görüntüye çevrilir. DPI artırmak kaynakta bulunmayan ayrıntıyı geri getirmez. Eski OCR ayrıca saklanır; geometri değişince yeniden OCR yapılır.
+
+Her PDF sayfası, sırası korunmuş bir giriş resmine dönüşür. Varsayılan **Tek sayfa · yeniden bölme** seçeneğidir. Çift sayfa çekimlerinde **Her PDF sayfasında iki kitap sayfası** seçin. Hazırlık bitince kitap kuyruğa eklenir; **Projeleri hazırla** ile ilerleyip bölmeyi kontrol edin. Kuyruk çalışıyorsa boşta olduğunda **Hazır kitabı kuyruğa ekle** düğmesini kullanın. Kesilen içe aktarma doğrulanmış sayfalardan sürer; aynı kitabı tekrar eklemek mevcut düzenlemelerini sıfırlamaz.
+
+İlk içe aktarma klasörü kuyruğun çıktı klasörüne göre seçilir. Görüntüler ve sonraki işlem için boş alanı olan bir disk kullanın.
 
 ## Araçlar
 

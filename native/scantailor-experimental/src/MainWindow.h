@@ -139,6 +139,8 @@ public:
 
     std::vector<PageRange> selectedRanges() const;
 protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
     virtual void closeEvent(QCloseEvent* event);
 
     virtual void timerEvent(QTimerEvent* event);

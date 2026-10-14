@@ -1,4 +1,4 @@
-# ScanTailor OCR Unified · 0.4.4
+# ScanTailor OCR Unified · 0.4.5
 
 **English** | [Türkçe](README.tr.md)
 
@@ -12,8 +12,8 @@ The repository is named **scantailor-unified-ocr-ai**; the application is called
 
 | System | Package and use |
 | --- | --- |
-| Windows x64 | Run `scantailor-ocr-unified-0.4.4-windows-x64-setup.exe`. Python, Qt, CPU OCR and AI models are included. No separate Python installation is needed. Open the app from the Start menu. |
-| Linux x64 | Extract `scantailor-ocr-unified-0.4.4-linux-x64.tar.gz` and run `ScanTailor-OCR-Unified` inside the extracted folder. To add a menu entry, run `sh install-user.sh` there. |
+| Windows x64 | Run `scantailor-ocr-unified-0.4.5-windows-x64-setup.exe`. Python, Qt, CPU OCR and AI models are included. No separate Python installation is needed. Open the app from the Start menu. |
+| Linux x64 | Extract `scantailor-ocr-unified-0.4.5-linux-x64.tar.gz` and run `ScanTailor-OCR-Unified` inside the extracted folder. To add a menu entry, run `sh install-user.sh` there. |
 
 The source-code ZIP is for development, not installation. Release assets include SHA-256 checksums and an acceptance-test summary.
 
@@ -46,6 +46,16 @@ Start with a few pages containing small footnotes, curved text and a cover. Insp
 - **▶ Apply beside the candidate:** applies the selected candidate to this page. A different geometry candidate replaces the previous one; undo restores it. **▶ Batch** uses each page's own recommended candidate in the selected scope.
 
 **Selected** and **Applied to this page** are displayed separately. Changing geometry, orientation, splitting or content invalidates the relevant old suggestion. If no reliable content suggestion is available, the interface shows **No suggestion** and disables Apply. Outdated suggestions do not overwrite new manual edits.
+
+## Start from a PDF
+
+Open the **Import PDF** tab and choose **Choose PDF and prepare**. Opening a PDF through **File → Open**, dropping one PDF onto the main window or passing a PDF to the launcher starts the same preparation step. The source PDF stays unchanged.
+
+**Automatic** extracts a suitable scan at its native pixel size, retaining white margins and page rotation. It accepts extraction only when all pixels match the visible PDF page at that scale. Pages with visible text, drawings, masks, annotations or multiple images are rendered as a complete page at the selected DPI instead. Increasing DPI does not recover detail absent from the source. Existing OCR is retained separately; geometry changes receive fresh OCR.
+
+Each PDF page becomes one ordered input image. **Single page · do not split again** is the default. Choose **Two book pages per PDF page** for photographed spreads. When preparation finishes, the book is added to the queue; continue with **Prepare projects** and inspect splitting before export. If the queue is running, use **Add prepared book to queue** once it is idle. Interrupted imports resume from verified pages. Re-importing the same book does not reset its edits.
+
+The initial import folder follows the queue's output folder. Select a drive with enough space for extracted images and subsequent processing.
 
 ## Tools and output
 
