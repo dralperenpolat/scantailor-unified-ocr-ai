@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedAiReview.h"
 #include "ImageLoader.h"
@@ -32,7 +33,7 @@ struct Process {
                 if(!line.startsWith("STOUAI "))continue;
                 auto result=QJsonDocument::fromJson(line.mid(7)).object();if(result.value("id")==input.value("id"))return result;
             }
-            if(child.state()==QProcess::NotRunning)throw std::runtime_error((QString::fromUtf8("Paddle işlemi kapandı: ")+QString::fromUtf8(errors.right(1800))).toStdString());
+            if(child.state()==QProcess::NotRunning)throw std::runtime_error((unified_i18n::text("Paddle işlemi kapandı: ")+unified_i18n::text(errors.right(1800))).toStdString());
             if(buffer.size()>4*1024*1024)throw std::runtime_error("Paddle yanıtı sınırı aştı.");
         }
         throw std::runtime_error("Paddle analizi 120 saniyede yanıt vermedi. Mevcut sayfa değişmedi.");
@@ -65,14 +66,14 @@ void run(std::vector<unified_content::Sample> const& samples,std::vector<int> co
             if(!out.analysis.value("ok").toBool())throw std::runtime_error(out.analysis.value("error").toString().toStdString());
             auto rect=box(out.analysis.value("candidate"));
             if(!rect.isEmpty())out.proposal.rect=QRectF((rect.x()+out.pixelCrop.x())/out.scale,(rect.y()+out.pixelCrop.y())/out.scale,rect.width()/out.scale,rect.height()/out.scale).intersected(s.crop);
-            out.proposal.safe=false;QStringList warnings;for(auto v:out.analysis.value("warnings").toArray())warnings<<v.toString();out.proposal.reason=warnings.join(' ');
-            if(out.proposal.rect.isEmpty()&&out.proposal.reason.isEmpty())out.proposal.reason=QString::fromUtf8("Güvenilir içerik alanı bulunamadı; mevcut seçim korundu.");
-        }catch(std::exception const& e){out.error=QString::fromUtf8(e.what());}
+            out.proposal.safe=false;QStringList warnings;for(auto v:out.analysis.value("warnings").toArray())warnings<<unified_i18n::display(v.toString());out.proposal.reason=warnings.join(' ');
+            if(out.proposal.rect.isEmpty()&&out.proposal.reason.isEmpty())out.proposal.reason=unified_i18n::text("Güvenilir içerik alanı bulunamadı; mevcut seçim korundu.");
+        }catch(std::exception const& e){out.error=unified_i18n::text(e.what());}
         completed(std::move(out));if(cancelled())break;
     }
 }
 QString label(QString const& value){
-    static QMap<QString,QString> labels={{"text",QString::fromUtf8("Metin")},{"doc_title",QString::fromUtf8("Kitap başlığı")},{"paragraph_title",QString::fromUtf8("Bölüm başlığı")},{"number",QString::fromUtf8("Numara")},{"footnote",QString::fromUtf8("Dipnot")},{"header",QString::fromUtf8("Üst bilgi")},{"footer",QString::fromUtf8("Alt bilgi")},{"table",QString::fromUtf8("Tablo")},{"chart",QString::fromUtf8("Grafik")},{"content",QString::fromUtf8("İçindekiler")},{"reference",QString::fromUtf8("Kaynakça")},{"image",QString::fromUtf8("Görsel")},{"abstract",QString::fromUtf8("Özet")},{"aside_text",QString::fromUtf8("Kenar metni")}};
+    static QMap<QString,QString> labels={{"text",unified_i18n::text("Metin")},{"doc_title",unified_i18n::text("Kitap başlığı")},{"paragraph_title",unified_i18n::text("Bölüm başlığı")},{"number",unified_i18n::text("Numara")},{"footnote",unified_i18n::text("Dipnot")},{"header",unified_i18n::text("Üst bilgi")},{"footer",unified_i18n::text("Alt bilgi")},{"table",unified_i18n::text("Tablo")},{"chart",unified_i18n::text("Grafik")},{"content",unified_i18n::text("İçindekiler")},{"reference",unified_i18n::text("Kaynakça")},{"image",unified_i18n::text("Görsel")},{"abstract",unified_i18n::text("Özet")},{"aside_text",unified_i18n::text("Kenar metni")}};
     return labels.value(value,value);
 }
 QImage preview(PageResult const& out,unified_content::Sample const& sample,bool text,bool layout){

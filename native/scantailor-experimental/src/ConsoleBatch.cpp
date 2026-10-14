@@ -18,6 +18,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include <vector>
 #include <iostream>
 #include <assert.h>
@@ -275,7 +276,7 @@ void unifiedCheckpoint() {
         if(file.open(QIODevice::ReadOnly))state=QJsonDocument::fromJson(file.readAll()).object().value("state").toString();
         if(state=="cancel")throw std::runtime_error("Unified: cancelled at page boundary");
         if(state!="pause")return;
-        if(!paused){unifiedEvent({{"stage",QString::fromUtf8("Duraklatıldı")},{"detail",QString::fromUtf8("Mevcut sayfa korundu.")}});paused=true;}
+        if(!paused){unifiedEvent({{"stage",unified_i18n::text("Duraklatıldı")},{"detail",unified_i18n::text("Mevcut sayfa korundu.")}});paused=true;}
         QThread::msleep(150);
     }
 }
@@ -286,7 +287,7 @@ ConsoleBatch::process()
     CommandLine const& cli = CommandLine::get();
     auto contentReview=[&]{
         auto samples=unified_content::collect(*m_ptrPages,*m_ptrStages);
-        auto result=unified_content::review(std::move(samples),[&](int n,int total){unifiedCheckpoint();unifiedEvent({{"stage",QString::fromUtf8("Kitap içerik denetimi")},{"page",n},{"total",total}});return true;});
+        auto result=unified_content::review(std::move(samples),[&](int n,int total){unifiedCheckpoint();unifiedEvent({{"stage",unified_i18n::text("Kitap içerik denetimi")},{"page",n},{"total",total}});return true;});
         if(qEnvironmentVariable("STOU_CONTENT_REVIEW")=="apply-safe")for(auto const& p:result.proposals)if(p.safe)unified_content::apply(p,result.samples[p.index],*m_ptrStages);
         QString path=qEnvironmentVariable("STOU_CONTENT_REVIEW_REPORT");
         if(path.isEmpty()&&cli.hasOutputProject())path=cli.outputProjectFile()+".content-review.json";
@@ -334,7 +335,7 @@ ConsoleBatch::process()
                 unsigned end = std::min<unsigned>(page_sequence.numPages(), first + output_workers);
                 std::vector<std::future<FilterResultPtr>> tasks;
                 std::vector<BackgroundTaskPtr> preparedTasks;
-                unifiedEvent({{"stage",m_ptrStages->filterAt(j)->getName()}, {"page",int(first)}, {"total",int(page_sequence.numPages())}, {"detail",QString::fromUtf8("Parallel output: %1 pages").arg(end-first)}});
+                unifiedEvent({{"stage",m_ptrStages->filterAt(j)->getName()}, {"page",int(first)}, {"total",int(page_sequence.numPages())}, {"detail",unified_i18n::text("Parallel output: %1 pages").arg(end-first)}});
                 for (unsigned i = first; i < end; ++i)
                 {
                     preparedTasks.push_back(createCompositeTask(page_sequence.pageAt(i), j));

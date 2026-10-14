@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -523,7 +524,7 @@ Task::processWarpDistortion(
     if (!params.getParamsDewarping().isValid())
     {
         if(params.getParamsDewarping().mode()==MODE_MANUAL){
-            params.unifiedWarning=QString::fromUtf8("Elle çizilen model henüz geçerli değil; üst ve alt eğri noktalarını düzeltin. Elle seçim korunuyor.");
+            params.unifiedWarning=unified_i18n::text("Elle çizilen model henüz geçerli değil; üst ve alt eğri noktalarını düzeltin. Elle seçim korunuyor.");
             if(editing)return editorResult();
             throw std::runtime_error("Elle cizilen egrilik modeli gecersiz; Geometric Distortions asamasinda duzeltin.");
         }
@@ -556,12 +557,12 @@ Task::processWarpDistortion(
         if (!distortion_model.isValid())
         {
             if(editing){
-                params.unifiedWarning=QString::fromUtf8("Otomatik eğri bulunamadı. Noktaları elle sürükleyebilirsiniz; düzenleme ekranı açık tutuldu.");
-                params.unifiedGeometry=comparisonReport+(detectedLines<4?QString::fromUtf8("\nBu sayfada eğriliği doğrulayacak yeterli metin satırı yok."):QString::fromUtf8("\nGüvenilir eğri bulunamadı; elle düzenleme açık."));
+                params.unifiedWarning=unified_i18n::text("Otomatik eğri bulunamadı. Noktaları elle sürükleyebilirsiniz; düzenleme ekranı açık tutuldu.");
+                params.unifiedGeometry=comparisonReport+(detectedLines<4?unified_i18n::text("\nBu sayfada eğriliği doğrulayacak yeterli metin satırı yok."):unified_i18n::text("\nGüvenilir eğri bulunamadı; elle düzenleme açık."));
                 return editorResult();
             }
-            params.unifiedWarning=QString::fromUtf8("Güvenilir üst/alt eğri bulunamadı; eğiklik düzeltmesine geçildi. Kontrol edin.");
-            params.unifiedGeometry=comparisonReport+(detectedLines<4?QString::fromUtf8("\nAz metinli sayfa: eğiklik düzeltmesi kullanıldı; eğri uygulanmadı."):QString::fromUtf8("\nGüvenilir eğri bulunamadı; eğiklik düzeltmesi kullanıldı."));
+            params.unifiedWarning=unified_i18n::text("Güvenilir üst/alt eğri bulunamadı; eğiklik düzeltmesine geçildi. Kontrol edin.");
+            params.unifiedGeometry=comparisonReport+(detectedLines<4?unified_i18n::text("\nAz metinli sayfa: eğiklik düzeltmesi kullanıldı; eğri uygulanmadı."):unified_i18n::text("\nGüvenilir eğri bulunamadı; eğiklik düzeltmesi kullanıldı."));
             params.setDistortionType(DistortionType::ROTATION);
             m_ptrSettings->setPageParams(m_pageId,params);
             return processRotationDistortion(status,accel_ops,orig_image,gray_orig_image_factory,orig_image_transform,params);
@@ -601,7 +602,7 @@ Task::processWarpDistortion(
         };
         double horizontalSupport=lineSupport(false),verticalSupport=lineSupport(true);
         if(verticalSupport>1500&&verticalSupport>horizontalSupport*3)
-            metrics.reason=QString::fromUtf8("Metin satırları dikey yönde baskın; yan basılmış sayfada otomatik eğrilik atlandı");
+            metrics.reason=unified_i18n::text("Metin satırları dikey yönde baskın; yan basılmış sayfada otomatik eğrilik atlandı");
         std::vector<double> ratios;
         std::vector<QPointF> glyphCenters;
         std::vector<double> glyphHeights;
@@ -622,7 +623,7 @@ Task::processWarpDistortion(
     // even when the current curves cannot produce an output transform.
     if(editing){
         params.unifiedGeometry=comparisonReport+"\n"+metrics.summary();params.unifiedWarning=metrics.reason;
-        if(!metrics.reason.isEmpty())params.unifiedWarning+=QString::fromUtf8("; eğrileri elle düzeltebilirsiniz. Seçtiğiniz yöntem korunuyor.");
+        if(!metrics.reason.isEmpty())params.unifiedWarning+=unified_i18n::text("; eğrileri elle düzeltebilirsiniz. Seçtiğiniz yöntem korunuyor.");
         return editorResult();
     }
     std::shared_ptr<DewarpingImageTransform> dewarping_transform;
@@ -641,12 +642,12 @@ Task::processWarpDistortion(
     params.unifiedGeometry=comparisonReport+"\n"+metrics.summary();
     params.unifiedWarning=metrics.reason;
     if(!metrics.reason.isEmpty() && params.getParamsDewarping().mode()==MODE_AUTO) {
-        params.unifiedWarning+=QString::fromUtf8("; güvenli eğiklik düzeltmesine geçildi. Kontrol edin.");
+        params.unifiedWarning+=unified_i18n::text("; güvenli eğiklik düzeltmesine geçildi. Kontrol edin.");
         params.setDistortionType(DistortionType::ROTATION);
         m_ptrSettings->setPageParams(m_pageId,params);
         return processRotationDistortion(status,accel_ops,orig_image,gray_orig_image_factory,orig_image_transform,params);
     }
-    if(!metrics.reason.isEmpty())params.unifiedWarning+=QString::fromUtf8("; elle seçilmiş model korundu.");
+    if(!metrics.reason.isEmpty())params.unifiedWarning+=unified_i18n::text("; elle seçilmiş model korundu.");
     m_ptrSettings->setPageParams(m_pageId,params);
     if (m_ptrNextTask)
     {

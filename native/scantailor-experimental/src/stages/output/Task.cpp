@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include <functional>
 #include <boost/bind/bind.hpp>
 #include <boost/shared_ptr.hpp>
@@ -658,8 +659,8 @@ Task::UiUpdater::updateUI(FilterUiInterface* ui)
         if(preview.isNull()) return;
         auto panel=new QWidget;auto layout=new QVBoxLayout(panel);layout->setContentsMargins(4,4,4,4);
         auto note=new QLabel(description);note->setWordWrap(true);layout->addWidget(note);
-        auto use=new QPushButton(QString::fromUtf8("PDF için seç"));
-        use->setToolTip(QString::fromUtf8("Kuyruktaki kitapların sonraki PDF çıktısı için görünümü seçer. TIFF çıktıları değişmez."));
+        auto use=new QPushButton(unified_i18n::text("PDF için seç"));
+        use->setToolTip(unified_i18n::text("Kuyruktaki kitapların sonraki PDF çıktısı için görünümü seçer. TIFF çıktıları değişmez."));
         layout->addWidget(use,0,Qt::AlignLeft);
         QObject::connect(use,&QPushButton::clicked,panel,[ui,appearance]{
             ui->setUnifiedPdfAppearance(appearance);
@@ -668,12 +669,12 @@ Task::UiUpdater::updateUI(FilterUiInterface* ui)
         layout->addWidget(view,1);
         tab_widget->addTab(panel,title,tab);
     };
-    addPreview(m_softPreview,m_downscaledSoftPreview,QString::fromUtf8("Yumuşak S/B"),
-        QString::fromUtf8("Beyaz zemin · gri harf kenarları. Görünüm önizlemesi; son PDF boyutu ve çözünürlüğü PDF ayarlarına bağlıdır."),"soft",TAB_SOFT);
-    addPreview(m_localSoftPreview,m_downscaledLocalSoftPreview,QString::fromUtf8("Yerel yumuşak S/B"),
-        QString::fromUtf8("Metin sayfaları için: eşik sayfanın her bölgesine göre değişir; soluk çizgileri ve gri harf kenarlarını korumaya yardımcı olur. Resimli sayfalarda gri kopyayı karşılaştırın. PDF ölçeği değişmez."),"soft_local",TAB_LOCAL_SOFT);
-    addPreview(m_ocrPreview,m_downscaledOcrPreview,QString::fromUtf8("OCR gri kopya"),
-        QString::fromUtf8("Geometrisi düzeltilmiş, eşikleme öncesi gri kopya. OCR bu görüntüden yapılır; siyah-beyaz eşikleme ayarları bu kopyayı değiştirmez."),"gray",TAB_OCR_GRAY);
+    addPreview(m_softPreview,m_downscaledSoftPreview,unified_i18n::text("Yumuşak S/B"),
+        unified_i18n::text("Beyaz zemin · gri harf kenarları. Görünüm önizlemesi; son PDF boyutu ve çözünürlüğü PDF ayarlarına bağlıdır."),"soft",TAB_SOFT);
+    addPreview(m_localSoftPreview,m_downscaledLocalSoftPreview,unified_i18n::text("Yerel yumuşak S/B"),
+        unified_i18n::text("Metin sayfaları için: eşik sayfanın her bölgesine göre değişir; soluk çizgileri ve gri harf kenarlarını korumaya yardımcı olur. Resimli sayfalarda gri kopyayı karşılaştırın. PDF ölçeği değişmez."),"soft_local",TAB_LOCAL_SOFT);
+    addPreview(m_ocrPreview,m_downscaledOcrPreview,unified_i18n::text("OCR gri kopya"),
+        unified_i18n::text("Geometrisi düzeltilmiş, eşikleme öncesi gri kopya. OCR bu görüntüden yapılır; siyah-beyaz eşikleme ayarları bu kopyayı değiştirmez."),"gray",TAB_OCR_GRAY);
     tab_widget->addTab(picture_zone_editor.release(), tr("Picture Zones"), TAB_PICTURE_ZONES);
     tab_widget->addTab(fill_zone_editor.release(), tr("Fill Zones / Parmak temizle"), TAB_FILL_ZONES);
     tab_widget->addTab(despeckle_view.release(), tr("Despeckling"), TAB_DESPECKLING);

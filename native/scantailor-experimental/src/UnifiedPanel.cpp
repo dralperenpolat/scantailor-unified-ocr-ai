@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedPanel.h"
 #include "UnifiedResources.h"
@@ -41,7 +42,7 @@
 #include <QTabBar>
 #include <limits>
 namespace {
-QString trU(char const* s) { return QString::fromUtf8(s); }
+QString trU(char const* s) { return unified_i18n::text(s); }
 QString uid() {return QUuid::createUuid().toString(QUuid::WithoutBraces);}
 QString queueReadPath(QString const& path){
     QFileInfo primary(path),pending(path+".pending.json");
@@ -164,10 +165,10 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto gpuNote=new QLabel(trU("GPU için yüzde üst sınırı uygulanmaz. Tek eşzamanlı sayfa ve sayfalar arası bekleme yükü azaltır.\nNumara koruma, yeni otomatik içerik seçimlerine uygulanır; elle çizilmiş kutular değişmez."));gpuNote->setWordWrap(true);rf->addRow(gpuNote);
     m_log=new QPlainTextEdit;m_log->setReadOnly(true);m_log->setMaximumBlockCount(2000);tabs->addTab(m_log,trU("İşlem ayrıntıları"));
     connect(&m_worker,&QProcess::readyReadStandardOutput,this,&UnifiedPanel::receive);
-    connect(&m_worker,&QProcess::readyReadStandardError,[this]{auto line=QString::fromUtf8(m_worker.readAllStandardError());m_log->appendPlainText(line);});
+    connect(&m_worker,&QProcess::readyReadStandardError,[this]{auto line=unified_i18n::text(m_worker.readAllStandardError());m_log->appendPlainText(line);});
     connect(&m_worker,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),[this](int code,QProcess::ExitStatus){receive();m_start->setEnabled(true);m_prepare->setEnabled(true);m_pause->setText(trU("Duraklat"));loadQueue();refreshBooks();refreshPreview();m_status->setText(trU(code==0?"İşlem tamamlandı. Sonuçları ve kontrol gereken kitapları inceleyebilirsiniz.":code==2?"Durduruldu. Tamamlanan sayfalar saklandı; devam edilebilir.":"İşlem hatayla bitti. Ayrıntılar sekmesini kontrol edin."));});
     connect(&m_worker,&QProcess::errorOccurred,[this](QProcess::ProcessError){m_status->setText(m_worker.errorString());m_start->setEnabled(true);m_prepare->setEnabled(true);});
-    connect(&m_gpu,&QProcess::readyReadStandardOutput,[this]{m_gpuUsage->setText(trU("GPU toplam kullanımı / VRAM: ")+QString::fromUtf8(m_gpu.readAllStandardOutput()).trimmed());});
+    connect(&m_gpu,&QProcess::readyReadStandardOutput,[this]{m_gpuUsage->setText(trU("GPU toplam kullanımı / VRAM: ")+unified_i18n::text(m_gpu.readAllStandardOutput()).trimmed());});
     connect(&m_gpu,&QProcess::errorOccurred,[this](QProcess::ProcessError){m_gpuUsage->setText(trU("GPU sayacı alınamadı; OpenCL cihazı Experimental ayarlarından seçilebilir."));});
     auto gpuProgram=QStandardPaths::findExecutable("nvidia-smi");if(gpuProgram.isEmpty())m_gpuUsage->setText(trU("NVIDIA GPU bulunmadı · CPU ile çalışabilirsiniz."));
     auto timer=new QTimer(this);timer->setInterval(3000);connect(timer,&QTimer::timeout,[this,gpuProgram]{m_usage->setText(unifiedUsage());if(!gpuProgram.isEmpty()&&m_gpu.state()==QProcess::NotRunning)m_gpu.start(gpuProgram,{"--query-gpu=utilization.gpu,memory.used,memory.total","--format=csv,noheader"});});timer->start();
@@ -238,7 +239,7 @@ void UnifiedPanel::refreshBooks(){
         auto j=m_jobs.at(i).toObject();QString id=j.value("id").toString();ids.insert(id);
         QTreeWidgetItem* item=rows.value(id,nullptr);
         if(!item)item=new QTreeWidgetItem(m_books);
-        item->setText(0,j.value("title").toString());item->setText(1,j.value("status").toString(trU("Bekliyor")));item->setText(2,j.value("detail").toString());
+        item->setText(0,j.value("title").toString());item->setText(1,unified_i18n::display(j.value("status").toString(QString::fromUtf8("Bekliyor"))));item->setText(2,unified_i18n::display(j.value("detail").toString()));
         item->setData(0,Qt::UserRole,i);item->setData(0,Qt::UserRole+1,id);
     }
     for(int n=m_books->topLevelItemCount()-1;n>=0;--n)if(!ids.contains(m_books->topLevelItem(n)->data(0,Qt::UserRole+1).toString()))delete m_books->takeTopLevelItem(n);
@@ -327,12 +328,12 @@ bool UnifiedPanel::submitRevision(QJsonObject const& binding,QString const& snap
 }
 void UnifiedPanel::addProject(QString const& title,QString const& path,QJsonArray const& outputs){
     if(busy())return;for(auto value:m_jobs)if(value.toObject().value("source_project").toString()==path)return;
-    m_jobs.append(QJsonObject{{"id",uid()},{"title",title},{"source_project",path},{"outputs",outputs},{"status",trU("Bekliyor")}});saveQueue();refreshBooks();
+    m_jobs.append(QJsonObject{{"id",uid()},{"title",title},{"source_project",path},{"outputs",outputs},{"status",QString::fromUtf8("Bekliyor")}});saveQueue();refreshBooks();
 }
 void UnifiedPanel::addFolder(QString const& path){
     QDir dir(path);if(dir.entryList({"*.jpg","*.jpeg","*.png","*.tif","*.tiff","*.bmp"},QDir::Files).isEmpty())return;
     for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(path).absoluteFilePath())return;
-    m_jobs.append(QJsonObject{{"id",uid()},{"title",dir.dirName()},{"folder",dir.absolutePath()},{"split",m_split->currentData().toString()},{"status",trU("Bekliyor")}});saveQueue();refreshBooks();
+    m_jobs.append(QJsonObject{{"id",uid()},{"title",dir.dirName()},{"folder",dir.absolutePath()},{"split",m_split->currentData().toString()},{"status",QString::fromUtf8("Bekliyor")}});saveQueue();refreshBooks();
 }
 void UnifiedPanel::applyResources(){
     QSettings s;s.setValue("settings/batch_processing_threads",m_threads->value());s.setValue("unified/cpu_limit",m_cpu->value());s.setValue("unified/single_gpu",m_singleGpu->isChecked());s.setValue("unified/page_delay_ms",m_delay->value());s.setValue("unified/protect_numbers",m_numbers->isChecked());s.sync();
@@ -346,7 +347,7 @@ void UnifiedPanel::updateRevisionStatus(){
     if(m_revisionJob.isEmpty())return;
     QString sessionPath=m_worker.state()!=QProcess::NotRunning?m_requestPath:m_monitorRequest;
     QFile status(sessionPath+".session.json");if(status.open(QIODevice::ReadOnly)){auto state=QJsonDocument::fromJson(status.readAll()).object();status.close();auto event=state.value("event").toObject();
-        if(event.value("job").toString()==m_revisionJob)m_revisionStatus->setText(trU("PDF güncellemesi · ")+event.value("stage").toString()+" · "+event.value("detail").toString());
+        if(event.value("job").toString()==m_revisionJob)m_revisionStatus->setText(trU("PDF güncellemesi · ")+unified_i18n::display(event.value("stage").toString())+" · "+unified_i18n::display(event.value("detail").toString()));
     }
     for(auto value:m_jobs){auto job=value.toObject();if(job.value("id").toString()!=m_revisionJob)continue;
         if(job.value("accepted_edits").toArray().contains(m_revisionToken)&&!job.value("edit_completed_id").toString().isEmpty()&&job.value("edit_completed_id")==job.value("edit_request_id")){
@@ -373,7 +374,7 @@ void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("OMP_THREAD_LIMIT",QString::number(m_threads->value()));env.insert("OMP_NUM_THREADS",QString::number(m_threads->value()));
     m_worker.setProcessEnvironment(env);m_worker.setWorkingDirectory(m_root);m_worker.start(unified_runtime::python(m_root),{"-u","-m","scantailor_ocr_unified.native_worker",m_requestPath});
 }
-void UnifiedPanel::receive(){m_buffer+=m_worker.readAllStandardOutput();int i;while((i=m_buffer.indexOf('\n'))>=0){auto line=m_buffer.left(i);m_buffer.remove(0,i+1);auto value=QJsonDocument::fromJson(line);if(value.isObject())event(value.object());else if(!line.trimmed().isEmpty())m_log->appendPlainText(QString::fromUtf8(line));}}
+void UnifiedPanel::receive(){m_buffer+=m_worker.readAllStandardOutput();int i;while((i=m_buffer.indexOf('\n'))>=0){auto line=m_buffer.left(i);m_buffer.remove(0,i+1);auto value=QJsonDocument::fromJson(line);if(value.isObject())event(value.object());else if(!line.trimmed().isEmpty())m_log->appendPlainText(unified_i18n::text(line));}}
 void UnifiedPanel::adoptJobRevision(QJsonObject const& before,QJsonObject const& after){
     if(after.value("pdf")==before.value("pdf")||after.value("pdf").toString().isEmpty())return;
     QString id=before.value("id").toString();int pageNumber=0;
@@ -426,13 +427,13 @@ void UnifiedPanel::pollExternal(){
     // is being replayed. Do not show a stale stage or duplicate preview rows.
     auto latest=state.value("event").toObject();
     if(running && !latest.isEmpty()){
-        m_status->setText(latest.value("book").toString()+" · "+latest.value("stage").toString()+" · "+latest.value("detail").toString());
+        m_status->setText(latest.value("book").toString()+" · "+unified_i18n::display(latest.value("stage").toString())+" · "+unified_i18n::display(latest.value("detail").toString()));
         if(latest.contains("total")){m_progress->setRange(0,qMax(1,latest.value("total").toInt()));m_progress->setValue(latest.value("page").toInt());}
     }
 }
 void UnifiedPanel::event(QJsonObject const& o){
     QString detail=o.value("detail").toString(),stage=o.value("stage").toString(),title=o.value("book").toString();
-    m_status->setText(title+" · "+stage+" · "+detail);m_log->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss ")+m_status->text());
+    m_status->setText(title+" · "+unified_i18n::display(stage)+" · "+unified_i18n::display(detail));m_log->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss ")+m_status->text());
     if(o.contains("total")){m_progress->setRange(0,qMax(1,o.value("total").toInt()));m_progress->setValue(o.value("page").toInt());}
     for(int i=0;i<m_jobs.size();++i){auto j=m_jobs.at(i).toObject();if(j.value("id")==o.value("job")){j.insert("status",stage);j.insert("detail",detail);m_jobs.replace(i,j);break;}}
     refreshBooks();QString p=o.value("preview").toString();if(!p.isEmpty()){
@@ -440,7 +441,7 @@ void UnifiedPanel::event(QJsonObject const& o){
         bool found=false;for(int n=0;n<previews.size();++n)if(previews.at(n).toObject().value("preview").toString()==p){previews.replace(n,o);found=true;break;}
         if(!found)previews.append(o);
         if(id==m_previewJob && !m_previewRefresh->isActive())m_previewRefresh->start();
-        auto item=new QTreeWidgetItem(m_pages,{title+" · "+QString::number(o.value("page").toInt()),stage,detail});item->setData(0,Qt::UserRole,p);item->setData(0,Qt::UserRole+1,id);
+        auto item=new QTreeWidgetItem(m_pages,{title+" · "+QString::number(o.value("page").toInt()),unified_i18n::display(stage),unified_i18n::display(detail)});item->setData(0,Qt::UserRole,p);item->setData(0,Qt::UserRole+1,id);
         while(m_pages->topLevelItemCount()>500)delete m_pages->takeTopLevelItem(0);
         if(!m_pages->currentItem())m_pages->scrollToItem(item);
     }

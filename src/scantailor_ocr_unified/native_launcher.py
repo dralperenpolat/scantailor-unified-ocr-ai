@@ -7,12 +7,12 @@ ROOT=app_root()
 SAMPLE=ROOT/'projects/Native_Deneme_03/Aden_Menno_Deneme_03.ScanTailor'
 
 def main():
-    parser=argparse.ArgumentParser(description='ScanTailor OCR Unified 0.4.3')
+    parser=argparse.ArgumentParser(description='ScanTailor OCR Unified 0.4.4')
     parser.add_argument('project',nargs='?');parser.add_argument('--sample',action='store_true')
     parser.add_argument('--check',action='store_true',help='Check local launch files without opening a window')
     args=parser.parse_args();suffix='.exe' if os.name=='nt' else ''
     packaged=ROOT/('native/bin/scantailor-ocr-unified'+suffix)
-    exe=packaged if packaged.is_file() else ROOT/('native/build/scantailor-ocr-unified-0.4.3'+suffix)
+    exe=packaged if packaged.is_file() else ROOT/('native/build/scantailor-ocr-unified-0.4.4'+suffix)
     try:
         for path in (exe,exe.parent/('scantailor-experimental-cli'+suffix),python_path(ROOT)):
             if not path.is_file():raise FileNotFoundError('Program dosyası eksik: '+str(path))

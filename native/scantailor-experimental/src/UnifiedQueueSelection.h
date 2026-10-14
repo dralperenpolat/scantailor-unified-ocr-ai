@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "UnifiedI18n.h"
 #include "SmartFilenameOrdering.h"
 #include <QDir>
 #include <QDomDocument>
@@ -43,7 +44,7 @@ inline QJsonArray unifiedQueueImages(QJsonObject const& job, QJsonArray const& l
     for (auto value : job.value("pages").toArray()) {
         auto page = value.toObject();
         bool layout=QFileInfo(page.value("preview").toString()).fileName().startsWith("layout-")&&QFileInfo::exists(job.value("pdf").toString());
-        addProcessed(page.value("preview").toString(), QString::fromUtf8("PDF görünümü · sayfa %1").arg(page.value("page").toInt()), page.value("page").toInt(), 4,
+        addProcessed(page.value("preview").toString(), unified_i18n::text("PDF görünümü · sayfa %1").arg(page.value("page").toInt()), page.value("page").toInt(), 4,
             layout?job.value("pdf").toString():page.value("page_pdf").toString(),layout?page.value("page").toInt()-1:0);
     }
     for (auto value : live) {
@@ -51,7 +52,7 @@ inline QJsonArray unifiedQueueImages(QJsonObject const& job, QJsonArray const& l
         QString stage = page.value("stage").toString();
         int number = page.value("page").toInt() + (stage == "OCR / PDF" ? 1 : 0);
         int priority = page.contains("page_pdf") ? 4 : stage == "OCR / PDF" ? 3 : 2;
-        addProcessed(page.value("preview").toString(), stage + QString::fromUtf8(" · sayfa %1").arg(number), number, priority,page.value("page_pdf").toString(),0);
+        addProcessed(page.value("preview").toString(), stage + unified_i18n::text(" · sayfa %1").arg(number), number, priority,page.value("page_pdf").toString(),0);
     }
     // Native outputs also exist before OCR, and must survive an application
     // restart. The manifest supplies the authoritative split-page order.
@@ -65,7 +66,7 @@ inline QJsonArray unifiedQueueImages(QJsonObject const& job, QJsonArray const& l
         }
     }
     for (int i = 0; i < outputs.size(); ++i)
-        addProcessed(outputs.at(i).toString(), QString::fromUtf8("İşlenmiş çıktı · sayfa %1").arg(i + 1), i + 1, 1);
+        addProcessed(outputs.at(i).toString(), unified_i18n::text("İşlenmiş çıktı · sayfa %1").arg(i + 1), i + 1, 1);
     for (auto const& image : processed) { images.append(image); seen.insert(image.value("path").toString()); }
     QString project = job.value("source_project").toString();
     if (project.isEmpty()) project = job.value("project").toString();
@@ -80,14 +81,14 @@ inline QJsonArray unifiedQueueImages(QJsonObject const& job, QJsonArray const& l
         for (auto e = root.firstChildElement("files").firstChildElement("file"); !e.isNull(); e = e.nextSiblingElement("file")) {
             if (!dirs.contains(e.attribute("dirId"))) continue;
             auto name = e.attribute("name");
-            add(QDir(dirs.value(e.attribute("dirId"))).filePath(name), QString::fromUtf8("Kaynak fotoğraf · ") + name, "source", 0);
+            add(QDir(dirs.value(e.attribute("dirId"))).filePath(name), unified_i18n::text("Kaynak fotoğraf · ") + name, "source", 0);
         }
     }
     QString folder = job.value("folder").toString();
     if (!folder.isEmpty()) {
         auto files = QDir(folder).entryInfoList({"*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff", "*.bmp"}, QDir::Files);
         std::sort(files.begin(), files.end(), SmartFilenameOrdering());
-        for (auto const& source : files) add(source.absoluteFilePath(), QString::fromUtf8("Kaynak fotoğraf · ") + source.fileName(), "source", 0);
+        for (auto const& source : files) add(source.absoluteFilePath(), unified_i18n::text("Kaynak fotoğraf · ") + source.fileName(), "source", 0);
     }
     return images;
 }

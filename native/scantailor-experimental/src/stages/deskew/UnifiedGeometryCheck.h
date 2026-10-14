@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "UnifiedI18n.h"
 #include <QPointF>
 #include <QRectF>
 #include <QString>
@@ -25,7 +26,7 @@ struct UnifiedGeometryMetrics {
     double glyphAspect=0, textCoverage=1;
     QString reason;
     QString summary() const {
-        return QString::fromUtf8("Üst/alt uzunluk: %1× · yükseklik farkı: %2× · yerel esneme: %3× · alan farkı: %4× · harf en/boy: %5 · model içinde metin: %6%")
+        return unified_i18n::text("Üst/alt uzunluk: %1× · yükseklik farkı: %2× · yerel esneme: %3× · alan farkı: %4× · harf en/boy: %5 · model içinde metin: %6%")
             .arg(lengthRatio,0,'f',2).arg(gapRatio,0,'f',2).arg(localStretch,0,'f',2).arg(areaRatio,0,'f',2).arg(glyphAspect,0,'f',2).arg(textCoverage*100,0,'f',0);
     }
 };
@@ -44,7 +45,7 @@ inline double unifiedYAt(std::vector<QPointF> const& c,double x) {
 inline UnifiedGeometryMetrics unifiedMeasureCurves(std::vector<QPointF> const& top,
         std::vector<QPointF> const& bottom,QRectF const& paper) {
     UnifiedGeometryMetrics m;
-    auto fail=[&](char const* reason){m.reason=QString::fromUtf8(reason);return m;};
+    auto fail=[&](char const* reason){m.reason=unified_i18n::text(reason);return m;};
     if(top.size()<2||bottom.size()<2||paper.isEmpty())return fail("Eğrilik modeli eksik");
     for(auto const* curve:{&top,&bottom}) {
         QPointF prev=curve->front();
@@ -94,7 +95,7 @@ inline void unifiedMeasureTextCoverage(UnifiedGeometryMetrics& m,
     if(tested<150)return;
     m.textCoverage=double(inside)/tested;
     if(m.textCoverage<.8 && tested-inside>=80)
-        m.reason=QString::fromUtf8("Eğrilik modeli metnin önemli bölümünü dışarıda bırakıyor");
+        m.reason=unified_i18n::text("Eğrilik modeli metnin önemli bölümünü dışarıda bırakıyor");
 }
 // Evaluate the actual inverse transform on a 15×15 interior grid. A positive
 // Jacobian is necessary for a non-folding transform. Singular values detect
@@ -103,7 +104,7 @@ inline void unifiedMeasureGrid(UnifiedGeometryMetrics& m,QPolygonF const& domain
         std::function<QPointF(QPointF const&)> const& inverse) {
     if(!m.reason.isEmpty())return;
     QRectF bounds=domain.boundingRect();
-    if(bounds.isEmpty()){m.reason=QString::fromUtf8("Düzeltme alanı boş");return;}
+    if(bounds.isEmpty()){m.reason=unified_i18n::text("Düzeltme alanı boş");return;}
     double step=std::max(1e-4,std::min(bounds.width(),bounds.height())*.0005);
     std::vector<double> areas,ratios;
     for(int y=1;y<16;++y)for(int x=1;x<16;++x) {
@@ -111,17 +112,17 @@ inline void unifiedMeasureGrid(UnifiedGeometryMetrics& m,QPolygonF const& domain
         if(!domain.containsPoint(p,Qt::OddEvenFill))continue;
         QPointF v=inverse(p),dx=(inverse(p+QPointF(step,0))-v)/step,dy=(inverse(p+QPointF(0,step))-v)/step;
         double det=dx.x()*dy.y()-dy.x()*dx.y();
-        if(!unifiedFinite(det)||det<=1e-8){m.reason=QString::fromUtf8("Dönüşüm ızgarası katlanıyor veya çöküyor");return;}
+        if(!unifiedFinite(det)||det<=1e-8){m.reason=unified_i18n::text("Dönüşüm ızgarası katlanıyor veya çöküyor");return;}
         double trace=dx.x()*dx.x()+dx.y()*dx.y()+dy.x()*dy.x()+dy.y()*dy.y();
         double disc=std::sqrt(std::max(0.,trace*trace-4*det*det));
         double large=(trace+disc)*.5,small=det*det/std::max(large,1e-12);
         areas.push_back(det);ratios.push_back(std::sqrt(large/std::max(small,1e-12)));
     }
-    if(areas.size()<20){m.reason=QString::fromUtf8("Dönüşüm ızgarası yeterli alanı kapsamıyor");return;}
+    if(areas.size()<20){m.reason=unified_i18n::text("Dönüşüm ızgarası yeterli alanı kapsamıyor");return;}
     std::sort(areas.begin(),areas.end());std::sort(ratios.begin(),ratios.end());
     m.areaRatio=areas.back()/areas.front();m.localStretch=ratios.back();
-    if(m.localStretch>6)m.reason=QString::fromUtf8("Dönüşüm yazıyı bir yönde aşırı esnetiyor");
-    else if(m.areaRatio>18)m.reason=QString::fromUtf8("Dönüşümde yerel büyütme aşırı değişiyor");
+    if(m.localStretch>6)m.reason=unified_i18n::text("Dönüşüm yazıyı bir yönde aşırı esnetiyor");
+    else if(m.areaRatio>18)m.reason=unified_i18n::text("Dönüşümde yerel büyütme aşırı değişiyor");
 }
 inline QString unifiedCheckCurves(std::vector<QPointF> const& top,std::vector<QPointF> const& bottom,QRectF const& paper) {
     return unifiedMeasureCurves(top,bottom,paper).reason;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedAutoDewarp.h"
 #include "ParamsDewarping.h"
 #include "TaskStatus.h"
@@ -120,7 +121,7 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     std::function<QPointF(QPointF const&)> const& currentMapper) {
     UnifiedDewarpSelection result;
     Evidence const evidence=sourceEvidence(image,transform,ops,status);
-    if(evidence.sideways){result.report=QString::fromUtf8("Karşılaştırma: yan basılmış metinde otomatik eğrilik uygulanmadı");return result;}
+    if(evidence.sideways){result.report=unified_i18n::text("Karşılaştırma: yan basılmış metinde otomatik eğrilik uygulanmadı");return result;}
     QTransform const inverse=transform.transform().inverted();
     // A direction is a vector: translations must cancel (not map(0,1) alone).
     Vec2d const down(inverse.map(QPointF(0,1))-inverse.map(QPointF(0,0)));
@@ -157,12 +158,12 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     QStringList report;
     // Keep the existing mixed model on exact ties, avoiding arbitrary changes.
     for(auto const& entry:std::vector<std::pair<QString,DistortionModelBuilder const*>>{
-        {QString::fromUtf8("Birleşik"),&mixed},{QString::fromUtf8("Metin"),&text},{QString::fromUtf8("Kenar"),&edges}}){
+        {unified_i18n::text("Birleşik"),&mixed},{unified_i18n::text("Metin"),&text},{unified_i18n::text("Kenar"),&edges}}){
         status.throwIfCancelled();
         UnifiedDewarpCandidate candidate; candidate.source=entry.first;
         rejectedReason.clear();
         candidate.model=entry.second->tryBuildModel(nullptr,nullptr,acceptable);
-        if(!candidate.model.isValid())candidate.metrics.reason=rejectedReason.isEmpty()?QString::fromUtf8("güvenli sınır çifti bulunamadı"):rejectedReason;
+        if(!candidate.model.isValid())candidate.metrics.reason=rejectedReason.isEmpty()?unified_i18n::text("güvenli sınır çifti bulunamadı"):rejectedReason;
         result.candidates.push_back(std::move(candidate));
     }
     result.candidates.insert(result.candidates.end(),extra.begin(),extra.end());
@@ -177,21 +178,21 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
                 candidate.lineError=unifiedTextLineError(text.horizontalCurves(),warp.forwardMapper());
                 if(candidate.metrics.reason.isEmpty()){
                     if(text.horizontalCurves().size()<4 || !unifiedFinite(candidate.lineError))
-                        candidate.metrics.reason=QString::fromUtf8("kenarı doğrulayacak yeterli satır yok; elle kontrol gerekli");
+                        candidate.metrics.reason=unified_i18n::text("kenarı doğrulayacak yeterli satır yok; elle kontrol gerekli");
                     else if(unifiedFinite(baseline) && candidate.lineError>baseline*1.15+.5)
-                        candidate.metrics.reason=QString::fromUtf8("metin satırları mevcut görüntüden daha fazla bozuluyor");
+                        candidate.metrics.reason=unified_i18n::text("metin satırları mevcut görüntüden daha fazla bozuluyor");
                     else candidate.score=candidate.lineError+1.5*std::log(std::max(1.,candidate.metrics.localStretch))
                         +.5*std::log(std::max(1.,candidate.metrics.areaRatio))+4*(1-candidate.metrics.textCoverage);
                 }
-            } catch(std::runtime_error const&){candidate.metrics.reason=QString::fromUtf8("kararlı dönüşüm üretilemedi");}
+            } catch(std::runtime_error const&){candidate.metrics.reason=unified_i18n::text("kararlı dönüşüm üretilemedi");}
         }
-        report << (candidate.accepted()?QString::fromUtf8("%1: %2").arg(candidate.source).arg(candidate.score,0,'f',2)
-            :QString::fromUtf8("%1: elendi (%2)").arg(candidate.source,candidate.metrics.reason));
+        report << (candidate.accepted()?unified_i18n::text("%1: %2").arg(candidate.source).arg(candidate.score,0,'f',2)
+            :unified_i18n::text("%1: elendi (%2)").arg(candidate.source,candidate.metrics.reason));
     }
     int const best=unifiedChooseDewarpCandidate(result.candidates);
     if(best>=0){result.model=result.candidates[best].model;result.source=result.candidates[best].source;}
-    result.report=QString::fromUtf8("Metin + kenar karşılaştırması · %1\n%2\nSatır: %3 · kenar: %4 · başlangıç satır hatası: %5")
-        .arg(best>=0?QString::fromUtf8("seçilen: ")+result.source:QString::fromUtf8("güvenli aday yok"),report.join(QString::fromUtf8(" · ")))
+    result.report=unified_i18n::text("Metin + kenar karşılaştırması · %1\n%2\nSatır: %3 · kenar: %4 · başlangıç satır hatası: %5")
+        .arg(best>=0?unified_i18n::text("seçilen: ")+result.source:unified_i18n::text("güvenli aday yok"),report.join(unified_i18n::text(" · ")))
         .arg(text.horizontalCurves().size()).arg(edges.horizontalCurves().size()).arg(baseline,0,'f',2);
     return result;
 }

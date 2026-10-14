@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedResources.h"
 #include <QThread>
 #ifdef Q_OS_WIN
@@ -20,7 +21,7 @@ QString unifiedApplyCpuLimit(int percent) {
         if (!candidate || !AssignProcessToJobObject(candidate, GetCurrentProcess())) {
             const auto error = GetLastError();
             if (candidate) CloseHandle(candidate);
-            return QString::fromUtf8("CPU sınırı uygulanamadı (Windows %1)").arg(error);
+            return unified_i18n::text("CPU sınırı uygulanamadı (Windows %1)").arg(error);
         }
         job = candidate;
     }
@@ -30,9 +31,9 @@ QString unifiedApplyCpuLimit(int percent) {
         info.CpuRate = qBound(5, percent, 100) * 100;
     }
     if (!SetInformationJobObject(job, JobObjectCpuRateControlInformation, &info, sizeof(info)))
-        return QString::fromUtf8("CPU sınırı uygulanamadı (Windows %1)").arg(GetLastError());
-    return percent == 100 ? QString::fromUtf8("CPU üst sınırı kapalı")
-                          : QString::fromUtf8("CPU üst sınırı: toplam kapasitenin %%%1'i").arg(percent);
+        return unified_i18n::text("CPU sınırı uygulanamadı (Windows %1)").arg(GetLastError());
+    return percent == 100 ? unified_i18n::text("CPU üst sınırı kapalı")
+                          : unified_i18n::text("CPU üst sınırı: toplam kapasitenin %%%1'i").arg(percent);
 }
 QString unifiedUsage() {
     static ULONGLONG lastWall=0, lastCpu=0;
@@ -45,11 +46,11 @@ QString unifiedUsage() {
     lastWall=wall;lastCpu=cpu;
     PROCESS_MEMORY_COUNTERS memory{};memory.cb=sizeof(memory);
     GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory));
-    return QString::fromUtf8("Ana uygulama CPU: %%%1 · RAM: %2 MB").arg(usage,0,'f',1).arg(memory.WorkingSetSize/1024/1024);
+    return unified_i18n::text("Ana uygulama CPU: %%%1 · RAM: %2 MB").arg(usage,0,'f',1).arg(memory.WorkingSetSize/1024/1024);
 }
 #else
 #include <signal.h>
 bool unifiedProcessRunning(qint64 pid) {return pid>0 && kill(pid,0)==0;}
-QString unifiedApplyCpuLimit(int) {return QString::fromUtf8("Bu sistemde CPU iş parçacığı sınırı kullanılabilir.");}
+QString unifiedApplyCpuLimit(int) {return unified_i18n::text("Bu sistemde CPU iş parçacığı sınırı kullanılabilir.");}
 QString unifiedUsage() {return {};}
 #endif

@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include "OptionsWidget.h"
 #include "ApplyDialog.h"
 #include "Settings.h"
@@ -41,18 +42,18 @@ OptionsWidget::OptionsWidget(
 
     connect(autoBtn, SIGNAL(toggled(bool)), this, SLOT(modeChanged(bool)));
     connect(applyToBtn, SIGNAL(clicked()), this, SLOT(showApplyToDialog()));
-    auto review=new QPushButton(QString::fromUtf8("Kitap düzeni · toplu düzeltme…"),this);
+    auto review=new QPushButton(unified_i18n::text("Kitap düzeni · toplu düzeltme…"),this);
     review->setObjectName("bookContentReview");
-    review->setToolTip(QString::fromUtf8("Elle düzeltilmiş ve benzer sayfalardan öğrenir; şüpheli uzantıları önizleyerek düzeltir. Elle seçimleri değiştirmez."));
+    review->setToolTip(unified_i18n::text("Elle düzeltilmiş ve benzer sayfalardan öğrenir; şüpheli uzantıları önizleyerek düzeltir. Elle seçimleri değiştirmez."));
     if(auto box=qobject_cast<QVBoxLayout*>(layout()))box->insertWidget(box->count()-1,review);
     connect(review,&QPushButton::clicked,this,&OptionsWidget::bookReviewRequested);
-    auto aiGroup=new QGroupBox(QString::fromUtf8("Yapay zekâ ile içerik inceleme"),this);
+    auto aiGroup=new QGroupBox(unified_i18n::text("Yapay zekâ ile içerik inceleme"),this);
     auto aiLayout=new QVBoxLayout(aiGroup);
-    auto aiReview=new QPushButton(QString::fromUtf8("Önerileri incele…"),aiGroup);
+    auto aiReview=new QPushButton(unified_i18n::text("Önerileri incele…"),aiGroup);
     aiReview->setObjectName("aiContentReview");
-    aiReview->setToolTip(QString::fromUtf8("Paddle ile metin ve sayfa bölgelerini inceler. Eski ve önerilen alanı karşılaştırır; uygulama ve geri alma sizin seçiminizdir. Ctrl+Shift+A"));
+    aiReview->setToolTip(unified_i18n::text("Paddle ile metin ve sayfa bölgelerini inceler. Eski ve önerilen alanı karşılaştırır; uygulama ve geri alma sizin seçiminizdir. Ctrl+Shift+A"));
     aiLayout->addWidget(aiReview);
-    auto aiNote=new QLabel(QString::fromUtf8("Metin ve tablo gibi bölgeleri tanır; içerik kutusu önerir. Elle seçilmiş alanlar siz izin verene kadar korunur."),aiGroup);
+    auto aiNote=new QLabel(unified_i18n::text("Metin ve tablo gibi bölgeleri tanır; içerik kutusu önerir. Elle seçilmiş alanlar siz izin verene kadar korunur."),aiGroup);
     aiNote->setWordWrap(true);
     aiLayout->addWidget(aiNote);
     if(auto box=qobject_cast<QVBoxLayout*>(layout()))box->insertWidget(box->count()-1,aiGroup);

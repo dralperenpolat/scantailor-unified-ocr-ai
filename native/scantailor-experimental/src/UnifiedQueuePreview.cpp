@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedQueuePreview.h"
 #include "BasicImageView.h"
@@ -31,28 +32,28 @@ UnifiedQueuePreview::UnifiedQueuePreview(QWidget* parent) : QWidget(parent)
     m_title->setWordWrap(true);
     m_title->setMinimumWidth(80);
     bar->addWidget(m_title, 1);
-    for(auto spec:QList<QPair<QString,int>>{{QString::fromUtf8("Bu sayfayı düzenle"),3},{QString::fromUtf8("Geometri"),2},{QString::fromUtf8("Kenarlar"),4},{QString::fromUtf8("Parmak sil"),6}}){
+    for(auto spec:QList<QPair<QString,int>>{{unified_i18n::text("Bu sayfayı düzenle"),3},{unified_i18n::text("Geometri"),2},{unified_i18n::text("Kenarlar"),4},{unified_i18n::text("Parmak sil"),6}}){
         auto edit=new QPushButton(spec.first);edit->setObjectName(QString("queueEditStage%1").arg(spec.second));bar->addWidget(edit);
         connect(edit,&QPushButton::clicked,this,[this,spec]{if(editRequested)editRequested(spec.second);});
     }
-    auto back = new QPushButton(QString::fromUtf8("Açık projeye dön"));
+    auto back = new QPushButton(unified_i18n::text("Açık projeye dön"));
     bar->addWidget(back);
     connect(back, &QPushButton::clicked, this, [this] { if (returnToEditor) returnToEditor(); });
     auto navigation = new QHBoxLayout;
     layout->addLayout(navigation);
-    m_previous = new QPushButton(QString::fromUtf8("‹"));
-    m_next = new QPushButton(QString::fromUtf8("›"));
+    m_previous = new QPushButton(unified_i18n::text("‹"));
+    m_next = new QPushButton(unified_i18n::text("›"));
     m_previous->setMaximumWidth(35); m_next->setMaximumWidth(35);
-    m_previous->setToolTip(QString::fromUtf8("Önceki görüntü")); m_next->setToolTip(QString::fromUtf8("Sonraki görüntü"));
+    m_previous->setToolTip(unified_i18n::text("Önceki görüntü")); m_next->setToolTip(unified_i18n::text("Sonraki görüntü"));
     m_choices = new QComboBox;
     m_choices->setObjectName("queuePreviewPages");
     m_choices->setMinimumWidth(80);
     m_choices->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     navigation->addWidget(m_previous); navigation->addWidget(m_choices, 1); navigation->addWidget(m_next);
-    m_quality=new QCheckBox(QString::fromUtf8("Net önizleme · 300 DPI"));m_quality->setObjectName("queuePreviewQuality");m_quality->setChecked(true);
-    m_quality->setToolTip(QString::fromUtf8("Seçili PDF sayfasını 300 DPI ile yükler. Kaynak fotoğrafta asıl çözünürlüğü kullanır. PDF dosyası değişmez."));navigation->addWidget(m_quality);
+    m_quality=new QCheckBox(unified_i18n::text("Net önizleme · 300 DPI"));m_quality->setObjectName("queuePreviewQuality");m_quality->setChecked(true);
+    m_quality->setToolTip(unified_i18n::text("Seçili PDF sayfasını 300 DPI ile yükler. Kaynak fotoğrafta asıl çözünürlüğü kullanır. PDF dosyası değişmez."));navigation->addWidget(m_quality);
     connect(m_quality,&QCheckBox::toggled,this,[this]{selectImage();});
-    for (auto spec : QList<QPair<QString, double>>{{"+", 1.25}, {QString::fromUtf8("−"), .8}, {QString::fromUtf8("Sığdır"), 0}}) {
+    for (auto spec : QList<QPair<QString, double>>{{"+", 1.25}, {unified_i18n::text("−"), .8}, {unified_i18n::text("Sığdır"), 0}}) {
         auto button = new QPushButton(spec.first); navigation->addWidget(button);
         if (spec.second) button->setFixedWidth(30);
         connect(button, &QPushButton::clicked, this, [this, spec] {
@@ -80,7 +81,7 @@ UnifiedQueuePreview::~UnifiedQueuePreview()
 
 void UnifiedQueuePreview::showSelection(QString const& title, QJsonArray const& images, QString const& path)
 {
-    m_title->setText(QString::fromUtf8("Kuyruk seçimi · ") + title);
+    m_title->setText(unified_i18n::text("Kuyruk seçimi · ") + title);
     QSignalBlocker block(m_choices);
     m_choices->clear();
     int selected = path.isEmpty() || path.endsWith(".pdf", Qt::CaseInsensitive) ? 0 : -1;
@@ -96,7 +97,7 @@ void UnifiedQueuePreview::showSelection(QString const& title, QJsonArray const& 
         // A requested file may disappear or be rewritten after the event.
         // Show its read error instead of silently substituting another page.
         selected = m_choices->count();
-        m_choices->addItem(QString::fromUtf8("Seçilen sonuç · dosya kontrol ediliyor"), path);
+        m_choices->addItem(unified_i18n::text("Seçilen sonuç · dosya kontrol ediliyor"), path);
     }
     m_choices->setCurrentIndex(m_choices->count() ? selected : -1);
     if (currentPath() != m_pendingPath || m_choices->currentData(Qt::UserRole + 1).toString() != m_revision || !m_view)
@@ -122,8 +123,8 @@ void UnifiedQueuePreview::selectImage()
     m_next->setEnabled(m_choices->currentIndex() >= 0 && m_choices->currentIndex() + 1 < m_choices->count());
     delete m_view.data();
     m_message->setText(m_pendingPath.isEmpty()
-        ? QString::fromUtf8("Bu kitap için okunabilir bir kaynak veya tamamlanmış önizleme henüz bulunamadı.")
-        : QString::fromUtf8("Görüntü yükleniyor…"));
+        ? unified_i18n::text("Bu kitap için okunabilir bir kaynak veya tamamlanmış önizleme henüz bulunamadı.")
+        : unified_i18n::text("Görüntü yükleniyor…"));
     loadImage();
     if (currentPathChanged) currentPathChanged(m_pendingPath);
 }
@@ -168,7 +169,7 @@ void UnifiedQueuePreview::loadImage(bool fullResolution)
         m_loader->deleteLater(); m_loader = nullptr;
         if (generation != m_generation) { loadImage(); return; }
         if (result->isNull()) {
-            m_message->setText(fullResolution?QString::fromUtf8("Net önizleme yüklenemedi; hızlı önizleme gösteriliyor. Satırı yeniden seçerek deneyebilirsiniz."):QString::fromUtf8("Görüntü okunamadı. Henüz yazılıyor olabilir; satırı yeniden seçebilirsiniz."));
+            m_message->setText(fullResolution?unified_i18n::text("Net önizleme yüklenemedi; hızlı önizleme gösteriliyor. Satırı yeniden seçerek deneyebilirsiniz."):unified_i18n::text("Görüntü okunamadı. Henüz yazılıyor olabilir; satırı yeniden seçebilirsiniz."));
             return;
         }
         double zoom=m_view?m_view->zoomLevel():1.;QPointF center(.5,.5);
@@ -181,9 +182,9 @@ void UnifiedQueuePreview::loadImage(bool fullResolution)
         m_imageLayout->activate();m_view->setZoomLevel(zoom);
         auto r=m_view->virtualDisplayRect();auto p=m_view->virtualToWidget().map(QPointF(r.x()+center.x()*r.width(),r.y()+center.y()*r.height()));
         m_view->setWidgetFocalPoint(m_view->getWidgetFocalPoint()+QPointF(m_view->viewport()->rect().center())-p);
-        m_message->setText(fullResolution?(pdf.isEmpty()?QString::fromUtf8("Kaynak / çıktı görüntüsü · net önizleme"):QString::fromUtf8("PDF'nin 300 DPI görünümü"))+QString(" · %1 × %2 px").arg(result->width()).arg(result->height()):QString::fromUtf8("Hızlı önizleme · net görüntü yükleniyor…"));
+        m_message->setText(fullResolution?(pdf.isEmpty()?unified_i18n::text("Kaynak / çıktı görüntüsü · net önizleme"):unified_i18n::text("PDF'nin 300 DPI görünümü"))+QString(" · %1 × %2 px").arg(result->width()).arg(result->height()):unified_i18n::text("Hızlı önizleme · net görüntü yükleniyor…"));
         if(!fullResolution&&m_quality->isChecked())loadImage(true);
-        else if(!fullResolution)m_message->setText(QString::fromUtf8("Hızlı önizleme · net görünüm için 300 DPI seçeneğini açın."));
+        else if(!fullResolution)m_message->setText(unified_i18n::text("Hızlı önizleme · net görünüm için 300 DPI seçeneğini açın."));
     });
     m_loader->start();
 }

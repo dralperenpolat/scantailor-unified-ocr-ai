@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include <boost/foreach.hpp>
 #include <Qt>
 #include <QtGlobal>
@@ -62,36 +63,36 @@ OptionsWidget::OptionsWidget(
 {
     setupUi(this);
 
-    auto pdfGroup=new QGroupBox(QString::fromUtf8("PDF görünümü ve OCR"),this);
+    auto pdfGroup=new QGroupBox(unified_i18n::text("PDF görünümü ve OCR"),this);
     pdfGroup->setObjectName("unifiedOutputTools");
     auto pdfLayout=new QVBoxLayout(pdfGroup);
     m_pdfAppearance=new QComboBox(pdfGroup);
     m_pdfAppearance->setObjectName("stagePdfAppearance");
-    m_pdfAppearance->addItem(QString::fromUtf8("Experimental çıktısı"),"native");
-    m_pdfAppearance->addItem(QString::fromUtf8("Yumuşak siyah-beyaz"),"soft");
-    m_pdfAppearance->addItem(QString::fromUtf8("Yerel yumuşak siyah-beyaz"),"soft_local");
-    m_pdfAppearance->addItem(QString::fromUtf8("Gri ton · eşikleme yok"),"gray");
+    m_pdfAppearance->addItem(unified_i18n::text("Experimental çıktısı"),"native");
+    m_pdfAppearance->addItem(unified_i18n::text("Yumuşak siyah-beyaz"),"soft");
+    m_pdfAppearance->addItem(unified_i18n::text("Yerel yumuşak siyah-beyaz"),"soft_local");
+    m_pdfAppearance->addItem(unified_i18n::text("Gri ton · eşikleme yok"),"gray");
     m_pdfAppearance->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_pdfAppearance->setMinimumContentsLength(16);
     pdfLayout->addWidget(m_pdfAppearance);
-    m_pdfPreview=new QPushButton(QString::fromUtf8("Görünümü önizle"),pdfGroup);
+    m_pdfPreview=new QPushButton(unified_i18n::text("Görünümü önizle"),pdfGroup);
     m_pdfPreview->setObjectName("stagePdfPreview");
     m_pdfPreview->setEnabled(false);
     pdfLayout->addWidget(m_pdfPreview);
-    m_pdfCleanup=new QCheckBox(QString::fromUtf8("PDF’de otomatik temizlik"),pdfGroup);
+    m_pdfCleanup=new QCheckBox(unified_i18n::text("PDF’de otomatik temizlik"),pdfGroup);
     m_pdfCleanup->setObjectName("stagePdfCleanup");
-    m_pdfCleanup->setToolTip(QString::fromUtf8("Gri / yumuşak PDF’de metinden ayrık parmak ve kenar izlerini temizler. Yapay zekâ ile parmak tanıma değildir; görüntü analizi ve OCR ile metin koruması kullanır. Sonuç tamamlanan PDF’de görünür."));
+    m_pdfCleanup->setToolTip(unified_i18n::text("Gri / yumuşak PDF’de metinden ayrık parmak ve kenar izlerini temizler. Yapay zekâ ile parmak tanıma değildir; görüntü analizi ve OCR ile metin koruması kullanır. Sonuç tamamlanan PDF’de görünür."));
     pdfLayout->addWidget(m_pdfCleanup);
     m_pdfScope=new QLabel(pdfGroup);
     m_pdfScope->setObjectName("stagePdfScope");
     m_pdfScope->setWordWrap(true);
     pdfLayout->addWidget(m_pdfScope);
-    m_manualCleanup=new QPushButton(QString::fromUtf8("Parmak / leke sil…"),pdfGroup);
+    m_manualCleanup=new QPushButton(unified_i18n::text("Parmak / leke sil…"),pdfGroup);
     m_manualCleanup->setObjectName("stageManualCleanup");
     m_manualCleanup->setEnabled(false);
-    m_manualCleanup->setToolTip(QString::fromUtf8("Bu sayfanın Fill Zones aracını açar. Silinecek alanı çokgenle çevreleyip dolgu rengini beyaz seçin. Kaydet / PDF güncelle ile çıktı yenilenir."));
+    m_manualCleanup->setToolTip(unified_i18n::text("Bu sayfanın Fill Zones aracını açar. Silinecek alanı çokgenle çevreleyip dolgu rengini beyaz seçin. Kaydet / PDF güncelle ile çıktı yenilenir."));
     pdfLayout->addWidget(m_manualCleanup);
-    auto manualNote=new QLabel(QString::fromUtf8("Elle silme yalnız bu sayfaya uygulanır. Alanı çokgenle çizip beyaz dolgu seçin."),pdfGroup);
+    auto manualNote=new QLabel(unified_i18n::text("Elle silme yalnız bu sayfaya uygulanır. Alanı çokgenle çizip beyaz dolgu seçin."),pdfGroup);
     manualNote->setWordWrap(true);
     pdfLayout->addWidget(manualNote);
     OutputOptionsVerticalLayout->insertWidget(0,pdfGroup);
@@ -519,7 +520,7 @@ void OptionsWidget::setUnifiedPdfOptions(QString const& appearance, bool cleanup
     m_pdfCleanup->setChecked(cleanup);
     bool native=m_pdfAppearance->currentData().toString()=="native";
     m_pdfCleanup->setEnabled(!native);
-    m_pdfScope->setText(QString::fromUtf8(native
+    m_pdfScope->setText(unified_i18n::text(native
         ? "Kapsam: sonraki PDF işlemleri. Experimental görünümünde otomatik kenar temizliği uygulanmaz."
         : "Kapsam: sonraki PDF işlemleri; çalışan iş değişmez. Otomatik temizlik OCR korumalı görüntü analizidir; sonucu PDF’de görünür."));
 }

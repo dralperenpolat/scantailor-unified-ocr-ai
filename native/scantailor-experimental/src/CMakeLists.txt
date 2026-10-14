@@ -221,13 +221,21 @@ TARGET_LINK_LIBRARIES(
     dewarping zones interaction imageproc math foundation
     ${EXTRA_LIBS}
 )
-SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.4.3" CACHE STRING "GUI executable name")
+SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.4.4" CACHE STRING "GUI executable name")
 SET_TARGET_PROPERTIES(
     scantailor-experimental PROPERTIES
     OUTPUT_NAME "${STOU_GUI_OUTPUT_NAME}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 TARGET_INCLUDE_DIRECTORIES(scantailor-experimental PRIVATE "${CMAKE_BINARY_DIR}/src/stages/output" "${CMAKE_BINARY_DIR}/src/stages/page_layout" "${CMAKE_BINARY_DIR}/src/stages/deskew" "${CMAKE_BINARY_DIR}/src/stages/select_content")
+IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_i18n.cpp")
+    SET(i18n_test_sources ${gui_only_sources})
+    LIST(REMOVE_ITEM i18n_test_sources main.cpp)
+    ADD_EXECUTABLE(unified-i18n-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_i18n.cpp" ${i18n_test_sources} ${resource_sources})
+    TARGET_INCLUDE_DIRECTORIES(unified-i18n-test PRIVATE "${CMAKE_BINARY_DIR}/src/stages/output" "${CMAKE_BINARY_DIR}/src/stages/page_layout" "${CMAKE_BINARY_DIR}/src/stages/deskew" "${CMAKE_BINARY_DIR}/src/stages/select_content")
+    TARGET_LINK_LIBRARIES(unified-i18n-test $<$<PLATFORM_ID:Windows>:psapi> acceleration page_layout output fix_orientation page_split deskew select_content stcore dewarping zones interaction imageproc math foundation ${EXTRA_LIBS})
+    SET_TARGET_PROPERTIES(unified-i18n-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+ENDIF()
 IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_window043.cpp")
     SET(window_test_sources ${gui_only_sources})
     LIST(REMOVE_ITEM window_test_sources main.cpp)

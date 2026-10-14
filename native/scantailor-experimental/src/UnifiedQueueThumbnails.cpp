@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedQueueThumbnails.h"
 #include <QComboBox>
 #include <QEvent>
@@ -34,7 +35,7 @@ public:
         painter->setFont(option.font);
         QRect picture = area.adjusted(6, 4, -6, -34);
         auto icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
-        if (icon.isNull()) painter->drawText(picture, Qt::AlignCenter, QString::fromUtf8("Yükleniyor…"));
+        if (icon.isNull()) painter->drawText(picture, Qt::AlignCenter, unified_i18n::text("Yükleniyor…"));
         else {
             auto pixmap = icon.pixmap(picture.size().boundedTo(QSize(220, 210)));
             QSize size = pixmap.size() / pixmap.devicePixelRatio();
@@ -54,9 +55,9 @@ UnifiedQueueThumbnails::UnifiedQueueThumbnails(QWidget* parent) : QWidget(parent
     setObjectName("unifiedQueueThumbnails");
     auto layout = new QVBoxLayout(this); layout->setContentsMargins(4, 4, 4, 4);
     m_filter = new QComboBox; m_filter->setObjectName("queueThumbnailFilter");
-    m_filter->addItem(QString::fromUtf8("İşlenmiş sayfalar"), "processed");
-    m_filter->addItem(QString::fromUtf8("Kaynak fotoğraflar"), "source");
-    m_filter->addItem(QString::fromUtf8("Tümü"), "all");
+    m_filter->addItem(unified_i18n::text("İşlenmiş sayfalar"), "processed");
+    m_filter->addItem(unified_i18n::text("Kaynak fotoğraflar"), "source");
+    m_filter->addItem(unified_i18n::text("Tümü"), "all");
     layout->addWidget(m_filter);
     m_note = new QLabel; m_note->setWordWrap(true); layout->addWidget(m_note);
     m_list = new QListWidget; m_list->setObjectName("queueThumbnailList");
@@ -67,7 +68,7 @@ UnifiedQueueThumbnails::UnifiedQueueThumbnails(QWidget* parent) : QWidget(parent
     m_list->setWordWrap(true); m_list->setUniformItemSizes(true);
     layout->addWidget(m_list, 1);
     m_order = new QComboBox; m_order->setObjectName("queueThumbnailOrder");
-    m_order->addItems({QString::fromUtf8("Kitap sırası"), QString::fromUtf8("Genişliğe göre"), QString::fromUtf8("Yüksekliğe göre"), QString::fromUtf8("En / boy oranına göre")});
+    m_order->addItems({unified_i18n::text("Kitap sırası"), unified_i18n::text("Genişliğe göre"), unified_i18n::text("Yüksekliğe göre"), unified_i18n::text("En / boy oranına göre")});
     layout->addWidget(m_order);
     m_timer = new QTimer(this); m_timer->setSingleShot(true);
     connect(m_timer, &QTimer::timeout, this, [this] { loadVisible(); });
@@ -102,10 +103,10 @@ void UnifiedQueueThumbnails::setImages(QJsonArray const& images, QString const& 
         item->setData(Natural, natural++); item->setData(CacheKey, keyFor(image));
         if (auto size = m_sizes.object(keyFor(image))) { item->setData(Width, size->width()); item->setData(Height, size->height()); }
     }
-    m_filter->setItemText(0, QString::fromUtf8("İşlenmiş sayfalar (%1)").arg(processed));
-    m_filter->setItemText(1, QString::fromUtf8("Kaynak fotoğraflar (%1)").arg(sources));
-    m_note->setText(processed ? QString::fromUtf8("Seçilen kitabın çıktıları · tıkla: üstte aç")
-        : QString::fromUtf8("Henüz işlenmiş çıktı yok. Kaynak fotoğraflar gösterilebilir; çıktı oluşunca liste yenilenir."));
+    m_filter->setItemText(0, unified_i18n::text("İşlenmiş sayfalar (%1)").arg(processed));
+    m_filter->setItemText(1, unified_i18n::text("Kaynak fotoğraflar (%1)").arg(sources));
+    m_note->setText(processed ? unified_i18n::text("Seçilen kitabın çıktıları · tıkla: üstte aç")
+        : unified_i18n::text("Henüz işlenmiş çıktı yok. Kaynak fotoğraflar gösterilebilir; çıktı oluşunca liste yenilenir."));
     applyFilter(); applyOrder(); setCurrentPath(selectedPath);
     m_list->verticalScrollBar()->setValue(scroll);
     if (m_list->currentItem()) m_list->scrollToItem(m_list->currentItem(), QAbstractItemView::EnsureVisible);

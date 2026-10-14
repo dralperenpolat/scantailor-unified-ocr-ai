@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include "StageListView.h"
 #include "StageSequence.h"
 #include "ChangedStateItemDelegate.h"
@@ -127,8 +128,8 @@ StageListView::StageListView(QWidget* parent)
         viewport()
     );
     m_pLaunchBtn->setObjectName("nativeStagePlay");
-    m_pLaunchBtn->setStatusTip(QString::fromUtf8("Kitabı seçili aşamaya kadar kayıtlı Auto / Manual ayarlarıyla işle."));
-    m_pLaunchBtn->setToolTip(QString::fromUtf8("Kitabı bu aşamaya kadar işle. Her sayfanın kayıtlı Auto / Manual ayarı kullanılır. AI önerileri için aşağıdaki ▶ Hazırla / ▶ Uygula düğmelerini kullan."));
+    m_pLaunchBtn->setStatusTip(unified_i18n::text("Kitabı seçili aşamaya kadar kayıtlı Auto / Manual ayarlarıyla işle."));
+    m_pLaunchBtn->setToolTip(unified_i18n::text("Kitabı bu aşamaya kadar işle. Her sayfanın kayıtlı Auto / Manual ayarı kullanılır. AI önerileri için aşağıdaki ▶ Hazırla / ▶ Uygula düğmelerini kullan."));
     m_pLaunchBtn->hide();
 
     connect(
@@ -333,7 +334,7 @@ StageListView::placeLaunchButton(int row)
     }
 
     QModelIndex const idx(m_pModel->index(row, 0));
-    m_pLaunchBtn->setAccessibleName(QString::fromUtf8("Kitabı şu aşamaya kadar işle: ")+idx.data().toString());
+    m_pLaunchBtn->setAccessibleName(unified_i18n::text("Kitabı şu aşamaya kadar işle: ")+idx.data().toString());
     QRect button_geometry(visualRect(idx));
 
     // Place it to the right (assuming height is less than width).

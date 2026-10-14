@@ -39,7 +39,7 @@ def main():
     copy(root/'resources/ocr-catalog.json',dest/'resources/ocr-catalog.json')
     (dest/'resources/paddle-cpu-ready.json').write_text(json.dumps({'ok':True,'device':'cpu','paddle':'3.3.0','paddleocr':'3.7.0','bundled':True}))
     shutil.copytree(Path(a.runtime),dest/'runtime',dirs_exist_ok=True,ignore=ignore)
-    for name in ('LICENSE','README.md','THIRD_PARTY_NOTICES.md'):
+    for name in ('LICENSE','README.md','README.tr.md','THIRD_PARTY_NOTICES.md'):
         if (root/name).exists():copy(root/name,dest/name)
     shutil.copytree(root/'packaging',dest/'packaging',dirs_exist_ok=True,ignore=ignore)
     copy(root/'native/scantailor-experimental/LICENSE',dest/'licenses/ScanTailor-GPL-3.0.txt')
@@ -51,7 +51,7 @@ def main():
             if notice.exists():copy(notice,dest/'licenses/native-dependencies'/(package+'.txt'))
     (dest/'native-libraries.json').write_text(json.dumps(libraries,indent=2))
     (dest/'local-tools.json').write_text(json.dumps({'tessdata':'resources/tessdata_best','jbig2':None,'uvdoc':'resources/UVDoc'}))
-    (dest/'release.json').write_text(json.dumps({'version':'0.4.3','platform':'linux-x64','glibc_minimum':'2.35','cpu_bundled':True,'native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli').read_bytes()).hexdigest()}))
+    (dest/'release.json').write_text(json.dumps({'version':'0.4.4','platform':'linux-x64','glibc_minimum':'2.35','cpu_bundled':True,'native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli').read_bytes()).hexdigest()}))
     script='''#!/bin/sh
 set -eu
 APPDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

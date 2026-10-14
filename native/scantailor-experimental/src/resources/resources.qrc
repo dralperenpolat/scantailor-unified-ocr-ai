@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="/">
+    <file>i18n/unified-en.json</file>
     <file>icons/distortion-none.png</file>
     <file>icons/distortion-rotation.png</file>
     <file>icons/distortion-warp.png</file>

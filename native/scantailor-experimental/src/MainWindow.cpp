@@ -16,6 +16,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
+#include <QActionGroup>
 #include "UnifiedRuntime.h"
 #include "MainWindow.h"
 #include "UnifiedPanel.h"
@@ -165,12 +167,12 @@ MainWindow::MainWindow()
     m_editBar=new QWidget;auto editLayout=new QVBoxLayout(m_editBar);editLayout->setContentsMargins(4,2,4,2);editLayout->setSpacing(2);
     m_editLabel=new QLabel;m_editLabel->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);editLayout->addWidget(m_editLabel);
     auto actions=new QHBoxLayout;editLayout->addLayout(actions);
-    auto publishEdit=new QPushButton(QString::fromUtf8("Kaydet ve PDF'yi güncelle"));publishEdit->setObjectName("publishQueueEdit");actions->addWidget(publishEdit);
+    auto publishEdit=new QPushButton(unified_i18n::text("Kaydet ve PDF'yi güncelle"));publishEdit->setObjectName("publishQueueEdit");actions->addWidget(publishEdit);
     connect(publishEdit,&QPushButton::clicked,this,&MainWindow::publishQueueEdit);
-    auto showPdf=new QPushButton(QString::fromUtf8("PDF'ye dön"));actions->addWidget(showPdf);actions->addStretch();
+    auto showPdf=new QPushButton(unified_i18n::text("PDF'ye dön"));actions->addWidget(showPdf);actions->addStretch();
     connect(showPdf,&QPushButton::clicked,this,[this]{m_unified->previewBook(m_editBinding.value("job_id").toString(),m_editBinding.value("page").toInt());});
-    m_keepEditMargins=new QCheckBox(QString::fromUtf8("PDF'de projenin kenarlarını koru"));m_keepEditMargins->setChecked(true);editLayout->addWidget(m_keepEditMargins);
-    m_keepEditMargins->setToolTip(QString::fromUtf8("Açık: düzenlediğiniz sayfanın tamamı kenarlarıyla A4'e sığar. Kapalı: PDF / OCR ayarlarındaki otomatik içerik doldurma uygulanır."));
+    m_keepEditMargins=new QCheckBox(unified_i18n::text("PDF'de projenin kenarlarını koru"));m_keepEditMargins->setChecked(true);editLayout->addWidget(m_keepEditMargins);
+    m_keepEditMargins->setToolTip(unified_i18n::text("Açık: düzenlediğiniz sayfanın tamamı kenarlarıyla A4'e sığar. Kapalı: PDF / OCR ayarlarındaki otomatik içerik doldurma uygulanır."));
     connect(m_keepEditMargins,&QCheckBox::toggled,[this](bool checked){if(!m_editBinding.isEmpty())m_editBinding.insert("preserve_margins",checked);});
     editorLayout->addWidget(m_editBar);editorLayout->addWidget(imageViewFrame,1);m_editBar->hide();
     m_unifiedViewStack->addWidget(m_editorHost);
@@ -178,7 +180,7 @@ MainWindow::MainWindow()
     m_unifiedViewStack->addWidget(m_queuePreview);
     m_stagePreviewHost=new QWidget;m_stagePreviewLayout=new QVBoxLayout(m_stagePreviewHost);
     m_stagePreviewNote=new QLabel;m_stagePreviewNote->setWordWrap(true);m_stagePreviewLayout->addWidget(m_stagePreviewNote);
-    auto backFromReview=new QPushButton(QString::fromUtf8("Sayfa düzenleyicisine dön"));m_stagePreviewLayout->addWidget(backFromReview);connect(backFromReview,&QPushButton::clicked,this,&MainWindow::returnToProjectView);
+    auto backFromReview=new QPushButton(unified_i18n::text("Sayfa düzenleyicisine dön"));m_stagePreviewLayout->addWidget(backFromReview);connect(backFromReview,&QPushButton::clicked,this,&MainWindow::returnToProjectView);
     m_unifiedViewStack->addWidget(m_stagePreviewHost);
     m_queuePreview->returnToEditor = [this]{returnToProjectView();};
     m_queuePreview->editRequested = [this](int stage){m_unified->editPreview(stage);};
@@ -198,7 +200,7 @@ MainWindow::MainWindow()
     dockWidgetThumbnails->setMaximumWidth(QWIDGETSIZE_MAX);
     sortOptions->setVisible(false);
     m_unified = new UnifiedPanel(this);
-    m_unifiedDock = new QDockWidget(QString::fromUtf8("OCR / Çoklu kitap / Kaynak kullanımı"), this);
+    m_unifiedDock = new QDockWidget(unified_i18n::text("OCR / Çoklu kitap / Kaynak kullanımı"), this);
     m_unifiedDock->setObjectName("unifiedJobsDock");
     m_unifiedDock->setWidget(m_unified);
     addDockWidget(Qt::BottomDockWidgetArea, m_unifiedDock);
@@ -206,32 +208,49 @@ MainWindow::MainWindow()
     m_unifiedDock->installEventFilter(this);
     connect(m_unifiedDock,&QDockWidget::visibilityChanged,[this](bool shown){if(shown)resizeDocks({m_unifiedDock},{QSettings().value("unified/panel_height",370).toInt()},Qt::Vertical);});
     connect(m_unified,&UnifiedPanel::panelHeightRequested,[this](int height){if(m_unifiedDock->isFloating())m_unifiedDock->resize(m_unifiedDock->width(),height);else resizeDocks({m_unifiedDock},{height},Qt::Vertical);});
-    auto unifiedMenu = menuBar()->addMenu(QString::fromUtf8("OCR / Kitaplar"));
-    unifiedMenu->addAction(QString::fromUtf8("Kitap düzenine göre içerik denetimi…"),this,&MainWindow::reviewBookContent);
-    auto aiAction=unifiedMenu->addAction(QString::fromUtf8("Yapay zekâ ile içerik ve sayfa düzeni…"),this,&MainWindow::reviewAiContent);
-    auto geometryAction=unifiedMenu->addAction(QString::fromUtf8("Eğriliği karşılaştır · AI dahil…"),this,&MainWindow::reviewGeometry);geometryAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
+    auto languageMenu=menuBar()->addMenu(QStringLiteral("Dil / Language"));
+    languageMenu->setObjectName("unifiedLanguageMenu");
+    auto languageGroup=new QActionGroup(this);languageGroup->setExclusive(true);
+    auto languageNote=languageMenu->addAction(unified_i18n::text("Dil değişikliği program yeniden açılınca uygulanır."));
+    languageNote->setEnabled(false);languageMenu->addSeparator();
+    const auto activeLanguage=qApp->property("unifiedUiLanguage").toString();
+    for(auto const& code:{QStringLiteral("tr"),QStringLiteral("en")}) {
+        auto action=languageMenu->addAction(code=="tr"?QStringLiteral("Türkçe"):QStringLiteral("English"));
+        action->setObjectName("unifiedLanguage_"+code);action->setCheckable(true);
+        action->setData(code);action->setChecked(code==activeLanguage);languageGroup->addAction(action);
+        connect(action,&QAction::triggered,this,[this,code,activeLanguage,languageNote]{
+            QSettings settings;settings.setValue("unified/ui_language",code);settings.sync();
+            if(settings.status()!=QSettings::NoError){QMainWindow::statusBar()->showMessage(unified_i18n::text("Dil seçimi kaydedilemedi."),15000);return;}
+            const auto note=unified_i18n::text(code==activeLanguage?"Seçili dil zaten kullanılıyor.":"Dil seçimi kaydedildi. Programı yeniden açınca uygulanacak; çalışan kitap kuyruğu devam ediyor.");
+            languageNote->setText(note);QMainWindow::statusBar()->showMessage(note,20000);
+        });
+    }
+    auto unifiedMenu = menuBar()->addMenu(unified_i18n::text("OCR / Kitaplar"));
+    unifiedMenu->addAction(unified_i18n::text("Kitap düzenine göre içerik denetimi…"),this,&MainWindow::reviewBookContent);
+    auto aiAction=unifiedMenu->addAction(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni…"),this,&MainWindow::reviewAiContent);
+    auto geometryAction=unifiedMenu->addAction(unified_i18n::text("Eğriliği karşılaştır · AI dahil…"),this,&MainWindow::reviewGeometry);geometryAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
     aiAction->setObjectName("unifiedAiReviewAction");aiAction->setShortcut(QKeySequence("Ctrl+Shift+A"));
     for(auto pair:{std::make_pair("Ctrl+Alt+A",UnifiedStageReviewBar::Analyze),std::make_pair("Ctrl+Alt+P",UnifiedStageReviewBar::Preview),std::make_pair("Ctrl+Alt+Return",UnifiedStageReviewBar::Apply),std::make_pair("Ctrl+Alt+Backspace",UnifiedStageReviewBar::Undo)}){
         auto shortcut=new QShortcut(QKeySequence(pair.first),this);connect(shortcut,&QShortcut::activated,[this,a=pair.second]{auto bar=m_curFilter==2?m_geometryReviewBar:m_curFilter==3?m_contentReviewBar:QPointer<UnifiedStageReviewBar>{};if(bar&&!isBatchProcessingInProgress())bar->trigger(a);});
     }
     auto reviewTimer=new QTimer(this);connect(reviewTimer,&QTimer::timeout,this,&MainWindow::refreshStageReviews);reviewTimer->start(400);
-    auto viewMenu=new QMenu(QString::fromUtf8("Görünüm"),this);menuBar()->insertMenu(unifiedMenu->menuAction(),viewMenu);
-    dockWidgetFilters->toggleViewAction()->setText(QString::fromUtf8("Aşama ve ayar paneli"));
-    dockWidgetThumbnails->toggleViewAction()->setText(QString::fromUtf8("Sayfa küçük resimleri"));
+    auto viewMenu=new QMenu(unified_i18n::text("Görünüm"),this);menuBar()->insertMenu(unifiedMenu->menuAction(),viewMenu);
+    dockWidgetFilters->toggleViewAction()->setText(unified_i18n::text("Aşama ve ayar paneli"));
+    dockWidgetThumbnails->toggleViewAction()->setText(unified_i18n::text("Sayfa küçük resimleri"));
     viewMenu->addAction(dockWidgetFilters->toggleViewAction());viewMenu->addAction(dockWidgetThumbnails->toggleViewAction());
     viewMenu->addAction(m_unifiedDock->toggleViewAction());
-    connect(viewMenu->addAction(QString::fromUtf8("Açık proje görüntüsüne dön")),&QAction::triggered,this,&MainWindow::returnToProjectView);
+    connect(viewMenu->addAction(unified_i18n::text("Açık proje görüntüsüne dön")),&QAction::triggered,this,&MainWindow::returnToProjectView);
     unifiedMenu->addAction(m_unifiedDock->toggleViewAction());
-    for(int tab:{0,1}){auto b=new QPushButton(QString::fromUtf8(tab==0?"Kitaplar ▴":"PDF / OCR ▴"));b->setToolTip(QString::fromUtf8("Alt paneli bu bölümde aç. Aynı düğmeye tekrar basınca gizle."));QMainWindow::statusBar()->addPermanentWidget(b);connect(b,&QPushButton::clicked,[this,tab]{auto tabs=m_unified->findChild<QTabWidget*>("unifiedToolTabs");if(m_unifiedDock->isVisible()&&tabs&&tabs->currentIndex()==tab)m_unifiedDock->hide();else{m_unified->showToolsTab(tab);m_unifiedDock->show();m_unifiedDock->raise();}});}
+    for(int tab:{0,1}){auto b=new QPushButton(unified_i18n::text(tab==0?"Kitaplar ▴":"PDF / OCR ▴"));b->setToolTip(unified_i18n::text("Alt paneli bu bölümde aç. Aynı düğmeye tekrar basınca gizle."));QMainWindow::statusBar()->addPermanentWidget(b);connect(b,&QPushButton::clicked,[this,tab]{auto tabs=m_unified->findChild<QTabWidget*>("unifiedToolTabs");if(m_unifiedDock->isVisible()&&tabs&&tabs->currentIndex()==tab)m_unifiedDock->hide();else{m_unified->showToolsTab(tab);m_unifiedDock->show();m_unifiedDock->raise();}});}
     auto audit=new UnifiedPageAudit(this);
-    auto auditDock=new QDockWidget(QString::fromUtf8("Sayfa ayarları / uygulama kapsamı"),this);
+    auto auditDock=new QDockWidget(unified_i18n::text("Sayfa ayarları / uygulama kapsamı"),this);
     auditDock->setObjectName("unifiedPageAuditDock");auditDock->setWidget(audit);
     addDockWidget(Qt::BottomDockWidgetArea,auditDock);tabifyDockWidget(m_unifiedDock,auditDock);auditDock->hide();
     unifiedMenu->addAction(auditDock->toggleViewAction());
     viewMenu->addAction(auditDock->toggleViewAction());viewMenu->addSeparator();
-    connect(viewMenu->addAction(QString::fromUtf8("Panel yerleşimini sıfırla")),&QAction::triggered,[this]{
+    connect(viewMenu->addAction(unified_i18n::text("Panel yerleşimini sıfırla")),&QAction::triggered,[this]{
         restoreState(m_defaultPanelState);dockWidgetFilters->show();dockWidgetThumbnails->show();
-        QMainWindow::statusBar()->showMessage(QString::fromUtf8("Panel yerleşimi sıfırlandı. Kitabın işleme ayarları korunuyor."),6000);
+        QMainWindow::statusBar()->showMessage(unified_i18n::text("Panel yerleşimi sıfırlandı. Kitabın işleme ayarları korunuyor."),6000);
     });
     auto auditTimer=new QTimer(this);auditTimer->setInterval(1200);
     connect(auditTimer,&QTimer::timeout,[this,audit,auditDock]{
@@ -244,15 +263,15 @@ MainWindow::MainWindow()
         auto pages=m_ptrPages->toPageSequence(PAGE_VIEW);if(index<0||size_t(index)>=pages.numPages())return;
         filterList->selectRow(stage);m_ptrThumbSequence->setSelection(pages.pageAt(index).id());
     };
-    auto fitAction=unifiedMenu->addAction(QString::fromUtf8("Sayfayı ekrana sığdır · yalnız görünüm"));
-    fitAction->setShortcut(QKeySequence("Ctrl+0"));fitAction->setToolTip(QString::fromUtf8("Tek seferlik yakınlaştırma komutu. PDF boyutu ve içerik alanı değişmez; tekerlekle yeniden yakınlaşabilirsiniz."));
+    auto fitAction=unifiedMenu->addAction(unified_i18n::text("Sayfayı ekrana sığdır · yalnız görünüm"));
+    fitAction->setShortcut(QKeySequence("Ctrl+0"));fitAction->setToolTip(unified_i18n::text("Tek seferlik yakınlaştırma komutu. PDF boyutu ve içerik alanı değişmez; tekerlekle yeniden yakınlaşabilirsiniz."));
     viewMenu->addAction(fitAction);
     connect(fitAction,&QAction::triggered,[this]{for(auto view:findChildren<ImageViewBase*>())if(view->isVisible())view->setZoomLevel(1.);});
-    connect(unifiedMenu->addAction(QString::fromUtf8("Bu kitabı OCR kuyruğuna ekle")), &QAction::triggered, this, &MainWindow::captureUnifiedProject);
-    connect(unifiedMenu->addAction(QString::fromUtf8("Parmak temizle · Fill Zones")), &QAction::triggered, [this] {
+    connect(unifiedMenu->addAction(unified_i18n::text("Bu kitabı OCR kuyruğuna ekle")), &QAction::triggered, this, &MainWindow::captureUnifiedProject);
+    connect(unifiedMenu->addAction(unified_i18n::text("Parmak temizle · Fill Zones")), &QAction::triggered, [this] {
         if (!isProjectLoaded() || isBatchProcessingInProgress()) return;
         filterList->selectRow(m_ptrStages->outputFilterIdx());
-        QMessageBox::information(this, QString::fromUtf8("Parmak temizleme"), QString::fromUtf8("Output aşamasında sağdaki Fill Zones / Parmak temizle sekmesini açın. Parmak çevresinde çokgen çizip başlangıç noktasına dönün; dolgu rengini beyaz seçin. Metin üzerini örten parmak, eksik harfler yeniden çekilmeden düzeltilemez."));
+        QMessageBox::information(this, unified_i18n::text("Parmak temizleme"), unified_i18n::text("Output aşamasında sağdaki Fill Zones / Parmak temizle sekmesini açın. Parmak çevresinde çokgen çizip başlangıç noktasına dönün; dolgu rengini beyaz seçin. Metin üzerini örten parmak, eksik harfler yeniden çekilmeden düzeltilemez."));
     });
     connect(m_unified, &UnifiedPanel::captureRequested, this, &MainWindow::captureUnifiedProject);
     connect(m_unified, &UnifiedPanel::editRequested, this, &MainWindow::openQueuePage);
@@ -271,8 +290,8 @@ MainWindow::MainWindow()
         m_queueThumbStack->setCurrentWidget(m_queueThumbnails);
         // Editing controls still belong to the preserved open project.
         dockWidgetFilters->widget()->setEnabled(false);
-        dockWidgetFilters->setWindowTitle(QString::fromUtf8("Aşamalar · üstte Bu sayfayı düzenle'yi seçin"));
-        dockWidgetThumbnails->setWindowTitle(QString::fromUtf8("Küçük resimler · ")+title);
+        dockWidgetFilters->setWindowTitle(unified_i18n::text("Aşamalar · üstte Bu sayfayı düzenle'yi seçin"));
+        dockWidgetThumbnails->setWindowTitle(unified_i18n::text("Küçük resimler · ")+title);
     });
     connect(m_unified,&UnifiedPanel::selectionPreviewUpdated,this,[this](QString const& title,QJsonArray const& images,QString const& path){
         if(m_unifiedViewStack->currentWidget()!=m_queuePreview)return;
@@ -492,7 +511,7 @@ MainWindow::switchToNewProject(
     if(binding.open(QIODevice::ReadOnly)){auto bytes=binding.readAll();binding.close();m_editBinding=QJsonDocument::fromJson(bytes).object();}
     m_editBar->setVisible(!m_editBinding.isEmpty());
     m_keepEditMargins->setChecked(m_editBinding.value("preserve_margins").toBool(true));
-    m_editLabel->setText(m_editBinding.value("title").toString()+QString::fromUtf8(" · düzenleme kopyası"));
+    m_editLabel->setText(m_editBinding.value("title").toString()+unified_i18n::text(" · düzenleme kopyası"));
 
     if (project_reader)
     {
@@ -669,9 +688,9 @@ MainWindow::createBatchProcessingWidget()
     layout->setRowStretch(0, 1);
     layout->setRowStretch(row, 1);
     // Native controls above are retained; add live stage, count and pause.
-    m_liveLabel = new QLabel(QString::fromUtf8("İşlenen sayfa burada görünecek."));
+    m_liveLabel = new QLabel(unified_i18n::text("İşlenen sayfa burada görünecek."));
     m_liveProgress = new QProgressBar;
-    m_pauseButton = new QPushButton(QString::fromUtf8("Duraklat"));
+    m_pauseButton = new QPushButton(unified_i18n::text("Duraklat"));
     auto live = new QWidget; m_liveLayout = new QVBoxLayout(live);
     layout->addWidget(m_liveLabel, 0, 0, 1, 3);
     layout->addWidget(live, 1, 0, 1, 3);
@@ -1444,7 +1463,7 @@ MainWindow::startBatchProcessing()
 
     m_ptrInteractiveQueue->cancelAndClear();
     m_batchDone=0;m_batchTotal=0;m_batchPaused=false;m_batchElapsed.start();
-    m_pauseButton->setText(QString::fromUtf8("Duraklat"));
+    m_pauseButton->setText(unified_i18n::text("Duraklat"));
 
     auto const enqueuePage = [this](PageInfo const& page)
     {
@@ -1508,7 +1527,7 @@ MainWindow::startBatchProcessing()
     }
 
     m_liveProgress->setRange(0,m_batchTotal);m_liveProgress->setValue(0);
-    m_liveLabel->setText(QString::fromUtf8("%1 · 0/%2 sayfa").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchTotal));
+    m_liveLabel->setText(unified_i18n::text("%1 · 0/%2 sayfa").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchTotal));
     // Display the batch processing screen.
     updateMainArea();
 }
@@ -1584,7 +1603,7 @@ MainWindow::filterResult(BackgroundTaskPtr const& task, FilterResultPtr const& r
         ++m_batchDone; m_liveProgress->setValue(m_batchDone);
         auto fileTask = dynamic_cast<LoadFileTask*>(task.get());
         QString label = fileTask ? QFileInfo(fileTask->pageId().imageId().filePath()).fileName() : QString();
-        m_liveLabel->setText(QString::fromUtf8("%1 · %2/%3 · %4 · %5 sn").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchDone).arg(m_batchTotal).arg(label).arg(m_batchElapsed.elapsed()/1000));
+        m_liveLabel->setText(unified_i18n::text("%1 · %2/%3 · %4 · %5 sn").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchDone).arg(m_batchTotal).arg(label).arg(m_batchElapsed.elapsed()/1000));
     }
     // This needs to be done even if batch processing is taking place,
     // for instance because thumbnail invalidation is done from here.
@@ -1847,10 +1866,10 @@ MainWindow::showAboutDialog()
     Ui::AboutDialog ui;
     QDialog* dialog = new QDialog(this);
     ui.setupUi(dialog);
-    ui.version->setText(QString::fromUtf8(STFAMILY "\n" VERSION));
+    ui.version->setText(unified_i18n::text(STFAMILY "\n" VERSION));
 
     QResource license(":/license.html");
-    ui.licenseViewer->setHtml(QString::fromUtf8((char const*)license.data(), license.size()));
+    ui.licenseViewer->setHtml(unified_i18n::text((char const*)license.data(), license.size()));
 
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowModality(Qt::WindowModal);
@@ -2054,7 +2073,7 @@ MainWindow::loadPageInteractive(PageInfo const& page)
         auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);int number=0;
         for(size_t i=0;i<sequence.numPages();++i)if(sequence.pageAt(i).id()==page.id()){number=int(i)+1;break;}
         m_editBinding.insert("page",number);
-        m_editLabel->setText(m_editBinding.value("title").toString()+QString::fromUtf8(" · sayfa %1 · ").arg(number)+QFileInfo(page.id().imageId().filePath()).fileName()+" · "+page.id().subPageAsString());
+        m_editLabel->setText(m_editBinding.value("title").toString()+unified_i18n::text(" · sayfa %1 · ").arg(number)+QFileInfo(page.id().imageId().filePath()).fileName()+" · "+page.id().subPageAsString());
     }
 
     m_ptrInteractiveQueue->cancelAndClear();
@@ -2106,8 +2125,8 @@ MainWindow::updateWindowTitle()
     {
         project_name = QFileInfo(m_projectFile).baseName();
     }
-    QString const version(QString::fromUtf8(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.4.3 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    QString const version(unified_i18n::text(VERSION));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.4.4 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2600,8 +2619,8 @@ MainWindow::newPageSelectionAccessor()
 void MainWindow::toggleUnifiedPause() {
     if (!isBatchProcessingInProgress()) return;
     m_batchPaused=!m_batchPaused;
-    m_pauseButton->setText(QString::fromUtf8(m_batchPaused?"Devam et":"Duraklat"));
-    if (m_batchPaused) m_liveLabel->setText(QString::fromUtf8("Duraklatılıyor: çalışan sayfalar tamamlanınca bekleyecek."));
+    m_pauseButton->setText(unified_i18n::text(m_batchPaused?"Devam et":"Duraklat"));
+    if (m_batchPaused) m_liveLabel->setText(unified_i18n::text("Duraklatılıyor: çalışan sayfalar tamamlanınca bekleyecek."));
     else dispatchUnifiedBatch();
 }
 void MainWindow::dispatchUnifiedBatch() {
@@ -2613,7 +2632,7 @@ void MainWindow::dispatchUnifiedBatch() {
 }
 void MainWindow::setUnifiedPdfAppearance(QString const& appearance) {
     m_unified->setAppearance(appearance);
-    QMainWindow::statusBar()->showMessage(QString::fromUtf8("Sonraki PDF işlemlerinin görünümü güncellendi. Output → PDF görünümü alanı ve alt panel aynı ayarı kullanır; çalışan iş değişmez."),7000);
+    QMainWindow::statusBar()->showMessage(unified_i18n::text("Sonraki PDF işlemlerinin görünümü güncellendi. Output → PDF görünümü alanı ve alt panel aynı ayarı kullanır; çalışan iş değişmez."),7000);
 }
 void MainWindow::returnToProjectView() {
     if(m_geometryReviewBar)m_geometryReviewBar->setPreview(false);
@@ -2649,7 +2668,7 @@ void MainWindow::openQueuePage(QJsonObject const& target,int stage){
         QString project=m_unified->editCopy(target);
         m_pendingQueueEdit=target;m_pendingQueueEdit.insert("edit_project",project);m_pendingQueueEdit.insert("stage",stage);
         openProject(project);
-    }catch(std::exception const& e){QMessageBox::warning(this,QString::fromUtf8("Düzenleme"),QString::fromUtf8(e.what()));}
+    }catch(std::exception const& e){QMessageBox::warning(this,unified_i18n::text("Düzenleme"),unified_i18n::text(e.what()));}
 }
 void MainWindow::selectQueueEditPage(QJsonObject const& target,int stage){
     auto pages=m_ptrPages->toPageSequence(PAGE_VIEW);PageId selected;
@@ -2657,12 +2676,12 @@ void MainWindow::selectQueueEditPage(QJsonObject const& target,int stage){
         if(QFileInfo(id.imageId().filePath()).absoluteFilePath()==QFileInfo(target.value("source").toString()).absoluteFilePath()&&id.imageId().page()==target.value("image_page").toInt()&&id.subPageAsString()==target.value("subpage").toString()){selected=id;break;}
     }
     if(selected.isNull()){
-        QMainWindow::statusBar()->showMessage(QString::fromUtf8("Sayfa bölme değişmiş. Kaynak sayfayı sağdaki küçük resimlerden seçin."),9000);return;
+        QMainWindow::statusBar()->showMessage(unified_i18n::text("Sayfa bölme değişmiş. Kaynak sayfayı sağdaki küçük resimlerden seçin."),9000);return;
     }
     returnToProjectView();m_editFillRequested=stage==6;
     filterList->selectRow(qBound(0,stage==6?5:stage,5));goToPage(selected);
     dockWidgetFilters->show();dockWidgetThumbnails->show();
-    m_editLabel->setText(target.value("title").toString()+QString::fromUtf8(" · sayfa %1 · ").arg(target.value("page").toInt())+QFileInfo(selected.imageId().filePath()).fileName()+" · "+selected.subPageAsString());
+    m_editLabel->setText(target.value("title").toString()+unified_i18n::text(" · sayfa %1 · ").arg(target.value("page").toInt())+QFileInfo(selected.imageId().filePath()).fileName()+" · "+selected.subPageAsString());
 }
 void MainWindow::reviewBookContent(){
     if(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()==0||isBatchProcessingInProgress())return;
@@ -2689,7 +2708,7 @@ void MainWindow::publishQueueEdit(){
     if(!saveProjectWithFeedback(m_projectFile))return;
     QString snapshot=m_unified->revisionSnapshotPath();
     if(!saveProjectWithFeedback(snapshot))return;
-    if(m_unified->submitRevision(m_editBinding,snapshot))QMainWindow::statusBar()->showMessage(QString::fromUtf8("Düzeltme kaydedildi. Yeni PDF sıraya alındı; önceki PDF saklanıyor."),12000);
+    if(m_unified->submitRevision(m_editBinding,snapshot))QMainWindow::statusBar()->showMessage(unified_i18n::text("Düzeltme kaydedildi. Yeni PDF sıraya alındı; önceki PDF saklanıyor."),12000);
 }
 void MainWindow::reviewAiContent(){
     ensureAiContentReview(true);
@@ -2698,11 +2717,11 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     if(!isProjectLoaded()||isBatchProcessingInProgress())return nullptr;
     if(auto existing=findChild<QDialog*>("unifiedAiReview")){if(show){existing->show();existing->raise();}return static_cast<UnifiedAiReviewDialog*>(existing);}
     auto stages=m_ptrStages;auto samples=unified_content::collect(*m_ptrPages,*stages);
-    if(samples.empty()){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Önce Geometric Distortions ve Select Content aşamalarını işle."),12000);return nullptr;}
+    if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önce Geometric Distortions ve Select Content aşamalarını işle."),12000);return nullptr;}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+QString::fromUtf8(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.4.3"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.4.4"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectRow(3);goToPage(page);}};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_content::collect(*m_ptrPages,*stages):std::vector<unified_content::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,QRectF const* applied){return m_ptrStages==stages&&unified_content::matchesCurrent(sample,*stages,applied);};
@@ -2717,7 +2736,7 @@ UnifiedGeometryReviewDialog* MainWindow::ensureGeometryReview(bool show){
     if(!isProjectLoaded()||isBatchProcessingInProgress())return nullptr;
     if(auto existing=findChild<QDialog*>("unifiedGeometryReview")){if(show){existing->show();existing->raise();}return static_cast<UnifiedGeometryReviewDialog*>(existing);}
     auto stages=m_ptrStages;auto samples=unified_geometry::collect(*m_ptrPages,*stages);
-    if(samples.empty()){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Önce sayfa yönü, bölme ve geometri aşamalarını işle."),12000);return nullptr;}
+    if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önce sayfa yönü, bölme ve geometri aşamalarını işle."),12000);return nullptr;}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     auto dialog=new UnifiedGeometryReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,this,m_editBinding.value("job_id").toString(m_projectFile));
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_geometry::collect(*m_ptrPages,*stages):std::vector<unified_geometry::Sample>{};};
@@ -2737,32 +2756,32 @@ void MainWindow::bindStageReviews(){
     if(auto box=qobject_cast<QVBoxLayout*>(content->layout()))box->insertWidget(0,m_contentReviewBar);
     m_geometryReviewBar->action=[this](auto a){stageReviewAction(true,int(a));};m_contentReviewBar->action=[this](auto a){stageReviewAction(false,int(a));};
     auto group=m_ptrStages->outputFilter()->optionsWidget()->findChild<QGroupBox*>("unifiedOutputTools");
-    if(group){auto settings=new QPushButton(QString::fromUtf8("PDF / OCR ayarları"));settings->setObjectName("stageOcrSettings");group->layout()->addWidget(settings);connect(settings,&QPushButton::clicked,[this]{m_unified->showToolsTab(1);m_unifiedDock->show();m_unifiedDock->raise();});
-        auto book=new QPushButton(QString::fromUtf8("Kitabı kuyruğa ekle"));book->setObjectName("stageQueueBook");book->setToolTip(QString::fromUtf8("Açık projeyi mevcut ayarlarıyla kuyruğa ekler. Başlatmak için alttaki PDF oluştur düğmesini kullan."));group->layout()->addWidget(book);connect(book,&QPushButton::clicked,[this]{m_unified->showToolsTab(0);m_unifiedDock->show();m_unifiedDock->raise();if(m_unified->busy())QMainWindow::statusBar()->showMessage(QString::fromUtf8("Kuyruk çalışıyor. Bu kitapta yaptığın düzeltmeleri Kaydet ve PDF’yi güncelle ile gönder."),14000);else captureUnifiedProject();});}
+    if(group){auto settings=new QPushButton(unified_i18n::text("PDF / OCR ayarları"));settings->setObjectName("stageOcrSettings");group->layout()->addWidget(settings);connect(settings,&QPushButton::clicked,[this]{m_unified->showToolsTab(1);m_unifiedDock->show();m_unifiedDock->raise();});
+        auto book=new QPushButton(unified_i18n::text("Kitabı kuyruğa ekle"));book->setObjectName("stageQueueBook");book->setToolTip(unified_i18n::text("Açık projeyi mevcut ayarlarıyla kuyruğa ekler. Başlatmak için alttaki PDF oluştur düğmesini kullan."));group->layout()->addWidget(book);connect(book,&QPushButton::clicked,[this]{m_unified->showToolsTab(0);m_unifiedDock->show();m_unifiedDock->raise();if(m_unified->busy())QMainWindow::statusBar()->showMessage(unified_i18n::text("Kuyruk çalışıyor. Bu kitapta yaptığın düzeltmeleri Kaydet ve PDF’yi güncelle ile gönder."),14000);else captureUnifiedProject();});}
     if(group)if(auto button=group->findChild<QPushButton*>("stageFinishPreview"))connect(button,&QPushButton::clicked,this,&MainWindow::previewOutputFinish);
 }
 void MainWindow::previewOutputFinish(){
     if(!isProjectLoaded()||isBatchProcessingInProgress()||m_curFilter!=5)return;
     auto page=m_ptrThumbSequence->selectionLeader().id();if(page.isNull())return;
     QString source=m_outFileNameGen.filePathFor(page),gray=source+".ocr.tif";
-    if(!QFileInfo::exists(gray)||!QFileInfo::exists(source)){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Önce bu sayfanın Output işleminin bitmesini bekle."),10000);return;}
-    if(auto running=findChild<QProcess*>("stageFinishProcess")){if(running->state()!=QProcess::NotRunning){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Önizleme hazırlanıyor…"),5000);return;}running->deleteLater();}
+    if(!QFileInfo::exists(gray)||!QFileInfo::exists(source)){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önce bu sayfanın Output işleminin bitmesini bekle."),10000);return;}
+    if(auto running=findChild<QProcess*>("stageFinishProcess")){if(running->state()!=QProcess::NotRunning){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önizleme hazırlanıyor…"),5000);return;}running->deleteLater();}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString folder=unified_runtime::data(root)+"/resources/reviews/output-previews/"+QUuid::createUuid().toString(QUuid::WithoutBraces);QDir().mkpath(folder);
     auto options=m_unified->outputFinish();auto appearance=m_unified->appearance();auto stamp=QFileInfo(gray).lastModified();auto stages=m_ptrStages;
     QSaveFile request(folder+"/request.json");if(!request.open(QIODevice::WriteOnly))return;
     request.write(QJsonDocument(QJsonObject{{"source",source},{"gray",gray},{"output",folder+"/after.png"},{"before",folder+"/before.png"},{"options",options},{"appearance",appearance}}).toJson());if(!request.commit())return;
     auto process=new QProcess(this);process->setObjectName("stageFinishProcess");process->setWorkingDirectory(root);auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("PYTHONPATH",root+"/src");process->setProcessEnvironment(env);
-    QMainWindow::statusBar()->showMessage(QString::fromUtf8("Son görüntü önizlemesi hazırlanıyor; önceki aşamalar korunuyor…"));
+    QMainWindow::statusBar()->showMessage(unified_i18n::text("Son görüntü önizlemesi hazırlanıyor; önceki aşamalar korunuyor…"));
     connect(process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[=](int code,QProcess::ExitStatus){
-        auto log=QString::fromUtf8(process->readAllStandardOutput()),error=QString::fromUtf8(process->readAllStandardError());process->deleteLater();
-        if(code){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Önizleme tamamlanamadı: ")+error.right(700),18000);return;}
-        if(m_ptrStages!=stages||m_curFilter!=5||m_ptrThumbSequence->selectionLeader().id()!=page||m_unified->outputFinish()!=options||m_unified->appearance()!=appearance||QFileInfo(gray).lastModified()!=stamp){QMainWindow::statusBar()->showMessage(QString::fromUtf8("Sayfa veya ayarlar değişti. Güncel sayfada yeniden önizle."),10000);return;}
+        auto log=unified_i18n::text(process->readAllStandardOutput()),error=unified_i18n::text(process->readAllStandardError());process->deleteLater();
+        if(code){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önizleme tamamlanamadı: ")+error.right(700),18000);return;}
+        if(m_ptrStages!=stages||m_curFilter!=5||m_ptrThumbSequence->selectionLeader().id()!=page||m_unified->outputFinish()!=options||m_unified->appearance()!=appearance||QFileInfo(gray).lastModified()!=stamp){QMainWindow::statusBar()->showMessage(unified_i18n::text("Sayfa veya ayarlar değişti. Güncel sayfada yeniden önizle."),10000);return;}
         delete m_stagePreviewImage;auto split=new QSplitter;m_stagePreviewImage=split;
-        m_stagePreviewNote->setText(QString::fromUtf8("SON GÖRÜNTÜ KARŞILAŞTIRMASI · Önceki aşamalar değişmedi. Seçenekler yeni PDF’de uygulanır. Burada sayfa yerleşimi ve OCR katmanı gösterilmez. Yakınlaştırma: tekerlek."));
-        for(auto name:{"before","after"}){auto host=new QWidget;auto layout=new QVBoxLayout(host);layout->addWidget(new QLabel(QString::fromUtf8(QString(name)=="before"?"Önce · mevcut Output görüntüsü":"Sonra · seçtiğin ek işlemler")));QImage image(folder+"/"+name+".png");layout->addWidget(new BasicImageView(std::make_shared<NonAcceleratedOperations>(),image),1);split->addWidget(host);}
+        m_stagePreviewNote->setText(unified_i18n::text("SON GÖRÜNTÜ KARŞILAŞTIRMASI · Önceki aşamalar değişmedi. Seçenekler yeni PDF’de uygulanır. Burada sayfa yerleşimi ve OCR katmanı gösterilmez. Yakınlaştırma: tekerlek."));
+        for(auto name:{"before","after"}){auto host=new QWidget;auto layout=new QVBoxLayout(host);layout->addWidget(new QLabel(unified_i18n::text(QString(name)=="before"?"Önce · mevcut Output görüntüsü":"Sonra · seçtiğin ek işlemler")));QImage image(folder+"/"+name+".png");layout->addWidget(new BasicImageView(std::make_shared<NonAcceleratedOperations>(),image),1);split->addWidget(host);}
         m_stagePreviewLayout->addWidget(split,1);m_unifiedViewStack->setCurrentWidget(m_stagePreviewHost);
-        QString message=QString::fromUtf8("Önce / sonra hazır. Seçenekler sonraki PDF işlerine uygulanır.");for(auto line:log.split('\n'))if(line.startsWith("STOUFINISH ")){auto report=QJsonDocument::fromJson(line.mid(11).toUtf8()).object();message+=" "+report.value("lines").toObject().value("reason").toString();}
+        QString message=unified_i18n::text("Önce / sonra hazır. Seçenekler sonraki PDF işlerine uygulanır.");for(auto line:log.split('\n'))if(line.startsWith("STOUFINISH ")){auto report=QJsonDocument::fromJson(line.mid(11).toUtf8()).object();message+=" "+report.value("lines").toObject().value("reason").toString();}
         QMainWindow::statusBar()->showMessage(message,20000);
     });
     connect(process,&QProcess::errorOccurred,this,[=](QProcess::ProcessError e){if(e==QProcess::FailedToStart){QMainWindow::statusBar()->showMessage(process->errorString(),15000);process->deleteLater();}});
@@ -2784,9 +2803,9 @@ void MainWindow::refreshStageReviews(){
     auto update=[&](auto d,UnifiedStageReviewBar* bar){
         UnifiedStageReviewState s;
         if(d)s=UnifiedStageReviewBridge::state(d,page,bar->candidateFor(key),bar->scope()=="page"?std::set<PageId>{page}:selectedPages(),bar->scope()=="book");
-        else {s.page=key;s.detail=QString::fromUtf8("Önce yanındaki ▶ Hazırla düğmesine bas. Öneri gelince inceleyip uygula.");}
-        if(bar==m_geometryReviewBar){auto params=m_ptrStages->deskewFilter()->getSettings()->getPageParams(page);if(params){auto type=params->distortionType();s.nativeMethod=QString::fromUtf8(type==deskew::DistortionType::WARP?"Curved lines · eğrilik":type==deskew::DistortionType::PERSPECTIVE?"Perspektif":type==deskew::DistortionType::ROTATION?"Döndürme / eğiklik":"Düzeltme yok");s.nativeMethod+=params->mode()==MODE_AUTO?" · Auto":" · Manual";}}
-        else {auto params=m_ptrStages->selectContentFilter()->getSettings()->getPageParams(page);if(params)s.nativeMethod=params->mode()==MODE_AUTO?QString::fromUtf8("Otomatik içerik seçimi · Auto"):QString::fromUtf8("Kayıtlı içerik kutusu · Manual");}
+        else {s.page=key;s.detail=unified_i18n::text("Önce yanındaki ▶ Hazırla düğmesine bas. Öneri gelince inceleyip uygula.");}
+        if(bar==m_geometryReviewBar){auto params=m_ptrStages->deskewFilter()->getSettings()->getPageParams(page);if(params){auto type=params->distortionType();s.nativeMethod=unified_i18n::text(type==deskew::DistortionType::WARP?"Curved lines · eğrilik":type==deskew::DistortionType::PERSPECTIVE?"Perspektif":type==deskew::DistortionType::ROTATION?"Döndürme / eğiklik":"Düzeltme yok");s.nativeMethod+=params->mode()==MODE_AUTO?" · Auto":" · Manual";}}
+        else {auto params=m_ptrStages->selectContentFilter()->getSettings()->getPageParams(page);if(params)s.nativeMethod=params->mode()==MODE_AUTO?unified_i18n::text("Otomatik içerik seçimi · Auto"):unified_i18n::text("Kayıtlı içerik kutusu · Manual");}
         if(s.stale&&bar->previewing())returnToProjectView();
         bar->showState(s);bar->setEnabled(!isBatchProcessingInProgress());
     };
@@ -2802,7 +2821,7 @@ void MainWindow::stageReviewAction(bool geometry,int action){
     auto run=[&](auto dialog){if(!dialog)return;QString feedback;
         switch(action){
         case UnifiedStageReviewBar::Analyze:feedback=UnifiedStageReviewBridge::analyze(dialog,pages,all,bar->device());break;
-        case UnifiedStageReviewBar::Preview:{auto im=UnifiedStageReviewBridge::preview(dialog,page,bar->candidate());if(im.isNull()){bar->setPreview(false);feedback=QString::fromUtf8("Önizleme hazır değil; yeniden öneri hazırla.");break;}delete m_stagePreviewImage;m_stagePreviewImage=new BasicImageView(std::make_shared<NonAcceleratedOperations>(),im);auto reviewState=UnifiedStageReviewBridge::state(dialog,page,bar->candidate());m_stagePreviewNote->setText(QString::fromUtf8(geometry?"EĞRİ KARŞILAŞTIRMASI · ":"İÇERİK KARŞILAŞTIRMASI · ")+reviewState.detail+QString::fromUtf8(" Yakınlaştırma: tekerlek."));m_stagePreviewLayout->addWidget(m_stagePreviewImage,1);m_unifiedViewStack->setCurrentWidget(m_stagePreviewHost);bar->setPreview(true);break;}
+        case UnifiedStageReviewBar::Preview:{auto im=UnifiedStageReviewBridge::preview(dialog,page,bar->candidate());if(im.isNull()){bar->setPreview(false);feedback=unified_i18n::text("Önizleme hazır değil; yeniden öneri hazırla.");break;}delete m_stagePreviewImage;m_stagePreviewImage=new BasicImageView(std::make_shared<NonAcceleratedOperations>(),im);auto reviewState=UnifiedStageReviewBridge::state(dialog,page,bar->candidate());m_stagePreviewNote->setText(unified_i18n::text(geometry?"EĞRİ KARŞILAŞTIRMASI · ":"İÇERİK KARŞILAŞTIRMASI · ")+reviewState.detail+unified_i18n::text(" Yakınlaştırma: tekerlek."));m_stagePreviewLayout->addWidget(m_stagePreviewImage,1);m_unifiedViewStack->setCurrentWidget(m_stagePreviewHost);bar->setPreview(true);break;}
         case UnifiedStageReviewBar::Apply:feedback=UnifiedStageReviewBridge::apply(dialog,pages,all,single,bar->allowManual(),bar->candidate());returnToProjectView();break;
         case UnifiedStageReviewBar::Undo:feedback=UnifiedStageReviewBridge::undo(dialog);returnToProjectView();break;
         case UnifiedStageReviewBar::Stop:UnifiedStageReviewBridge::stop(dialog);break;

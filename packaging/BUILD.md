@@ -1,4 +1,6 @@
-# 0.4.3 paketini yeniden oluşturma
+# 0.4.4 paketini yeniden oluşturma
+
+[English](BUILD.en.md) | **Türkçe**
 
 Windows ve Linux kendi sistemlerinde ayrı derlenir. Git deposuna kitap, kuyruk, özel proje, sanal ortam veya ikili model eklemeyin. Kaynak ZIP'i yalnız uygulama kaynakları, lisanslar, testler ve bu betiklerden oluşur.
 
@@ -44,7 +46,7 @@ python3 packaging/fetch_assets.py
 bash packaging/build-linux.sh
 $HOME/stou-tools/python/bin/python3 packaging/stage_linux.py --runtime "$HOME/stou-tools/python" --destination "$HOME/stage-linux"
 LD_LIBRARY_PATH="$HOME/stage-linux/native/bin" "$HOME/stage-linux/runtime/bin/python3" packaging/smoke_cpu.py --root "$HOME/stage-linux" --work "$HOME/qa-linux" --ai
-tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.4.3-linux-x64.tar.gz .
+tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.4.4-linux-x64.tar.gz .
 ```
 
 glibc, çekirdek ve ekran sunucusu sistemden gelir; diğer tespit edilen native kitaplıklar pakete alınır. Qt platform eklentileri dahildir. glibc 2.35 altı veya musl sistemleri için bu ikiliyi kullanmayın. Kaynaktan ayrı derleme gerekir.
@@ -58,3 +60,5 @@ Native arayüz kontrolleri için derleme dizininde `cmake --build ... --target u
 Windows EXE'yi boş bir klasöre kurup aynı testi **kurulan** yorumlayıcıyla tekrar çalıştırın. Linux arşivini başka bir konuma açıp başlatıcıyı ve testi yeniden çalıştırın. Boşluk ve Türkçe karakter içeren yolları dahil edin. `QT_QPA_PLATFORM=offscreen`, `STOU_SETTINGS_NAME=release-test` ve `STOU_SMOKE_SCREENSHOT=/tam/yol/gui.png` ile native arayüzün test ekranı kaydedilebilir. Windows offscreen fontları için `QT_QPA_FONTDIR=C:\Windows\Fonts` gerekebilir.
 
 GitHub Releases'e Windows EXE, Linux arşivi, **eşleşen kaynak ZIP'i**, SHA256SUMS ve test sonuçlarını birlikte yükleyin. Kaynak ZIP'ini üretmek için `python packaging/source_archive.py --destination ...` kullanın. Lisans ve bildirimleri koruyun. Kurulum paketi ile kaynak kodun sürümü eşleşmelidir.
+
+Arayüz dili testi: `unified-i18n-test` hedefini derleyip `QT_QPA_PLATFORM=offscreen` ile çalıştırın. Test dil seçimi, kalıcılık, ayrı play düğmeleri, ilerleme mesajları ve OCR dil kodlarının korunmasını denetler.

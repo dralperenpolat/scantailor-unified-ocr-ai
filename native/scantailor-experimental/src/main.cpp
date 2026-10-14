@@ -20,6 +20,7 @@
 #include "Application.h"
 #include "MainWindow.h"
 #include "UnifiedRuntime.h"
+#include "UnifiedI18n.h"
 #include <QProcess>
 #include <QTimer>
 #include <QCryptographicHash>
@@ -75,14 +76,21 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    QString const translation("scantailor-experimental_"+QLocale::system().name());
-    QString const translation_qtbase("qtbase_"+QLocale::system().name());
+    // Choose the interface language before constructing any widgets. It is
+    // independent of OCR languages and does not alter running queue requests.
+    app.setApplicationName(qEnvironmentVariable("STOU_SETTINGS_NAME", "scantailor-ocr-unified"));
+    app.setOrganizationName("Scan Tailor");
+    app.setOrganizationDomain("scantailor.sourceforge.net");
+    const auto uiLanguage=unified_i18n::selectedLanguage();
+    app.setProperty("unifiedUiLanguage",uiLanguage);
+    QString const translation("scantailor-experimental_"+uiLanguage);
+    QString const translation_qtbase("qtbase_"+uiLanguage);
     QTranslator translator, translator_qtbase;
     bool found_translation = false, found_translation_qtbase = false;
 
     // Try loading translations from different paths.
     QStringList const translation_dirs(
-        QString::fromUtf8(TRANSLATION_DIRS).split(QChar(':'), QStringSkipEmptyParts)
+        unified_i18n::text(TRANSLATION_DIRS).split(QChar(':'), QStringSkipEmptyParts)
     );
     for (QString const& path : translation_dirs)
     {
@@ -120,10 +128,12 @@ int main(int argc, char** argv)
 
     app.installTranslator(&translator);
     app.installTranslator(&translator_qtbase);
+    unified_i18n::EnglishTranslator unifiedEnglish;
+    if(uiLanguage=="en")app.installTranslator(&unifiedEnglish);
 
     // Plugin search paths.
     QStringList const plugin_dirs(
-        QString::fromUtf8(PLUGIN_DIRS).split(QChar(':'), QStringSkipEmptyParts)
+        unified_i18n::text(PLUGIN_DIRS).split(QChar(':'), QStringSkipEmptyParts)
     );
     // Reversing, as QCoreApplication::addLibraryPath() prepends the new path to the list.
     for (QString const& path : boost::adaptors::reverse(plugin_dirs))
@@ -149,14 +159,14 @@ int main(int argc, char** argv)
     unified_runtime::initialize();
     if(QFileInfo::exists(unified_runtime::root()+"/release.json")) {
         QProcess prepare;prepare.start(unified_runtime::python(unified_runtime::root()),{"-m","scantailor_ocr_unified.runtime_layout"});
-        if(!prepare.waitForFinished(60000)||prepare.exitCode()!=0){QMessageBox::critical(nullptr,"ScanTailor OCR Unified",QString::fromUtf8("Kullanıcı klasörü hazırlanamadı. Kurulumu kontrol edin.\n")+QString::fromUtf8(prepare.readAllStandardError()));return 1;}
+        if(!prepare.waitForFinished(60000)||prepare.exitCode()!=0){QMessageBox::critical(nullptr,"ScanTailor OCR Unified",unified_i18n::text("Kullanıcı klasörü hazırlanamadı. Kurulumu kontrol edin.\n")+unified_i18n::text(prepare.readAllStandardError()));return 1;}
     }
     QSettings settings;
     auto lockId=QString::fromLatin1(QCryptographicHash::hash(app.applicationName().toUtf8(),QCryptographicHash::Sha256).toHex().left(16));
     QLockFile instanceLock(QStandardPaths::writableLocation(QStandardPaths::TempLocation)+(app.applicationName()=="scantailor-ocr-unified"?"/scantailor-ocr-unified-editor.lock":"/scantailor-ocr-unified-editor-"+lockId+".lock"));
     instanceLock.setStaleLockTime(0);
     if(!instanceLock.tryLock(0)){
-        QMessageBox::information(nullptr,QString::fromUtf8("ScanTailor OCR Unified"),QString::fromUtf8("Program zaten açık. İkinci bir kopya başlatılmadı; açık pencereyi kullanın."));
+        QMessageBox::information(nullptr,unified_i18n::text("ScanTailor OCR Unified"),unified_i18n::text("Program zaten açık. İkinci bir kopya başlatılmadı; açık pencereyi kullanın."));
         return 0;
     }
 

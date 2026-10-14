@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedGeometryReview.h"
 #include "ProjectPages.h"
@@ -91,7 +92,7 @@ struct Process {
                 if(!line.startsWith("STOUGEOMETRY "))continue;
                 auto result=QJsonDocument::fromJson(line.mid(13)).object();if(result.value("id")==input.value("id"))return result;
             }
-            if(child.state()==QProcess::NotRunning)throw std::runtime_error((QString::fromUtf8("UVDoc kapandı: ")+QString::fromUtf8(errors)).toStdString());
+            if(child.state()==QProcess::NotRunning)throw std::runtime_error((unified_i18n::text("UVDoc kapandı: ")+unified_i18n::text(errors)).toStdString());
             if(buffer.size()>4*1024*1024)throw std::runtime_error("UVDoc yanıt boyutu sınırı aşıldı.");
         }
         throw std::runtime_error("UVDoc zamanında yanıt vermedi; mevcut geometri korundu.");
@@ -144,37 +145,37 @@ void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QStr
                 try{
                     auto json=process.request({{"id",index},{"image",input},{"device",device}},root,cancelled);
                     if(!json.value("ok").toBool())throw std::runtime_error(json.value("error").toString().toStdString());
-                    out.cached=json.value("cached").toBool();deskew::UnifiedDewarpCandidate ai;ai.source=QString::fromUtf8("UVDoc eğri önerisi");
+                    out.cached=json.value("cached").toBool();deskew::UnifiedDewarpCandidate ai;ai.source=unified_i18n::text("UVDoc eğri önerisi");
                     auto curve=[&](char const* key){std::vector<QPointF> points;for(auto value:json.value(key).toArray()){auto p=value.toArray();if(p.size()!=2)throw std::runtime_error("UVDoc eğri koordinatı eksik.");points.push_back(small.transform().inverted().map(QPointF(p[0].toDouble()+rect.x(),p[1].toDouble()+rect.y())));}return Curve(points);};
                     ai.model.setTopCurve(curve("top"));ai.model.setBottomCurve(curve("bottom"));
-                    QStringList reasons;for(auto v:json.value("reasons").toArray())reasons<<v.toString();ai.metrics.reason=reasons.join(' ');extra.push_back(std::move(ai));
-                }catch(std::exception const& e){aiError=QString::fromUtf8(e.what());}
+                    QStringList reasons;for(auto v:json.value("reasons").toArray())reasons<<unified_i18n::display(v.toString());ai.metrics.reason=reasons.join(' ');extra.push_back(std::move(ai));
+                }catch(std::exception const& e){aiError=unified_i18n::text(e.what());}
             }
             status.throwIfCancelled();
             auto selection=deskew::unifiedSelectAutoDewarp(GrayImage(source),s.transform,s.params.getParamsDewarping(),
                 s.params.getParamsSource().photo()?s.params.getParamsSource().fov():0.,ops,status,nullptr,extra,current->forwardMapper());
             out.currentError=selection.currentError;out.report=selection.report;
-            if(!aiError.isEmpty())out.report+=QString::fromUtf8("\nUVDoc: ")+aiError;
+            if(!aiError.isEmpty())out.report+=unified_i18n::text("\nUVDoc: ")+aiError;
             int best=deskew::unifiedChooseDewarpCandidate(selection.candidates);
             for(auto const& candidate:selection.candidates){
                 status.throwIfCancelled();auto params=s.params;params.setDistortionType(deskew::DistortionType::WARP);
                 params.getParamsDewarping().setDistortionModel(candidate.model);params.getParamsDewarping().setMode(MODE_MANUAL);
-                params.getParamsDewarping().setDetectionReport(QString::fromUtf8("İncelenmiş geometri · ")+candidate.source);
+                params.getParamsDewarping().setDetectionReport(unified_i18n::text("İncelenmiş geometri · ")+candidate.source);
                 params.unifiedWarning.clear();params.unifiedGeometry=candidate.metrics.summary();
                 Candidate c{candidate.source,{},candidate.metrics.reason,params,candidate.metrics,candidate.lineError,candidate.score,candidate.accepted()};
                 // Sparse covers cannot be ranked by text residual. A UVDoc model
                 // that passed all geometric checks is still reviewable by hand,
                 // but is never a bulk recommendation.
-                if(candidate.model.isValid()&&candidate.source.startsWith("UVDoc")&&candidate.metrics.reason.startsWith(QString::fromUtf8("kenarı doğrulayacak yeterli satır yok"))){c.accepted=true;c.reason=QString::fromUtf8("Az metin: yalnız görsel incelemeyle tek sayfaya uygulanabilir; toplu önerilmez.");}
+                if(candidate.model.isValid()&&candidate.source.startsWith("UVDoc")&&candidate.metrics.reason.startsWith(unified_i18n::text("kenarı doğrulayacak yeterli satır yok"))){c.accepted=true;c.reason=unified_i18n::text("Az metin: yalnız görsel incelemeyle tek sayfaya uygulanabilir; toplu önerilmez.");}
                 if(c.accepted){c.path=directory+QString("/%1-candidate-%2.png").arg(index).arg(out.candidates.size());
-                    try{savePreview(source,*transform(s,params),c.path,ops);}catch(std::exception const& e){c.accepted=false;c.reason=QString::fromUtf8(e.what());c.path.clear();}}
+                    try{savePreview(source,*transform(s,params),c.path,ops);}catch(std::exception const& e){c.accepted=false;c.reason=unified_i18n::text(e.what());c.path.clear();}}
                 out.candidates.push_back(std::move(c));
             }
             if(best>=0&&out.candidates[best].accepted&&deskew::unifiedFinite(selection.currentError)&&
                out.candidates[best].error+.25<selection.currentError*.90)out.recommended=best;
-            out.report+=out.recommended>=0?QString::fromUtf8("\nÖnerilen: ")+out.candidates[out.recommended].name:
-                QString::fromUtf8("\nMevcut sonucu değiştirecek yeterli iyileşme bulunmadı.");
-        }catch(std::exception const& e){out.error=QString::fromUtf8(e.what());}
+            out.report+=out.recommended>=0?unified_i18n::text("\nÖnerilen: ")+out.candidates[out.recommended].name:
+                unified_i18n::text("\nMevcut sonucu değiştirecek yeterli iyileşme bulunmadı.");
+        }catch(std::exception const& e){out.error=unified_i18n::text(e.what());}
         out.seconds=timer.elapsed()/1000.;completed(std::move(out));
     }
 }

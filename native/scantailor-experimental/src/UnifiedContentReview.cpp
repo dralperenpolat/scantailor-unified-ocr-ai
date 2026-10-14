@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "UnifiedI18n.h"
 #include "UnifiedContentReview.h"
 #include "ProjectPages.h"
 #include "PageSequence.h"
@@ -111,9 +112,9 @@ Proposal examine(Sample const& sample,Model const& learned,int index) {
     double scale=std::min(1.,1200./std::max(sample.crop.width(),sample.crop.height()));
     transform->scale(scale,scale);
     QRect target=transform->transformedCropArea().boundingRect().toAlignedRect();
-    if(target.width()>1600||target.height()>1600||target.isEmpty()){p.reason=QString::fromUtf8("Geometri boyutu olağandışı; elle incele.");return p;}
+    if(target.width()>1600||target.height()>1600||target.isEmpty()){p.reason=unified_i18n::text("Geometri boyutu olağandışı; elle incele.");return p;}
     QImage source=ImageLoader::load(sample.page.imageId());
-    if(source.isNull()){p.reason=QString::fromUtf8("Kaynak görüntü okunamadı.");return p;}
+    if(source.isNull()){p.reason=unified_i18n::text("Kaynak görüntü okunamadı.");return p;}
     auto ops=std::make_shared<NonAcceleratedOperations>();
     QImage image=transform->materialize(source,target,Qt::white,ops);
     auto toPixel=[&](QRectF r){return QRectF(r.x()*scale-target.x(),r.y()*scale-target.y(),r.width()*scale,r.height()*scale);};
@@ -125,7 +126,7 @@ Proposal examine(Sample const& sample,Model const& learned,int index) {
         if(cc.pixCount()<3)continue;components.push_back(cc);
         if(cut.contains(QRectF(cc.rect()))&&cc.height()>=4&&cc.height()<40&&cc.width()>=2&&cc.width()<cc.height()*2.5&&cc.pixCount()>=6)heights.push_back(cc.height());
     }
-    if(heights.size()<60){p.reason=QString::fromUtf8("Az metin / özel sayfa: yalnız inceleme.");p.rect=QRectF();}
+    if(heights.size()<60){p.reason=unified_i18n::text("Az metin / özel sayfa: yalnız inceleme.");p.rect=QRectF();}
     else {
         double glyph=median(heights);int outsideGlyphs=0;bool graphic=false;
         // A cut may never bisect a glyph, page number or footnote marker.
@@ -158,9 +159,9 @@ Proposal examine(Sample const& sample,Model const& learned,int index) {
         // Uncertain printed matter is always presented for a human decision.
         // Even one surviving glyph prevents unattended application.
         p.safe=outsideGlyphs==0&&!graphic&&removed>.01&&removed<.40;
-        p.reason=outsideGlyphs?QString::fromUtf8("Taşma şüpheli; dışarıda %1 harf / numara benzeri iz var. Önizleyerek karar ver.").arg(outsideGlyphs):
-            graphic?QString::fromUtf8("Taşmada görsel / gölge var; önizleyerek karar ver."):
-            QString::fromUtf8("Tekrarlanan düzene göre fazla kenar; kesilecek alanda metin izi bulunmadı.");
+        p.reason=outsideGlyphs?unified_i18n::text("Taşma şüpheli; dışarıda %1 harf / numara benzeri iz var. Önizleyerek karar ver.").arg(outsideGlyphs):
+            graphic?unified_i18n::text("Taşmada görsel / gölge var; önizleyerek karar ver."):
+            unified_i18n::text("Tekrarlanan düzene göre fazla kenar; kesilecek alanda metin izi bulunmadı.");
         if(removed<.01){p.index=-1;return p;}
     }
     QPainter painter(&image);painter.setPen(QPen(QColor(215,50,40),2));painter.drawRect(old);
@@ -188,7 +189,7 @@ Result review(std::vector<Sample> samples,std::function<bool(int,int)> const& pr
         auto const& s=out.samples[i];if(s.params.mode()==MODE_MANUAL){++out.manual;continue;}
         if(s.rect.isEmpty())continue;auto learned=model(s,refs);if(!learned.peers){++out.unavailable;continue;}++out.compared;
         try{auto p=examine(s,learned,int(i));if(p.index>=0)out.proposals.push_back(std::move(p));}
-        catch(std::exception const& e){Proposal p;p.index=int(i);p.reason=QString::fromUtf8(e.what());out.proposals.push_back(std::move(p));}
+        catch(std::exception const& e){Proposal p;p.index=int(i);p.reason=unified_i18n::text(e.what());out.proposals.push_back(std::move(p));}
     }
     if(progress)progress(int(out.samples.size()),int(out.samples.size()));return out;
 }

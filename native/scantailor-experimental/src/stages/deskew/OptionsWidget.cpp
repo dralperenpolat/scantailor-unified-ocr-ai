@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "UnifiedI18n.h"
 #include "OptionsWidget.h"
 #include <QLabel>
 #include <QVBoxLayout>
@@ -52,10 +53,10 @@ OptionsWidget::OptionsWidget(
 
     ui.setupUi(this);
     setupDistortionTypeButtons();
-    auto reviewGroup=new QGroupBox(QString::fromUtf8("Eğri önerilerini karşılaştır"),this);
+    auto reviewGroup=new QGroupBox(unified_i18n::text("Eğri önerilerini karşılaştır"),this);
     auto reviewLayout=new QVBoxLayout(reviewGroup);
-    auto reviewButton=new QPushButton(QString::fromUtf8("Eğriliği karşılaştır · AI dahil…"));reviewButton->setObjectName("geometryReviewButton");reviewButton->setToolTip(QString::fromUtf8("Metin, sayfa kenarı ve UVDoc eğri önerilerini karşılaştır. Ctrl+Shift+G"));reviewLayout->addWidget(reviewButton);
-    auto note=new QLabel(QString::fromUtf8("Tek sayfa / kitap analizi · toplu uygulama. Elle düzenlenen eğriler korunur."));note->setWordWrap(true);reviewLayout->addWidget(note);
+    auto reviewButton=new QPushButton(unified_i18n::text("Eğriliği karşılaştır · AI dahil…"));reviewButton->setObjectName("geometryReviewButton");reviewButton->setToolTip(unified_i18n::text("Metin, sayfa kenarı ve UVDoc eğri önerilerini karşılaştır. Ctrl+Shift+G"));reviewLayout->addWidget(reviewButton);
+    auto note=new QLabel(unified_i18n::text("Tek sayfa / kitap analizi · toplu uygulama. Elle düzenlenen eğriler korunur."));note->setWordWrap(true);reviewLayout->addWidget(note);
     if(auto box=qobject_cast<QVBoxLayout*>(layout()))box->insertWidget(0,reviewGroup);
     connect(reviewButton,&QPushButton::clicked,this,&OptionsWidget::geometryReviewRequested);
 
@@ -216,7 +217,7 @@ bool OptionsWidget::disconnectAll(void)
 void
 OptionsWidget::typePanelToggled(bool const checked)
 {
-    ui.typePanel->setToolTip(QString::fromUtf8("Bu kutucuk yalnız ayar bölümünü açar/kapatır. Geometriyi kapatmak için ilk (düz sayfa) simgesini seçin."));
+    ui.typePanel->setToolTip(unified_i18n::text("Bu kutucuk yalnız ayar bölümünü açar/kapatır. Geometriyi kapatmak için ilk (düz sayfa) simgesini seçin."));
     ui.typePanelEmpty->setToolTip(ui.typePanel->toolTip());
     ui.typePanelEmpty->setVisible(!checked);
     ui.typePanelEmpty->setChecked(checked);
@@ -227,7 +228,7 @@ OptionsWidget::typePanelToggled(bool const checked)
 void
 OptionsWidget::autoManualPanelToggled(bool const checked)
 {
-    ui.autoManualPanel->setToolTip(QString::fromUtf8("Yalnız ayar bölümünü gösterir/gizler; Otomatik / Elle seçimi korunur."));
+    ui.autoManualPanel->setToolTip(unified_i18n::text("Yalnız ayar bölümünü gösterir/gizler; Otomatik / Elle seçimi korunur."));
     ui.autoManualPanelEmpty->setToolTip(ui.autoManualPanel->toolTip());
     ui.autoManualPanelEmpty->setVisible(!checked);
     ui.autoManualPanelEmpty->setChecked(checked);
@@ -238,7 +239,7 @@ OptionsWidget::autoManualPanelToggled(bool const checked)
 void
 OptionsWidget::sourcePanelToggled(bool const checked)
 {
-    ui.sourcePanel->setToolTip(QString::fromUtf8("Yalnız ayar bölümünü gösterir/gizler; kaynak fotoğraf ayarları korunur."));
+    ui.sourcePanel->setToolTip(unified_i18n::text("Yalnız ayar bölümünü gösterir/gizler; kaynak fotoğraf ayarları korunur."));
     ui.sourcePanelEmpty->setToolTip(ui.sourcePanel->toolTip());
     ui.sourcePanelEmpty->setVisible(!checked);
     ui.sourcePanelEmpty->setChecked(checked);
@@ -258,7 +259,7 @@ OptionsWidget::rotationPanelToggled(bool const checked)
 void
 OptionsWidget::correctionPanelToggled(bool const checked)
 {
-    ui.correctionPanel->setToolTip(QString::fromUtf8("Yalnız ayar bölümünü gösterir/gizler; eğrilik modeli değerleri korunur."));
+    ui.correctionPanel->setToolTip(unified_i18n::text("Yalnız ayar bölümünü gösterir/gizler; eğrilik modeli değerleri korunur."));
     ui.correctionPanelEmpty->setToolTip(ui.correctionPanel->toolTip());
     ui.correctionPanelEmpty->setVisible(!checked);
     ui.correctionPanelEmpty->setChecked(checked);

@@ -1,4 +1,4 @@
-# Third-party components · 0.4.3
+# Third-party components · 0.4.4
 
 Original copyright belongs to the respective authors. This application is not an official release of ScanTailor, PaddleOCR, UVDoc or Qt. Upstream notices remain in the source and installed distribution.
 

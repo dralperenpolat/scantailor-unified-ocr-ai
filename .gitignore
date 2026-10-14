@@ -11,7 +11,7 @@ research/private/
 *.msi
 local-tools.json
 local-native-performance.json
-resources/
+/resources/
 projects/
 .pytest_cache/
 .build-tools/
