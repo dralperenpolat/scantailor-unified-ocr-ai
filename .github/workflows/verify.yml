@@ -5,6 +5,7 @@ permissions:
 jobs:
   regression:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
@@ -14,5 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e . scipy==1.18.0
+      - name: Install CPU geometry test dependency
+        run: python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
       - name: Synthetic regression suite
         run: python -m unittest discover -s tests -p "test_*.py"

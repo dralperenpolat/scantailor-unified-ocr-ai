@@ -36,7 +36,7 @@ class RevisionsTest(unittest.TestCase):
         self.assertEqual((ids,errors),(['edited-book'],[]));self.assertFalse(path.exists())
         self.assertEqual(self.job['previous_editions'][0]['pdf'],str(self.old))
         self.assertEqual(file_hash(self.old),old_hash);self.assertEqual(file_hash(self.project),source_hash)
-        self.assertEqual(self.job['source_project'],str(self.snapshot));self.assertNotIn('signature',self.job)
+        self.assertTrue(Path(self.job['source_project']).samefile(self.snapshot));self.assertNotIn('signature',self.job)
         self.assertEqual(self.data['jobs'][1],before);self.assertEqual(load_queue(self.queue),self.data)
         self.request();self.assertEqual(accept_revisions(self.data,self.queue,self.save),([],[]))
         self.assertEqual(len(self.job['previous_editions']),1)
