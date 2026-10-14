@@ -1,0 +1,11 @@
+Pillow==12.2.0
+PyMuPDF==1.28.0
+pypdf==6.13.3
+img2pdf==0.6.3
+numpy==2.2.6
+scipy==1.18.0
+paddleocr==3.7.0
+
+# Install the CPU-only engine wheels separately from their official indexes:
+# paddlepaddle==3.3.0  https://www.paddlepaddle.org.cn/packages/stable/cpu/
+# torch==2.11.0       https://download.pytorch.org/whl/cpu

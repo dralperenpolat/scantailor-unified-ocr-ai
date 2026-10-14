@@ -1,0 +1,118 @@
+/*
+    Scan Tailor - Interactive post-processing tool for scanned pages.
+    Copyright (C) Joseph Artsimovich <joseph.artsimovich@gmail.com>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef DESKEW_PARAMS_DEWARPING_H_
+#define DESKEW_PARAMS_DEWARPING_H_
+
+#include "AutoManualMode.h"
+#include "dewarping/DistortionModel.h"
+#include "dewarping/DepthPerception.h"
+#include <QString>
+
+class QDomDocument;
+class QDomElement;
+class QString;
+
+namespace deskew
+{
+
+class ParamsDewarping
+{
+    // Member-wise copying is OK.
+public:
+    /** Defaults to invalid state with MODE_AUTO. */
+    ParamsDewarping();
+
+    ParamsDewarping(QDomElement const& el);
+
+    ~ParamsDewarping();
+
+    QDomElement toXml(QDomDocument& doc, QString const& name) const;
+
+    bool isValid() const;
+
+    void invalidate();
+
+    QString const& detectionReport() const { return m_detectionReport; }
+    void setDetectionReport(QString const& report) { m_detectionReport=report; }
+
+    double getAngle() const;
+
+    double getAngleOblique() const;
+
+    double getAngleHor() const;
+
+    double getAngleVert() const;
+
+    AutoManualMode mode() const
+    {
+        return m_mode;
+    }
+    void setMode(AutoManualMode mode)
+    {
+        m_mode = mode;
+        if(mode==MODE_MANUAL)m_detectionReport.clear();
+    }
+
+    dewarping::DistortionModel const& distortionModel() const
+    {
+        return m_distortionModel;
+    }
+    void setDistortionModel(dewarping::DistortionModel const& distortion_model)
+    {
+        m_distortionModel = distortion_model;
+    }
+
+    dewarping::DepthPerception const& depthPerception() const
+    {
+        return m_depthPerception;
+    }
+    void setDepthPerception(dewarping::DepthPerception const& depth_perception)
+    {
+        m_depthPerception = depth_perception;
+    }
+
+    dewarping::DepthPerception const& correctCurves() const
+    {
+        return m_correctCurves;
+    }
+    void setCorrectCurves(dewarping::DepthPerception const& correct_curves)
+    {
+        m_correctCurves = correct_curves;
+    }
+
+    dewarping::DepthPerception const& correctAngle() const
+    {
+        return m_correctAngle;
+    }
+    void setCorrectAngle(dewarping::DepthPerception const& correct_angle)
+    {
+        m_correctAngle = correct_angle;
+    }
+private:
+    dewarping::DistortionModel m_distortionModel;
+    dewarping::DepthPerception m_depthPerception;
+    dewarping::DepthPerception m_correctCurves;
+    dewarping::DepthPerception m_correctAngle;
+    AutoManualMode m_mode;
+    QString m_detectionReport;
+};
+
+} // namespace deskew
+
+#endif

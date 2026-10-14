@@ -1,0 +1,9 @@
+Pillow>=11
+PyMuPDF==1.28.0
+pypdf>=6
+img2pdf==0.6.3
+
+[desktop]
+numpy<3,>=1.26
+opencv-python>=4.8
+torch>=2.6

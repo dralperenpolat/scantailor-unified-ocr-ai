@@ -1,0 +1,50 @@
+id: io.github.ImageProcessing_ElectronicPublications.scantailor-experimental
+runtime: org.kde.Platform
+runtime-version: '5.15-24.08'
+sdk: org.kde.Sdk
+command: scantailor-experimental
+modules:
+  - name: Eigen3
+    buildsystem: simple
+    sources:
+      - type: archive
+        url: https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.bz2
+        sha256: b4c198460eba6f28d34894e3a5710998818515104d6e74e5cc331ce31e46e626
+    build-commands:
+      - mkdir /app/Eigen3
+      - mkdir -p /app/license_deps_dir
+      - cp ./COPYING.MPL2 /app/license_deps_dir/eigen-3.4.0.txt
+      - cp -r ./* /app/Eigen3
+  - name: boost
+    buildsystem: simple
+    sources:
+      - type: archive
+        url: https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2
+        sha256: 1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b
+    build-commands:
+      - mkdir /app/boost
+      - mkdir -p /app/license_deps_dir
+      - cp ./LICENSE_1_0.txt /app/license_deps_dir/boost_1_86_0.txt
+      - ./bootstrap.sh --prefix=/app/boost --with-libraries=test,system
+      - ./b2 -j $FLATPAK_BUILDER_N_JOBS install
+  - name: scantailor-experimental
+    buildsystem: cmake-ninja
+    config-opts:
+      - '-DCMAKE_PREFIX_PATH=/app/Eigen3;/app/boost'
+      - '-DST_LICENSE_DEPS_DIR=/app/license_deps_dir'
+    sources:
+      - type: dir
+        path: ../../
+finish-args:
+  - --device=dri
+  - --filesystem=host
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+cleanup:
+  - '/boost'
+  - '/Eigen3'
+  - '/bin/scantailor-experimental-cli'
+  - '/lib'
+  - '/license_deps_dir'
+

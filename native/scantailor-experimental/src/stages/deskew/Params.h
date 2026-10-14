@@ -1,0 +1,137 @@
+/*
+    Scan Tailor - Interactive post-processing tool for scanned pages.
+    Copyright (C) 2007-2008  Joseph Artsimovich <joseph_a@mail.ru>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef DESKEW_PARAMS_H_
+#define DESKEW_PARAMS_H_
+
+#include <QString>
+#include <QPolygonF>
+#include "DistortionType.h"
+#include "ParamsDewarping.h"
+#include "ParamsPerspective.h"
+#include "ParamsRotation.h"
+#include "ParamsSource.h"
+#include "Dependencies.h"
+
+class QDomDocument;
+class QDomElement;
+
+namespace deskew
+{
+
+class Params
+{
+    // Member-wise copying is OK.
+public:
+    QString unifiedWarning;
+    QString unifiedGeometry;
+    Params(Dependencies const& deps);
+
+    Params(QDomElement const& deskew_el);
+
+    ~Params();
+
+    static DistortionType defaultDistortionType();
+
+    DistortionType distortionType() const
+    {
+        return m_distortionType;
+    }
+
+    void setDistortionType(DistortionType type)
+    {
+        m_distortionType = type;
+    }
+
+    ParamsDewarping& getParamsDewarping()
+    {
+        return m_paramsDewarping;
+    }
+
+    ParamsDewarping const& getParamsDewarping() const
+    {
+        return m_paramsDewarping;
+    }
+
+    ParamsPerspective& getParamsPerspective()
+    {
+        return m_paramsPerspective;
+    }
+
+    ParamsPerspective const& getParamsPerspective() const
+    {
+        return m_paramsPerspective;
+    }
+
+    ParamsRotation& getParamsRotation()
+    {
+        return m_paramsRotation;
+    }
+
+    ParamsRotation const& getParamsRotation() const
+    {
+        return m_paramsRotation;
+    }
+
+    ParamsSource& getParamsSource()
+    {
+        return m_paramsSource;
+    }
+
+    ParamsSource const& getParamsSource() const
+    {
+        return m_paramsSource;
+    }
+
+    void setParamsSource(ParamsSource source)
+    {
+        m_paramsSource = source;
+    }
+
+    Dependencies const& dependencies() const
+    {
+        return m_deps;
+    }
+
+    /**
+     * Looks up the mode associated with the current distortion type.
+     * DistortionType::NONE always produces MODE_MANUAL.
+     */
+    AutoManualMode mode() const;
+
+    /**
+     * We may have enough / valid data for some distortion types but
+     * not for others.
+     */
+    bool validForDistortionType(DistortionType const& distortion_type) const;
+
+    QDomElement toXml(QDomDocument& doc, QString const& name) const;
+
+    void takeManualSettingsFrom(Params const& other);
+private:
+    DistortionType m_distortionType;
+    ParamsDewarping m_paramsDewarping;
+    ParamsPerspective m_paramsPerspective;
+    ParamsRotation m_paramsRotation;
+    ParamsSource m_paramsSource;
+    Dependencies m_deps;
+};
+
+} // namespace deskew
+
+#endif

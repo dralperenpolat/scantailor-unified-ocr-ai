@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleExecutable</key>
+	<string>scantailor-experimental</string>
+	<key>CFBundleName</key>
+	<string>ScanTailor-Experimental</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.github.Scantailor-Experimental</string>
+	<key>CFBundleSignature</key>
+	<string>stex</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+	<key>CFBundleIconFile</key>
+	<string>ScanTailor-Experimental.icns</string>
+	<key>CFBundleShortVersionString</key>
+	<string>ScanTailor-Experimental-@VERSION@</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.4.0</string>
+</dict>
+</plist>

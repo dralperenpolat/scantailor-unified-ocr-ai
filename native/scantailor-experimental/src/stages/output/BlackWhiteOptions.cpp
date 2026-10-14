@@ -1,0 +1,388 @@
+/*
+    Scan Tailor - Interactive post-processing tool for scanned pages.
+    Copyright (C)  Joseph Artsimovich <joseph.artsimovich@gmail.com>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include <QDomDocument>
+#include <QDomElement>
+#include <QString>
+#include "BlackWhiteOptions.h"
+
+namespace output
+{
+
+BlackWhiteOptions::BlackWhiteOptions()
+    : m_thresholdMethod(T_OTSU)
+    , m_negate(false)
+    , m_dimmingColoredCoef(0.0)
+    , m_morphologyCoef(1.0)
+    , m_thresholdAdjustment(0)
+    , m_boundLower(0)
+    , m_boundUpper(255)
+    , m_thresholdRadius(50)
+    , m_thresholdCoef(0.3)
+    , m_autoPictureCoef(0.0)
+    , m_autoPictureOff(false)
+    , m_pictureToDots8(false)
+{
+}
+
+BlackWhiteOptions::BlackWhiteOptions(QDomElement const& el)
+    : m_thresholdMethod(parseThresholdMethod(el.attribute("thresholdMethod")))
+    , m_negate(el.attribute("negate") == "1")
+    , m_dimmingColoredCoef(el.attribute("dimmingColoredCoef").toDouble())
+    , m_morphologyCoef(el.attribute("morphology").toDouble())
+    , m_thresholdAdjustment(el.attribute("thresholdAdj").toInt())
+    , m_boundLower(el.attribute("boundLower").toInt())
+    , m_boundUpper(el.attribute("boundUpper").toInt())
+    , m_thresholdRadius(el.attribute("thresholdRadius").toInt())
+    , m_thresholdCoef(el.attribute("thresholdCoef").toDouble())
+    , m_autoPictureCoef(el.attribute("autoPictureCoef").toDouble())
+    , m_autoPictureOff(el.attribute("autoPictureOff") == "1")
+    , m_pictureToDots8(el.attribute("pictureToDots8") == "1")
+{
+    if (m_dimmingColoredCoef < -1.0 || m_dimmingColoredCoef > 2.0)
+    {
+        m_dimmingColoredCoef = 0.0;
+    }
+    if (m_morphologyCoef < 0.0 || m_morphologyCoef > 1.0)
+    {
+        m_morphologyCoef = 1.0;
+    }
+    if (m_boundUpper <= m_boundLower)
+    {
+        m_boundLower = 0;
+        m_boundUpper = 255;
+    }
+    if (m_thresholdRadius < 1)
+    {
+        m_thresholdRadius = 50;
+    }
+    if (m_thresholdCoef < 0.0)
+    {
+        m_thresholdCoef = 0.0;
+    }
+}
+
+QDomElement
+BlackWhiteOptions::toXml(QDomDocument& doc, QString const& name) const
+{
+    QDomElement el(doc.createElement(name));
+    el.setAttribute("thresholdMethod", formatThresholdMethod(m_thresholdMethod));
+    if (m_negate)
+    {
+        el.setAttribute("negate", "1");
+    }
+    if (m_dimmingColoredCoef != 0.0)
+    {
+        el.setAttribute("dimmingColoredCoef", m_dimmingColoredCoef);
+    }
+    el.setAttribute("morphology", m_morphologyCoef);
+    if (m_thresholdAdjustment != 0)
+    {
+        el.setAttribute("thresholdAdj", m_thresholdAdjustment);
+    }
+    if (m_boundLower > 0)
+    {
+        el.setAttribute("boundLower", m_boundLower);
+    }
+    if (m_boundUpper < 255)
+    {
+        el.setAttribute("boundUpper", m_boundUpper);
+    }
+    el.setAttribute("thresholdRadius", m_thresholdRadius);
+    el.setAttribute("thresholdCoef", m_thresholdCoef);
+    if (m_autoPictureCoef != 0.0)
+    {
+        el.setAttribute("autoPictureCoef", m_autoPictureCoef);
+    }
+    if (m_autoPictureOff)
+    {
+        el.setAttribute("autoPictureOff", "1");
+    }
+    if (m_pictureToDots8)
+    {
+        el.setAttribute("pictureToDots8", "1");
+    }
+    return el;
+}
+
+bool
+BlackWhiteOptions::operator==(BlackWhiteOptions const& other) const
+{
+    if (m_thresholdMethod != other.m_thresholdMethod)
+    {
+        return false;
+    }
+    if (m_negate != other.m_negate)
+    {
+        return false;
+    }
+    if (m_dimmingColoredCoef != other.m_dimmingColoredCoef)
+    {
+        return false;
+    }
+    if (m_morphologyCoef != other.m_morphologyCoef)
+    {
+        return false;
+    }
+    if (m_thresholdAdjustment != other.m_thresholdAdjustment)
+    {
+        return false;
+    }
+    if (m_boundLower != other.m_boundLower)
+    {
+        return false;
+    }
+    if (m_boundUpper != other.m_boundUpper)
+    {
+        return false;
+    }
+    if (m_thresholdRadius != other.m_thresholdRadius)
+    {
+        return false;
+    }
+    if (m_thresholdCoef != other.m_thresholdCoef)
+    {
+        return false;
+    }
+    if (m_autoPictureCoef != other.m_autoPictureCoef)
+    {
+        return false;
+    }
+    if (m_autoPictureOff != other.m_autoPictureOff)
+    {
+        return false;
+    }
+    if (m_pictureToDots8 != other.m_pictureToDots8)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool
+BlackWhiteOptions::operator!=(BlackWhiteOptions const& other) const
+{
+    return !(*this == other);
+}
+
+ThresholdFilter
+BlackWhiteOptions::parseThresholdMethod(QString const& str)
+{
+    if (str == "mean")
+    {
+        return T_MEANDELTA;
+    }
+    else if (str == "dots8")
+    {
+        return T_DOTS8;
+    }
+    else if (str == "bmtiled")
+    {
+        return T_BMTILED;
+    }
+    else if (str == "niblack")
+    {
+        return T_NIBLACK;
+    }
+    else if (str == "gatos")
+    {
+        return T_GATOS;
+    }
+    else if (str == "sauvola")
+    {
+        return T_SAUVOLA;
+    }
+    else if (str == "wolf")
+    {
+        return T_WOLF;
+    }
+    else if (str == "window")
+    {
+        return T_WINDOW;
+    }
+    else if (str == "bradley")
+    {
+        return T_BRADLEY;
+    }
+    else if (str == "nick")
+    {
+        return T_NICK;
+    }
+    else if (str == "grad")
+    {
+        return T_GRAD;
+    }
+    else if (str == "singh")
+    {
+        return T_SINGH;
+    }
+    else if (str == "fox")
+    {
+        return T_FOX;
+    }
+    else if (str == "laab")
+    {
+        return T_LAAB;
+    }
+    else if (str == "lcam")
+    {
+        return T_LCAM;
+    }
+    else if (str == "WAN")
+    {
+        return T_WAN;
+    }
+    else if (str == "OBBPM")
+    {
+        return T_OBBPM;
+    }
+    else if (str == "edgeplus")
+    {
+        return T_EDGEPLUS;
+    }
+    else if (str == "blurdiv")
+    {
+        return T_BLURDIV;
+    }
+    else if (str == "edgediv")
+    {
+        return T_EDGEDIV;
+    }
+    else if (str == "edgeadapt")
+    {
+        return T_EDGEADAPT;
+    }
+    else if (str == "robust")
+    {
+        return T_ROBUST;
+    }
+    else if (str == "grain")
+    {
+        return T_GRAIN;
+    }
+    else if (str == "grainem")
+    {
+        return T_GRAINEM;
+    }
+    else if (str == "multiscale")
+    {
+        return T_MSCALE;
+    }
+    else if (str == "engraving")
+    {
+        return T_ENGRAVING;
+    }
+    else
+    {
+        return T_OTSU;
+    }
+}
+
+QString
+BlackWhiteOptions::formatThresholdMethod(ThresholdFilter type)
+{
+    QString str = "";
+    switch (type)
+    {
+    case T_OTSU:
+        str = "otsu";
+        break;
+    case T_MEANDELTA:
+        str = "mean";
+        break;
+    case T_DOTS8:
+        str = "dots8";
+        break;
+    case T_BMTILED:
+        str = "bmtiled";
+        break;
+    case T_NIBLACK:
+        str = "niblack";
+        break;
+    case T_GATOS:
+        str = "gatos";
+        break;
+    case T_SAUVOLA:
+        str = "sauvola";
+        break;
+    case T_WOLF:
+        str = "wolf";
+        break;
+    case T_WINDOW:
+        str = "window";
+        break;
+    case T_BRADLEY:
+        str = "bradley";
+        break;
+    case T_NICK:
+        str = "nick";
+        break;
+    case T_GRAD:
+        str = "grad";
+        break;
+    case T_SINGH:
+        str = "singh";
+        break;
+    case T_FOX:
+        str = "fox";
+        break;
+    case T_LAAB:
+        str = "laab";
+        break;
+    case T_LCAM:
+        str = "lcam";
+        break;
+    case T_WAN:
+        str = "WAN";
+        break;
+    case T_OBBPM:
+        str = "OBBPM";
+        break;
+    case T_EDGEPLUS:
+        str = "edgeplus";
+        break;
+    case T_BLURDIV:
+        str = "blurdiv";
+        break;
+    case T_EDGEDIV:
+        str = "edgediv";
+        break;
+    case T_EDGEADAPT:
+        str = "edgeadapt";
+        break;
+    case T_ROBUST:
+        str = "robust";
+        break;
+    case T_GRAIN:
+        str = "grain";
+        break;
+    case T_GRAINEM:
+        str = "grainem";
+        break;
+    case T_MSCALE:
+        str = "multiscale";
+        break;
+    case T_ENGRAVING:
+        str = "engraving";
+        break;
+    }
+    return str;
+}
+
+} // namespace output

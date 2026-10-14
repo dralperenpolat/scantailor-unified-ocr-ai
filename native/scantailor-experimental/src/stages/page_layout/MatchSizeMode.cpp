@@ -1,0 +1,90 @@
+/*
+    Scan Tailor - Interactive post-processing tool for scanned pages.
+    Copyright (C) 2015  Joseph Artsimovich <joseph.artsimovich@gmail.com>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include <QDomDocument>
+#include <QDomElement>
+#include <QString>
+#include "MatchSizeMode.h"
+
+namespace page_layout
+{
+
+MatchSizeMode::MatchSizeMode(QDomElement const& el)
+{
+    QString const mode(el.attribute("mode"));
+
+    if (mode == "disabled")
+    {
+        m_mode = M_DISABLED;
+    }
+    else if (mode == "scale")
+    {
+        m_mode = M_SCALE;
+    }
+    else if (mode == "affine")
+    {
+        m_mode = M_AFFINE;
+    }
+    else
+    {
+        // Default mode for backwards compatibility.
+        m_mode = M_GROW_MARGINS;
+    }
+    m_subScaleFactorWidth = el.attribute("subScaleWidth").toDouble();
+    m_subScaleFactorHeight = el.attribute("subScaleHeight").toDouble();
+    if ((m_subScaleFactorWidth < 0.25) || (m_subScaleFactorWidth > 2.0))
+    {
+        m_subScaleFactorWidth = 1.0;
+    }
+    if ((m_subScaleFactorHeight < 0.25) || (m_subScaleFactorHeight > 2.0))
+    {
+        m_subScaleFactorHeight = 1.0;
+    }
+}
+
+QDomElement
+MatchSizeMode::toXml(QDomDocument& doc, QString const& name) const
+{
+    char const* mode = "";
+
+    switch (m_mode)
+    {
+    case M_DISABLED:
+        mode = "disabled";
+        break;
+    case M_GROW_MARGINS:
+        mode = "margins";
+        break;
+    case M_SCALE:
+        mode = "scale";
+        break;
+    case M_AFFINE:
+        mode = "affine";
+        break;
+    }
+
+    QDomElement el(doc.createElement(name));
+    el.setAttribute("mode", QLatin1String(mode));
+    el.setAttribute("subScaleWidth", m_subScaleFactorWidth);
+    el.setAttribute("subScaleHeight", m_subScaleFactorHeight);
+
+    return el;
+}
+
+} // namespace page_layout
+

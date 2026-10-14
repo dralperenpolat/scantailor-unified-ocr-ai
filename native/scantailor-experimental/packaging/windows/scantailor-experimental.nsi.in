@@ -1,0 +1,195 @@
+!define VERSION "@ST_VERSION@"
+!define LICENSE_FILE "@LICENSE_FILE@"
+!define INSTALLER_FILENAME "@INSTALLER_FILENAME@"
+!define STAGING_DIR "@STAGING_DIR@"
+!define UNINST_REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Scantailor-@ST_FAMILY@"
+!define PRODUCT_FAMILY "@ST_FAMILY@"
+!define PRODUCT_FAMILY_LOWERCASE "@ST_FAMILY_LOWER@"
+!define FULL_ARCH "@ST_FULLARCH@"
+
+!include "@REGISTER_EXTENSION_NSH@"
+!include "x64.nsh"
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
+!include "nsProcess.nsh"
+
+BrandingText " " # To remove the mention of NullSoft.
+#LoadLanguageFile "${NSISDIR}\Contrib\Language files\Russian.nlf"
+
+Name "Scantailor-${PRODUCT_FAMILY} version ${VERSION} (${FULL_ARCH})"
+
+OutFile "${INSTALLER_FILENAME}"
+
+!if "@ST_ARCH@" == "ARM"
+  InstallDir "$PROGRAMFILES\Scantailor-${PRODUCT_FAMILY}"
+!else
+  !if "@SIZEOF_VOID_PTR@" == "8"
+    InstallDir "$PROGRAMFILES64\Scantailor-${PRODUCT_FAMILY}"
+  !else
+    InstallDir "$PROGRAMFILES32\Scantailor-${PRODUCT_FAMILY}"
+  !endif
+!endif
+
+InstallDirRegKey HKLM "${UNINST_REGKEY}" "InstallLocation"
+
+RequestExecutionLevel admin
+
+XPStyle on
+
+AllowSkipFiles off
+
+SetCompressor /SOLID /FINAL lzma
+
+!if "${VERSION}" != ""
+  VIAddVersionKey "ProductName" "Scantailor-${PRODUCT_FAMILY} (${FULL_ARCH})"
+  VIAddVersionKey "ProductVersion" "${VERSION}"
+  VIAddVersionKey "Comments" "Interactive post-processing tool for scanned pages."
+  VIAddVersionKey "CompanyName" "Joseph Artsimovich and contributors"
+  VIAddVersionKey "LegalTrademarks" ""
+  VIAddVersionKey "LegalCopyright" "${U+00A9} Joseph Artsimovich et al."
+  VIAddVersionKey "FileDescription" "Post-processing tool for scanned pages."
+  VIAddVersionKey "FileVersion" "${VERSION}"
+  VIProductVersion "${VERSION}"
+!endif
+
+!define MUI_ABORTWARNING
+
+# Installer Pages
+!insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+!if "@SIZEOF_VOID_PTR@" == "8"
+Function .onInit
+  ${IfNot} ${RunningX64}
+    MessageBox MB_ICONSTOP|MB_OK "A 64-bit version of ScanTailor won't work on a 32-bit version of Windows."
+    Abort
+  ${EndIf}
+!if "@ST_ARCH@" == "ARM"
+  ${IfNot} ${IsNativeARM64}
+    MessageBox MB_ICONSTOP|MB_OK "An ARM64 version of ScanTailor won't work on an AMD64 version of Windows."
+    Abort
+  ${EndIf}
+!else
+  ${IfNot} ${IsNativeAMD64}
+    MessageBox MB_ICONSTOP|MB_OK "An AMD64 version of ScanTailor won't work on an ARM64 version of Windows."
+    Abort
+  ${EndIf}
+!endif
+FunctionEnd
+!endif
+
+Section
+  SetOutPath $INSTDIR
+  File /r "${STAGING_DIR}\*"
+  
+  WriteUninstaller $INSTDIR\Uninstaller.exe
+  
+  # Write uninstall registry records.
+  WriteRegStr HKLM "${UNINST_REGKEY}" "DisplayIcon" "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "DisplayName" "Scantailor-${PRODUCT_FAMILY} (${FULL_ARCH})"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "InstallLocation" "$INSTDIR\"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "UninstallString" "$INSTDIR\Uninstaller.exe"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "QuietUninstallString" "$\"$INSTDIR\Uninstaller.exe$\" /S"
+  WriteRegStr HKLM "${UNINST_REGKEY}" "Publisher" "ImageProcessing-ElectronicPublications"
+  
+  # Create menu shortcuts.
+  SetShellVarContext all
+  CreateDirectory "$SMPROGRAMS\Scantailor-${PRODUCT_FAMILY}"
+  CreateShortcut "$SMPROGRAMS\Scantailor-${PRODUCT_FAMILY}\Scantailor-${PRODUCT_FAMILY}.lnk" "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe"
+  CreateShortcut "$SMPROGRAMS\Scantailor-${PRODUCT_FAMILY}\Uninstall.lnk" "$INSTDIR\Uninstaller.exe"  
+
+  # Register the ".ScanTailor" file extension.
+  ${registerExtension} "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe" ".ScanTailor" \
+  "Scantailor Project" "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe"
+SectionEnd
+
+
+Function un.onInit
+  #FindWindow $0 "${WNDCLASS}" ""
+  ${nsProcess::FindProcess} "scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe" $0
+  ${nsProcess::Unload}
+  StrCmp $0 0 0 continueInstall
+    MessageBox MB_ICONSTOP|MB_OK "The application you are trying to remove is running. Close it and try again."
+    Abort
+  continueInstall:
+FunctionEnd
+
+
+Section "Uninstall"
+  # Unregister the ".ScanTailor" file extension.
+  ${unregisterExtension} ".ScanTailor" "Scantailor Project"
+  
+  # Remove program files.
+  Delete "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}.exe"
+  Delete "$INSTDIR\scantailor-${PRODUCT_FAMILY_LOWERCASE}-cli.exe"
+  Delete "$INSTDIR\opencl_plugin.dll"
+  Delete "$INSTDIR\acceleration.dll"
+  Delete "$INSTDIR\foundation.dll"
+  Delete "$INSTDIR\math.dll"
+  Delete "$INSTDIR\imageproc.dll"
+  Delete "$INSTDIR\dewarping.dll"
+  Delete "$INSTDIR\mingwm10.dll"
+  Delete "$INSTDIR\libgcc_*.dll"
+  Delete "$INSTDIR\Qt*.dll"
+  Delete "$INSTDIR\libz.dll"
+  Delete "$INSTDIR\zdll.dll"
+  Delete "$INSTDIR\zlib.dll"
+  Delete "$INSTDIR\zlib1.dll"
+  Delete "$INSTDIR\z.dll"
+  Delete "$INSTDIR\libpng.dll"
+  Delete "$INSTDIR\libpng16.dll"
+  Delete "$INSTDIR\libjpeg.dll"
+  Delete "$INSTDIR\jpeg.dll"
+  Delete "$INSTDIR\jpeg62.dll"
+  Delete "$INSTDIR\libtiff.dll"
+  Delete "$INSTDIR\tiff.dll"
+  Delete "$INSTDIR\msvc*.dll"
+  Delete "$INSTDIR\vccorlib*.dll"
+  Delete "$INSTDIR\concrt*.dll"
+  Delete "$INSTDIR\vcruntime*.dll"
+  Delete "$INSTDIR\Uninstaller.exe"
+  RMDir /r "$INSTDIR\Microsoft.VC80.CRT"
+  RMDir /r "$INSTDIR\Microsoft.VC90.CRT"
+  RMDir /r "$INSTDIR\Microsoft.VC100.CRT"
+  
+  # Remove translations.
+  Delete "$INSTDIR\translations\*.qm"
+  RMDir "$INSTDIR\translations"
+
+  # Remove stylesheets.
+  RMDir /r "$INSTDIR\stylesheets"
+
+  # Remove imageformats plugins.
+  # We no longer ship any, but it's a good idea to cleanup after previous version.
+  Delete "$INSTDIR\imageformats\*.dll"
+  RMDir "$INSTDIR\imageformats"
+
+  # Remove platform plugins.
+  Delete "$INSTDIR\platforms\*.dll"
+  RMDir "$INSTDIR\platforms"
+
+  # Remove accessible plugins.
+  Delete "$INSTDIR\accessible\*.dll"
+  RMDir "$INSTDIR\accessible"
+
+  # Remove styles plugins.
+  Delete "$INSTDIR\styles\*.dll"
+  RMDir "$INSTDIR\styles"
+  
+  # Remove the installation directory.
+  RMDir "$INSTDIR"
+
+  # Remove the uninstall record from the registry.
+  DeleteRegKey HKLM "${UNINST_REGKEY}"
+
+  # Remove menu entries
+  SetShellVarContext all
+  RMDir /r "$SMPROGRAMS\Scantailor-${PRODUCT_FAMILY}"
+SectionEnd

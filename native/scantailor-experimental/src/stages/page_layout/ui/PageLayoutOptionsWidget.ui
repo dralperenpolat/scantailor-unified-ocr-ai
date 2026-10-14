@@ -1,0 +1,1044 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PageLayoutOptionsWidget</class>
+ <widget class="QWidget" name="PageLayoutOptionsWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>267</width>
+    <height>639</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="PageLayoutVerticalLayout">
+   <item>
+    <widget class="QCheckBox" name="framingsGroupEmpty">
+     <property name="text">
+      <string>Framings</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="framingsGroup">
+     <property name="title">
+      <string>Framings</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QVBoxLayout" name="framingsVerticalLayout">
+      <item>
+       <layout class="QHBoxLayout" name="framingsHorizontalLayout_2">
+        <item>
+         <spacer name="framingsHorizontalSpacer_1">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <layout class="QGridLayout" name="framingsGridLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="labelExtraW">
+            <property name="text">
+             <string>Width</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="extraWMarginSpinBox">
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>2</number>
+            </property>
+            <property name="minimum">
+             <double>0.0</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLabel" name="labelExtraWout">
+            <property name="text">
+             <string></string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="labelExtraH">
+            <property name="text">
+             <string>Height</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="extraHMarginSpinBox">
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>2</number>
+            </property>
+            <property name="minimum">
+             <double>0.0</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="labelExtraHout">
+            <property name="text">
+             <string></string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <spacer name="framingsHorizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="framingsHorizontalLayout_5">
+        <item>
+         <spacer name="framingsHorizontalSpacer_9">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="applyFramingsBtn">
+          <property name="text">
+           <string>Apply to ...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="framingsHorizontalSpacer_10">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="marginsGroupEmpty">
+     <property name="text">
+      <string>Margins</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="marginsGroup">
+     <property name="title">
+      <string>Margins</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <layout class="QVBoxLayout" name="marginsVerticalLayout">
+      <item>
+       <layout class="QHBoxLayout" name="marginsHorizontalLayout">
+        <item>
+         <spacer name="marginsHorizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <layout class="QGridLayout" name="marginsGridLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="marginsLabelTL">
+            <property name="text">
+             <string>.</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignLeft|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="topMarginSpinBox">
+            <property name="toolTip">
+             <string>Top</string>
+            </property>
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>1</number>
+            </property>
+            <property name="minimum">
+             <double>-49.5</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QLabel" name="marginsLabelTR">
+            <property name="text">
+             <string>.</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QDoubleSpinBox" name="leftMarginSpinBox">
+            <property name="toolTip">
+             <string>Left</string>
+            </property>
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>1</number>
+            </property>
+            <property name="minimum">
+             <double>-49.5</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <layout class="QHBoxLayout" name="marginsLinksHorizontalLayout">
+            <item>
+             <widget class="QToolButton" name="leftRightLink">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-hchain-broken-24.png</normaloff>
+                <normalon>:/icons/stock-hchain-24.png</normalon>:/icons/stock-hchain-broken-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>9</height>
+               </size>
+              </property>
+              <property name="checked">
+               <bool>false</bool>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="topBottomLink">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-vchain-broken-24.png</normaloff>
+                <normalon>:/icons/stock-vchain-24.png</normalon>:/icons/stock-vchain-broken-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>9</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="1" column="2">
+           <widget class="QDoubleSpinBox" name="rightMarginSpinBox">
+            <property name="toolTip">
+             <string>Right</string>
+            </property>
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>1</number>
+            </property>
+            <property name="minimum">
+             <double>-49.5</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="marginsLabelBL">
+            <property name="text">
+             <string>.</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignLeft|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="bottomMarginSpinBox">
+            <property name="toolTip">
+             <string>Bottom</string>
+            </property>
+            <property name="suffix">
+             <string notr="true">%</string>
+            </property>
+            <property name="decimals">
+             <number>1</number>
+            </property>
+            <property name="minimum">
+             <double>-49.5</double>
+            </property>
+            <property name="maximum">
+             <double>999.5</double>
+            </property>
+            <property name="singleStep">
+             <double>0.5</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="QLabel" name="marginsLabelBR">
+            <property name="text">
+             <string>.</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <spacer name="marginsHorizontalSpacerEnd">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="marginsApplyHorizontalLayout">
+        <item>
+         <spacer name="marginsApplyHorizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="applyMarginsBtn">
+          <property name="text">
+           <string>Apply to ...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="marginsApplyHorizontalSpacerEnd">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="alignmentGroupEmpty">
+     <property name="text">
+      <string>Alignment</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="alignmentGroup">
+     <property name="title">
+      <string>Alignment</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <layout class="QVBoxLayout" name="alignmentGroupVerticalLayout">
+      <item>
+       <layout class="QHBoxLayout" name="alignmentGroupHorizontalLayout">
+        <item>
+         <layout class="QHBoxLayout" name="matchSizeHorizontalLayout">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item>
+           <layout class="QVBoxLayout" name="matchSizeVerticalLayout">
+            <item>
+             <widget class="QRadioButton" name="matchSizeDisabledRb">
+              <property name="text">
+               <string>None</string>
+              </property>
+              <property name="toolTip">
+               <string>Don't match size</string>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">matchSizeButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="matchSizeMarginsRb">
+              <property name="text">
+               <string>Growing</string>
+              </property>
+              <property name="toolTip">
+               <string>Match size by growing margins</string>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">matchSizeButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="matchSizeScaleRb">
+              <property name="text">
+               <string>Scaling</string>
+              </property>
+              <property name="toolTip">
+               <string>Match size by scaling</string>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">matchSizeButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item>
+             <widget class="QRadioButton" name="matchSizeAffineRb">
+              <property name="text">
+               <string>Affine</string>
+              </property>
+              <property name="toolTip">
+               <string>Match size by affine scaling</string>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">matchSizeButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="sizeSubGridLayout">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QLabel" name="sizeSubWidthLabel">
+                <property name="text">
+                 <string>Width</string>
+                </property>
+                <property name="toolTip">
+                 <string>Sub scaling Width.</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QDoubleSpinBox" name="subScaleFactorWidth">
+                <property name="toolTip">
+                 <string>Value is 0.25 .. 2.00.</string>
+                </property>
+                <property name="decimals">
+                 <double>4</double>
+                </property>
+                <property name="minimum">
+                 <double>0.25</double>
+                </property>
+                <property name="maximum">
+                 <double>2.00</double>
+                </property>
+                <property name="singleStep">
+                 <double>0.001</double>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="sizeSubHeightLabel">
+                <property name="text">
+                 <string>Height</string>
+                </property>
+                <property name="toolTip">
+                 <string>Sub scaling Height.</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QDoubleSpinBox" name="subScaleFactorHeight">
+                <property name="toolTip">
+                 <string>Value is 0.25 .. 2.00.</string>
+                </property>
+                <property name="decimals">
+                 <double>4</double>
+                </property>
+                <property name="minimum">
+                 <double>0.25</double>
+                </property>
+                <property name="maximum">
+                 <double>2.00</double>
+                </property>
+                <property name="singleStep">
+                 <double>0.001</double>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_8">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="alignHorizontalLayout">
+          <item>
+           <spacer name="horizontalSpacer_6">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>1</width>
+              <height>1</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <layout class="QGridLayout" name="alignGridLayout">
+            <property name="spacing">
+             <number>16</number>
+            </property>
+            <item row="0" column="0">
+             <widget class="QToolButton" name="alignTopLeftBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-north-west-24.png</normaloff>:/icons/stock-gravity-north-west-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QToolButton" name="alignTopBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-north-24.png</normaloff>:/icons/stock-gravity-north-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="0" column="2">
+             <widget class="QToolButton" name="alignTopRightBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-north-east-24.png</normaloff>:/icons/stock-gravity-north-east-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QToolButton" name="alignLeftBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-west-24.png</normaloff>:/icons/stock-gravity-west-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QToolButton" name="alignCenterBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-center-24.png</normaloff>:/icons/stock-center-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="1" column="2">
+             <widget class="QToolButton" name="alignRightBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-east-24.png</normaloff>:/icons/stock-gravity-east-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QToolButton" name="alignBottomLeftBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-south-west-24.png</normaloff>:/icons/stock-gravity-south-west-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QToolButton" name="alignBottomBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-south-24.png</normaloff>:/icons/stock-gravity-south-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+            <item row="2" column="2">
+             <widget class="QToolButton" name="alignBottomRightBtn">
+              <property name="text">
+               <string>...</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../../resources/resources.qrc">
+                <normaloff>:/icons/stock-gravity-south-east-24.png</normaloff>:/icons/stock-gravity-south-east-24.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>24</width>
+                <height>24</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="autoExclusive">
+               <bool>true</bool>
+              </property>
+              <attribute name="buttonGroup">
+               <string notr="true">alignmentButtonGroup</string>
+              </attribute>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_5">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>1</width>
+              <height>1</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="applyAlignmentHorizontalLayout">
+        <item>
+         <spacer name="applyAlignmentHorizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="applyAlignmentBtn">
+          <property name="text">
+           <string>Apply to ...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_12">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>1</width>
+            <height>1</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="missingContentBoxGroup">
+     <property name="title">
+      <string>Missing content box</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QLabel" name="warningIconLabel">
+        <property name="text">
+         <string notr="true">Image</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>As there is no content box, the output will be a blank white page with size matching that of other pages.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>1</width>
+       <height>1</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>topBottomLink</tabstop>
+  <tabstop>topMarginSpinBox</tabstop>
+  <tabstop>bottomMarginSpinBox</tabstop>
+  <tabstop>leftRightLink</tabstop>
+  <tabstop>leftMarginSpinBox</tabstop>
+  <tabstop>rightMarginSpinBox</tabstop>
+  <tabstop>applyMarginsBtn</tabstop>
+  <tabstop>alignTopLeftBtn</tabstop>
+  <tabstop>alignTopBtn</tabstop>
+  <tabstop>alignTopRightBtn</tabstop>
+  <tabstop>alignLeftBtn</tabstop>
+  <tabstop>alignCenterBtn</tabstop>
+  <tabstop>alignRightBtn</tabstop>
+  <tabstop>alignBottomLeftBtn</tabstop>
+  <tabstop>alignBottomBtn</tabstop>
+  <tabstop>alignBottomRightBtn</tabstop>
+  <tabstop>applyAlignmentBtn</tabstop>
+ </tabstops>
+ <resources>
+  <include location="../../../resources/resources.qrc"/>
+ </resources>
+ <connections/>
+ <buttongroups>
+  <buttongroup name="matchSizeButtonGroup"/>
+  <buttongroup name="alignmentButtonGroup"/>
+ </buttongroups>
+</ui>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-scantailor-experimental-project">
+    <comment>Scan Tailor Experimental project file</comment>
+    <glob pattern="*.ScanTailor"/>
+    <sub-class-of type="text/xml"/>
+    <generic-icon name="io.github.ImageProcessing_ElectronicPublications.scantailor-experimental"/>
+  </mime-type>
+</mime-info>

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scantailor-ocr-unified"
+version = "0.4.3"
+description = "Local book-photo correction and searchable PDF desktop preview"
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+dependencies = ["Pillow>=11", "PyMuPDF==1.28.0", "pypdf>=6,<7", "img2pdf==0.6.3", "numpy>=1.26,<2.4", "opencv-contrib-python>=4.8"]
+
+[project.optional-dependencies]
+desktop = ["numpy>=1.26,<2.4", "opencv-contrib-python>=4.8", "torch>=2.6"]
+
+[project.scripts]
+scantailor-ocr-unified = "scantailor_ocr_unified.cli:main"
+scantailor-ocr-unified-gui = "scantailor_ocr_unified.native_launcher:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
