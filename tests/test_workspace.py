@@ -78,6 +78,25 @@ class StorageRecovery(unittest.TestCase):
             with storage.workspace({'root':str(self.root),'temp_root':str(self.root/'work'),'reserve_gib':0}) as folder:
                 (folder/'partial.pdf').write_bytes(b'partial');raise RuntimeError('crash simulation')
         self.assertFalse(folder.exists())
+    def test_completed_book_cleanup_checks_pdf_hash_and_keeps_edits(self):
+        import hashlib
+        from scantailor_ocr_unified.work_cleanup import reclaim
+        output=self.root/'outputs';folder=output/'book';out=folder/'out';out.mkdir(parents=True)
+        cache=folder/'.ocr-cache/1';cache.mkdir(parents=True)
+        final=folder/'book.pdf';final.write_bytes(b'verified-pdf-fixture')
+        page=cache/'page.pdf';page.write_bytes(final.read_bytes())
+        project=folder/'book.ScanTailor';project.write_text('manual project settings')
+        original=self.root/'source.png';original.write_bytes(b'original')
+        manual=cache/'manual-review.json';manual.write_text('protected review')
+        targets=[out/'page.tif',out/'page.tif.ocr.tif',cache/'display.tif',cache/'display-final.tif',cache/'ocr.png']
+        for target in targets:target.write_bytes(b'reproducible')
+        Path(str(project)+'.outputs.json').write_text(json.dumps({'pages':[str(targets[0])]}))
+        job={'pdf':str(final),'pdf_hash':'wrong','project':str(project),'verification':{'all_pages_render_identical':True},'pages':[{'page_pdf':str(page)}]}
+        with self.assertRaises(ValueError):reclaim(folder,output,job)
+        self.assertTrue(all(p.exists() for p in targets))
+        job['pdf_hash']=hashlib.sha256(final.read_bytes()).hexdigest()
+        self.assertEqual(reclaim(folder,output,job)['files'],5)
+        self.assertTrue(all(p.exists() for p in (original,manual,project,page,final)))
     def test_retry_is_bounded_and_missing_sources_are_not_retried(self):
         calls=[]
         def transient():

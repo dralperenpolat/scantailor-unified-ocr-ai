@@ -40,6 +40,7 @@ def main():
     if a.fast:
         from scantailor_ocr_unified.settings import PROFILES
         request.update(PROFILES['cpu_fast'],output_finish={})
+    request['reclaim_intermediates']=True
     req=work/'request.json';req.write_text(json.dumps(request),'utf8');start=time.monotonic()
     with (work/'worker.log').open('w',encoding='utf8') as log:
         subprocess.run([sys.executable,'-u','-m','scantailor_ocr_unified.native_worker',str(req)],env=os.environ,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=300)
