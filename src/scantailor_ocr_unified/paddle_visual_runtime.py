@@ -46,14 +46,15 @@ class VisualEngine:
         from paddleocr import TextDetection, LayoutDetection
         # Require complete local models. A GUI analysis must not silently spend
         # minutes downloading or switch devices after a CUDA error.
-        models = ROOT/'resources/paddle-models/official_models'
+        from scantailor_ocr_unified.runtime_layout import paddle_model
+        models = {name:paddle_model(name,ROOT) for name in (DETECTOR,LAYOUT)}
         for name in (DETECTOR, LAYOUT):
-            if not all((models/name/f).is_file() for f in ('inference.json', 'inference.pdiparams', 'inference.yml')):
+            if models[name] is None:
                 raise RuntimeError('Eksik görsel analiz modeli: '+name)
-        self.detector = TextDetection(model_name=DETECTOR, model_dir=native_model_directory(models/DETECTOR), device=device,
+        self.detector = TextDetection(model_name=DETECTOR, model_dir=native_model_directory(models[DETECTOR]), device=device,
                                       enable_mkldnn=False, cpu_threads=2, limit_side_len=1600,
                                       limit_type='max', box_thresh=.5, unclip_ratio=1.5)
-        self.layout = LayoutDetection(model_name=LAYOUT, model_dir=native_model_directory(models/LAYOUT), device=device,
+        self.layout = LayoutDetection(model_name=LAYOUT, model_dir=native_model_directory(models[LAYOUT]), device=device,
                                       enable_mkldnn=False, cpu_threads=2, threshold=.3)
         self.device = device
 

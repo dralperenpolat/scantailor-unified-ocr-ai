@@ -2154,7 +2154,7 @@ MainWindow::updateWindowTitle()
         project_name = QFileInfo(m_projectFile).baseName();
     }
     QString const version(unified_i18n::text(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.4.5 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.5.0 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2749,7 +2749,7 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.4.5"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.5.0"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectRow(3);goToPage(page);}};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_content::collect(*m_ptrPages,*stages):std::vector<unified_content::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,QRectF const* applied){return m_ptrStages==stages&&unified_content::matchesCurrent(sample,*stages,applied);};

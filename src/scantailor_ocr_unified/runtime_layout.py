@@ -91,6 +91,18 @@ def environment_python(directory):
     return Path(directory) / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python3')
 
 
+def paddle_model(name, root=None):
+    """An empty/partial download cache must not hide a bundled complete model."""
+    root=Path(root) if root else app_root()
+    suffix=Path('resources/paddle-models/official_models')/name
+    bases=[data_root(root),root]
+    if os.environ.get('STOU_ASSET_ROOT'):bases.append(Path(os.environ['STOU_ASSET_ROOT']))
+    for base in bases:
+        path=base/suffix
+        if all((path/file).is_file() for file in ('inference.json','inference.pdiparams','inference.yml')):return path
+    return None
+
+
 def python_path(root=None):
     if os.environ.get('STOU_PYTHON'):return Path(os.environ['STOU_PYTHON'])
     root = Path(root) if root else app_root()

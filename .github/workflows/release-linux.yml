@@ -45,6 +45,7 @@ jobs:
           bash packaging/build-linux.sh
           cmake --build native/release-linux --target unified-review-state-test unified-stage-tools-test unified-i18n-test -j2
       - name: Stage and verify the installed package
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail
@@ -54,6 +55,8 @@ jobs:
           runtime="$RUNNER_TEMP/baseline/runtime"
           if [ '${{ matrix.variant }}' = minimal ]; then runtime="$RUNNER_TEMP/minimal-runtime"; fi
           python packaging/stage_linux.py --runtime "$runtime" --destination "$STAGE" --variant '${{ matrix.variant }}'
+          export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+          export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9
           "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --fast
           if [ '${{ matrix.variant }}' = full ]; then
             "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/ai" --ai

@@ -3,11 +3,24 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from scantailor_ocr_unified.runtime_layout import initialize, resource_path, paddle_python, python_path, native_model_directory
+from scantailor_ocr_unified.runtime_layout import initialize, resource_path, paddle_python, python_path, native_model_directory, paddle_model
 from scantailor_ocr_unified.native_worker import NativeCrash, Worker
 
 
 class ReleaseRuntime(unittest.TestCase):
+    def test_partial_user_model_cache_does_not_hide_bundled_or_shared_models(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=root/'app';data=root/'user';shared=root/'shared'
+            suffix=Path('resources/paddle-models/official_models/example')
+            (data/suffix).mkdir(parents=True);(app/suffix).mkdir(parents=True);(shared/suffix).mkdir(parents=True)
+            for base in (app,shared):
+                for name in ('inference.json','inference.pdiparams','inference.yml'):(base/suffix/name).write_bytes(b'model')
+            with patch.dict(os.environ,{'STOU_DATA':str(data),'STOU_ASSET_ROOT':str(shared)}):
+                self.assertEqual(paddle_model('example',app),app/suffix)
+                (app/suffix/'inference.json').unlink()
+                self.assertEqual(paddle_model('example',app),shared/suffix)
+                for name in ('inference.json','inference.pdiparams','inference.yml'):(data/suffix/name).write_bytes(b'user model')
+                self.assertEqual(paddle_model('example',app),data/suffix)
     def test_native_unicode_model_path_is_readable_and_ascii_on_windows(self):
         with tempfile.TemporaryDirectory(prefix='stou Türkçe ') as folder:
             model=Path(folder)/'model';model.mkdir();(model/'inference.json').write_bytes(b'{"model":1}')

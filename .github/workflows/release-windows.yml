@@ -65,9 +65,13 @@ jobs:
           python packaging/stage_windows.py --destination "$env:RUNNER_TEMP\stage" --runtime $runtime --prefix $prefix --variant '${{ matrix.variant }}'
           if ($LASTEXITCODE) { throw 'Stage failed' }
       - name: Installed CPU, PDF and native UI checks
+        timeout-minutes: 12
         run: |
           $stage="$env:RUNNER_TEMP\stage"; $qa="$env:RUNNER_TEMP\qa"
           $env:PATH="$stage\native\bin;$env:PATH"
+          $env:QT_PLUGIN_PATH="$stage\native\bin"
+          $env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'
+          $env:HTTP_PROXY='http://127.0.0.1:9'; $env:HTTPS_PROXY=$env:HTTP_PROXY; $env:ALL_PROXY=$env:HTTP_PROXY
           & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\cpu" --fast
           if ($LASTEXITCODE) { throw 'Fast CPU test failed' }
           if ('${{ matrix.variant }}' -eq 'full') {
@@ -76,10 +80,13 @@ jobs:
           }
           & "$stage\runtime\python.exe" packaging/smoke_pdf_import.py --root $stage --work "$qa\pdf"
           if ($LASTEXITCODE) { throw 'PDF test failed' }
+          Write-Output 'Checking native review state'
           & native/release050/unified-review-state-test.exe
           if ($LASTEXITCODE) { throw 'Review UI test failed' }
+          Write-Output 'Checking native stage controls and PDF import'
           & native/release050/unified-stage-tools-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Stage UI test failed' }
+          Write-Output 'Checking language and startup settings'
           & native/release050/unified-i18n-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Language/setup UI test failed' }
       - name: Build installer and test upgrade and uninstall

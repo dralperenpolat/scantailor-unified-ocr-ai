@@ -28,7 +28,7 @@ def main():
     # Keep downloaded models under this portable program. No user photos sent.
     root=Path(os.environ.get('STOU_ROOT',Path(__file__).resolve().parents[2]))
     sys.path.insert(0,str(root/'src'))
-    from scantailor_ocr_unified.runtime_layout import resource_path, native_model_directory
+    from scantailor_ocr_unified.runtime_layout import resource_path, native_model_directory, paddle_model
     os.environ.setdefault('PADDLE_PDX_CACHE_HOME',str(resource_path('paddle-models',root,writable=True)))
     os.environ.setdefault('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK','True')
     if '--probe' in sys.argv:
@@ -47,16 +47,17 @@ def main():
                 detector_name,detector_limit=detector_profile(device,available_bytes())
                 check(device)
                 from paddleocr import PaddleOCR
-                models=resource_path('paddle-models',root)/'official_models'
                 local={}
                 if version not in ('PP-OCRv5','PP-OCRv6'):raise ValueError('Unsupported Paddle OCR version')
                 if version=='PP-OCRv6':
                     detector_name='PP-OCRv6_small_det'
-                detector=models/detector_name
-                if detector.is_dir():local.update(text_detection_model_name=detector_name,text_detection_model_dir=native_model_directory(detector))
+                detector=paddle_model(detector_name,root)
+                local['text_detection_model_name']=detector_name
+                if detector:local['text_detection_model_dir']=native_model_directory(detector)
                 if version=='PP-OCRv5' and lang in ('de','tr','fr','it','es','pt','nl','pl','en'):
-                    recognizer=models/'latin_PP-OCRv5_mobile_rec'
-                    if recognizer.is_dir():local.update(text_recognition_model_name='latin_PP-OCRv5_mobile_rec',text_recognition_model_dir=native_model_directory(recognizer))
+                    recognizer=paddle_model('latin_PP-OCRv5_mobile_rec',root)
+                    local['text_recognition_model_name']='latin_PP-OCRv5_mobile_rec'
+                    if recognizer:local['text_recognition_model_dir']=native_model_directory(recognizer)
                 engines[key]=PaddleOCR(lang=lang,ocr_version=version,device=device_name(device),
                     use_doc_orientation_classify=False,use_doc_unwarping=False,use_textline_orientation=False,
                     text_det_limit_side_len=detector_limit,text_det_limit_type='max',enable_mkldnn=False,
