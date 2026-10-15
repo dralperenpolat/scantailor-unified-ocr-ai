@@ -10,7 +10,7 @@ from scantailor_ocr_unified.native_worker import NativeCrash, Worker
 class ReleaseRuntime(unittest.TestCase):
     def test_partial_user_model_cache_does_not_hide_bundled_or_shared_models(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);app=root/'app';data=root/'user';shared=root/'shared'
+            root=Path(folder).resolve();app=root/'app';data=root/'user';shared=root/'shared'
             suffix=Path('resources/paddle-models/official_models/example')
             (data/suffix).mkdir(parents=True);(app/suffix).mkdir(parents=True);(shared/suffix).mkdir(parents=True)
             for base in (app,shared):
