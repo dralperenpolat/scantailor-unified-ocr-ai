@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.4.5
+# ScanTailor OCR Unified · 0.5.0 development
 
 **English** | [Türkçe](README.tr.md)
+
+The 0.5.0 work adds startup settings (including output and temporary folders), CPU Fast with Tesseract and deferred OCR, a SQLite queue, storage controls and a PDF/review workspace. See the [0.5.0 workflow and build notes](packaging/BUILD-0.5.0.md). The installation instructions below describe the published 0.4.5 release until 0.5.0 package checks finish.
 
 A desktop application for cleaning up book photographs and creating searchable PDFs. It retains the interface and six processing stages of [ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental), adding a book queue, OCR, PDF export, UVDoc dewarping suggestions and Paddle-based content review. Documents are processed on your computer. A GPU is optional.
 

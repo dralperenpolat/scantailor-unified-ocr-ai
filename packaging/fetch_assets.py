@@ -6,9 +6,10 @@ def digest(path):
     with path.open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--root',default=str(Path(__file__).resolve().parents[1]));parser.add_argument('--verify-only',action='store_true');a=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--root',default=str(Path(__file__).resolve().parents[1]));parser.add_argument('--verify-only',action='store_true');parser.add_argument('--variant',choices=['full','minimal'],default='full');a=parser.parse_args()
     root=Path(a.root).resolve();manifest=json.loads(Path(__file__).with_name('assets.json').read_text('utf8'))
     for item in manifest['assets']:
+        if a.variant=='minimal' and '/tessdata_' not in item['path']:continue
         path=(root/item['path']).resolve()
         if not path.is_relative_to(root):raise ValueError('Asset path escapes root')
         if path.is_file() and digest(path)==item['sha256']:continue

@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.4.5
+# ScanTailor OCR Unified · 0.5.0 geliştirme
 
 [English](README.md) | **Türkçe**
+
+0.5.0 çalışması; çıktı ve geçici klasör seçilen başlangıç sihirbazı, Tesseract Fast ile hızlı CPU profili, OCR’ı sona bırakma, SQLite kuyruk ve depolama/PDF/kontrol merkezini ekler. [Yeni sürümün kullanım ve derleme notları](packaging/BUILD-0.5.0.md). Aşağıdaki kurulum bilgileri, 0.5.0 paket denetimleri tamamlanana kadar yayımlanmış 0.4.5 sürümüne aittir.
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 

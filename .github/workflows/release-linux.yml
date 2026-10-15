@@ -3,12 +3,18 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 jobs:
   linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [minimal, full]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
-      VERSION: '0.4.5'
+      VERSION: '0.5.0'
       QT_QPA_PLATFORM: offscreen
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -25,12 +31,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 -o "$RUNNER_TEMP/baseline.tar.gz" https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.4.4/scantailor-ocr-unified-0.4.4-linux-x64.tar.gz
-          echo "9b116b6ffa6b1f1cbdf64f2303ca8262d211327b323b0e411a5184b6181e3a14  $RUNNER_TEMP/baseline.tar.gz" | sha256sum --check
+          curl --fail --location --retry 3 -o "$RUNNER_TEMP/baseline.tar.gz" https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.4.5/scantailor-ocr-unified-0.4.5-linux-x64.tar.gz
+          echo "7658a49715ba8bbdf17b0799b6e8c27c180d57dba0bc615647cb88df72459478  $RUNNER_TEMP/baseline.tar.gz" | sha256sum --check
           mkdir "$RUNNER_TEMP/baseline"
           tar -xzf "$RUNNER_TEMP/baseline.tar.gz" -C "$RUNNER_TEMP/baseline"
           cp -a "$RUNNER_TEMP/baseline/resources" resources
-          "$RUNNER_TEMP/baseline/runtime/bin/python3" packaging/fetch_assets.py --verify-only
+          "$RUNNER_TEMP/baseline/runtime/bin/python3" packaging/fetch_assets.py
+          if [ '${{ matrix.variant }}' = minimal ]; then
+            python packaging/minimal_runtime.py --base "$RUNNER_TEMP/baseline/runtime" --destination "$RUNNER_TEMP/minimal-runtime"
+          fi
       - name: Compile the application and native UI tests
         run: |
           bash packaging/build-linux.sh
@@ -42,12 +51,18 @@ jobs:
           export STAGE="$RUNNER_TEMP/stage-linux"
           export QA="$RUNNER_TEMP/qa-linux"
           export LD_LIBRARY_PATH="$STAGE/native/bin"
-          "$RUNNER_TEMP/baseline/runtime/bin/python3" packaging/stage_linux.py --runtime "$RUNNER_TEMP/baseline/runtime" --destination "$STAGE"
-          "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --ai
+          runtime="$RUNNER_TEMP/baseline/runtime"
+          if [ '${{ matrix.variant }}' = minimal ]; then runtime="$RUNNER_TEMP/minimal-runtime"; fi
+          python packaging/stage_linux.py --runtime "$runtime" --destination "$STAGE" --variant '${{ matrix.variant }}'
+          "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --fast
+          if [ '${{ matrix.variant }}' = full ]; then
+            "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/ai" --ai
+          fi
           "$STAGE/runtime/bin/python3" packaging/smoke_pdf_import.py --root "$STAGE" --work "$QA/pdf"
           native/release-linux/unified-review-state-test
           native/release-linux/unified-stage-tools-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
           native/release-linux/unified-i18n-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
+          python packaging/smoke_install.py --work "$QA/install" --previous "$RUNNER_TEMP/baseline" --stage "$STAGE"
           mkdir -p release
           python - <<'PY'
           import hashlib, json, os
@@ -65,12 +80,21 @@ jobs:
                     'native_ui': 'passed', 'manifest_files_verified': len(manifest)}
           Path('release/linux-acceptance-'+os.environ['VERSION']+'.json').write_text(json.dumps(result, indent=2))
           PY
-          tar -C "$STAGE" -czf "release/scantailor-ocr-unified-$VERSION-linux-x64.tar.gz" .
+          python packaging/sbom.py "$STAGE" release/sbom.cdx.json
+          cp "$QA/install/install-result.json" release/
+          tar -C "$STAGE" -czf "release/scantailor-ocr-unified-$VERSION-linux-x64-${{ matrix.variant }}.tar.gz" .
           cp "$QA/pdf/final-1.png" "$QA/pdf/final-2.png" release/
           cp "$QA/ui/pdf-import-tr.png" "$QA/ui/pdf-import-en.png" release/
+      - uses: actions/attest@v4
+        with:
+          subject-path: release/*.tar.gz
+      - uses: actions/attest@v4
+        with:
+          subject-path: release/*.tar.gz
+          sbom-path: release/sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: release-linux-0.4.5
+          name: release-linux-0.5.0-${{ matrix.variant }}
           path: release/
           compression-level: 0
           retention-days: 3

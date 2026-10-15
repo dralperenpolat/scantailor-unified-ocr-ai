@@ -47,11 +47,14 @@ def main():
                 detector_name,detector_limit=detector_profile(device,available_bytes())
                 check(device)
                 from paddleocr import PaddleOCR
-                models=root/'resources/paddle-models/official_models'
+                models=resource_path('paddle-models',root)/'official_models'
                 local={}
+                if version not in ('PP-OCRv5','PP-OCRv6'):raise ValueError('Unsupported Paddle OCR version')
+                if version=='PP-OCRv6':
+                    detector_name='PP-OCRv6_small_det'
                 detector=models/detector_name
                 if detector.is_dir():local.update(text_detection_model_name=detector_name,text_detection_model_dir=native_model_directory(detector))
-                if lang in ('de','tr','fr','it','es','pt','nl','pl','en'):
+                if version=='PP-OCRv5' and lang in ('de','tr','fr','it','es','pt','nl','pl','en'):
                     recognizer=models/'latin_PP-OCRv5_mobile_rec'
                     if recognizer.is_dir():local.update(text_recognition_model_name='latin_PP-OCRv5_mobile_rec',text_recognition_model_dir=native_model_directory(recognizer))
                 engines[key]=PaddleOCR(lang=lang,ocr_version=version,device=device_name(device),

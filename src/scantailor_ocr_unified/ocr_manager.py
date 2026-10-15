@@ -68,7 +68,7 @@ def download(root,quality,codes):
 def runtime_path(root,device):
     return paddle_python(root,device)
 def install_paddle(root,device):
-    if device=='cpu' and (root/'release.json').is_file():
+    if device=='cpu' and (root/'release.json').is_file() and json.loads((root/'release.json').read_text('utf8')).get('cpu_bundled',True):
         event('CPU paketi kurulumun içinde; yeniden indirmeden test ediliyor.')
         return probe(root,device)
     target=data_root(root)/'resources/runtimes'/('paddle' if device=='gpu' else 'paddle_cpu')

@@ -7,6 +7,7 @@
 #include "UnifiedOcrOptions.h"
 #include "UnifiedPanel.h"
 #include "UnifiedPdfToolsDialog.h"
+#include "UnifiedStartupDialog.h"
 #include <QAction>
 #include <QTemporaryDir>
 #include <QJsonArray>
@@ -20,6 +21,10 @@
 static void check(bool ok,char const* why){if(!ok)throw std::runtime_error(why);}
 int main(int argc,char** argv){
     Application app(argc,argv);app.setOrganizationName("Scan Tailor Tests");app.setApplicationName("Language test");
+#ifdef Q_OS_WIN
+    QFontDatabase::addApplicationFont(QDir(qEnvironmentVariable("WINDIR")).filePath("Fonts/arial.ttf"));
+    app.setFont(QFont("Arial",9));
+#endif
     QTemporaryDir temp;QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());
     qputenv("STOU_ROOT",argc>2?QByteArray(argv[2]):temp.path().toUtf8());qputenv("STOU_DATA",temp.path().toUtf8());qputenv("STOU_QUEUE_PATH",(temp.path()+"/queue.json").toUtf8());qunsetenv("STOU_MONITOR_REQUEST");qunsetenv("STOU_UI_LANGUAGE");
     CommandLine::set(CommandLine(QStringList{},true));
@@ -35,6 +40,30 @@ int main(int argc,char** argv){
         QSettings().setValue("unified/ui_language","en");QSettings().sync();check(unified_i18n::selectedLanguage()=="en","English selection survives settings reload");
         unified_i18n::EnglishTranslator english;check(!english.isEmpty(),"embedded translation catalog exists");check(app.installTranslator(&english),"install English translator");app.setProperty("unifiedUiLanguage","en");
         check(unified_i18n::text("▶ Hazırla")=="▶ Prepare","English prepare translation");
+        {
+            UnifiedStartupDialog setup({},temp.path()+"/output");setup.show();app.processEvents();
+            auto values=setup.values();
+            check(values.value("ocr_engine")=="tesseract"&&values.value("tess_quality")=="fast"&&values.value("ocr_timing")=="after","CPU fast defaults to Tesseract Fast after images");
+            check(!values.value("auto_warp").toBool()&&!values.value("page_cleanup").toBool()&&values.value("native_scale")==1,"fast profile avoids expensive automatic processing");
+            check(setup.windowTitle()=="Startup settings","English startup title");
+            check(setup.button(QWizard::NextButton)->isVisible()&&setup.button(QWizard::NextButton)->isEnabled(),"startup Next button is visible and usable");
+            check(setup.button(QWizard::NextButton)->mapTo(&setup,QPoint(0,0)).y()+setup.button(QWizard::NextButton)->height()<=setup.height(),"startup Next button fits the window");
+            if(argc>1)check(setup.grab().save(QString::fromLocal8Bit(argv[1])+"/startup-en-ocr.png"),"startup OCR screenshot");
+            setup.findChild<QComboBox*>("setupProfile")->setCurrentIndex(1);values=setup.values();
+            check(values.value("tess_quality")=="best"&&values.value("auto_warp").toBool(),"quality profile changes OCR and geometry together");
+            setup.next();setup.next();app.processEvents();
+            check(setup.button(QWizard::FinishButton)->isVisible(),"startup Save button is visible");
+            auto output=setup.findChild<QLineEdit*>("setupOutputFolder"),temporary=setup.findChild<QLineEdit*>("setupTempFolder");
+            check(output&&temporary,"startup exposes output and temporary folders");
+            output->setText(temp.path()+"/chosen-output");temporary->setText(temp.path()+"/chosen-temp");
+            check(setup.validateCurrentPage(),"selected startup folders are writable");
+            values=setup.values();check(values.value("preferred_output")==temp.path()+"/chosen-output","chosen output is saved in preferences");
+            if(argc>1)check(setup.grab().save(QString::fromLocal8Bit(argv[1])+"/startup-en-folders.png"),"startup folders screenshot");
+            values.insert("structured_text",false);
+            UnifiedStartupDialog restored(values,values.value("preferred_output").toString());
+            check(restored.values().value("tess_quality")=="best"&&!restored.values().value("structured_text").toBool(),"custom preferences survive reopening");
+            check(restored.values().value("preferred_output")==values.value("preferred_output"),"output folder survives reopening");
+        }
         check(unified_i18n::display(QString::fromUtf8("12/50 · 1450 OCR karakteri · kontrol edin"))=="12/50 · 1450 OCR characters · review required","formatted live worker message");
         check(unified_i18n::display(QString::fromUtf8("Page %2 — Türkçe.pdf"))==QString::fromUtf8("Page %2 — Türkçe.pdf"),"unknown filenames are unchanged");
         check(english.translate("OtherContext","Görünüm").isNull(),"native translation contexts are not intercepted");
@@ -96,6 +125,7 @@ int main(int argc,char** argv){
             QElapsedTimer elapsed;elapsed.start();
             while(!start->isEnabled()&&elapsed.elapsed()<60000){app.processEvents();QThread::msleep(20);}
             check(start->isEnabled(),"PDF process finished");
+            if(books->topLevelItemCount()!=2)std::cerr<<pdf->findChild<QLabel*>("pdfToolsStatus")->text().toUtf8().constData()<<'\n';
             check(books->topLevelItemCount()==2,"prepared PDF added as one book");
             check(window.windowTitle()==title,"PDF import preserves editor project");
             check(queue.open(QIODevice::ReadOnly),"read imported queue");auto imported=QJsonDocument::fromJson(queue.readAll()).object().value("jobs").toArray();queue.close();
@@ -123,6 +153,8 @@ int main(int argc,char** argv){
         window.close();app.removeTranslator(&english);
         check(unified_i18n::text("▶ Hazırla")==QString::fromUtf8("▶ Hazırla"),"Turkish text restored without translator");
         {
+            UnifiedStartupDialog setup({},temp.path()+"/output");setup.show();setup.next();setup.next();app.processEvents();
+            if(argc>1)check(setup.grab().save(QString::fromLocal8Bit(argv[1])+"/startup-tr-folders.png"),"Turkish startup folders screenshot");
             UnifiedPanel turkish;turkish.resize(1100,650);turkish.show();turkish.openPdfTools();app.processEvents();
             auto trTabs=turkish.findChild<QTabWidget*>("unifiedToolTabs");
             check(trTabs->tabText(trTabs->currentIndex())==QString::fromUtf8("PDF’den içe aktar"),"Turkish PDF tab");

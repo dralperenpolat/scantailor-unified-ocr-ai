@@ -22,8 +22,8 @@ class PaddleClient:
                 else:self.recent.append(line.strip());self.recent=self.recent[-12:]
             self.messages.put({'ok':False,'error':'Paddle işlemi kapandı. '+' '.join(self.recent)[-1200:]})
         self.thread=threading.Thread(target=collect,daemon=True);self.thread.start()
-    def recognize(self,image,language,device):
-        self.proc.stdin.write(json.dumps({'image':str(image),'language':language,'device':device})+'\n');self.proc.stdin.flush()
+    def recognize(self,image,language,device,version='PP-OCRv5'):
+        self.proc.stdin.write(json.dumps({'image':str(image),'language':language,'device':device,'version':version})+'\n');self.proc.stdin.flush()
         try:result=self.messages.get(timeout=1800)
         except queue.Empty:raise TimeoutError('PaddleOCR / model indirmesi 30 dakika içinde tamamlanmadı.')
         if not result.get('ok'):raise RuntimeError(result.get('error','PaddleOCR hatası'))
@@ -38,12 +38,29 @@ def close_clients():
     _clients.clear()
 atexit.register(close_clients)
 
-def paddle_pdf(image,conf,work):
+def paddle_pdf(image,conf,work,metadata=None):
     root=Path(conf['root']);device=conf.get('ocr_device','cpu');key=(str(root),device)
     if key not in _clients:_clients[key]=PaddleClient(root,device)
     path=Path(work)/('paddle-'+uuid.uuid4().hex+'.png');image.save(path,compress_level=1)
-    result=_clients[key].recognize(path,conf.get('paddle_language','de'),device)
+    result=_clients[key].recognize(path,conf.get('paddle_language','de'),device,conf.get('paddle_version','PP-OCRv5'))
+    if metadata is not None:
+        metadata.update(result)
+        weights=sum(len(line['text']) for line in result['lines'])
+        metadata['confidence']=sum(line['score']*len(line['text']) for line in result['lines'])/weights if weights else None
+        metadata['confidence_kind']='engine score, not calibrated accuracy'
     path.with_suffix('.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
+    return lines_pdf(image,result)
+
+
+def recognize_pdf(image,conf,work,metadata=None):
+    if conf.get('ocr_engine')!='kraken':return paddle_pdf(image,conf,work,metadata)
+    from .optional_engines import kraken_lines
+    result=kraken_lines(image,conf,work)
+    if metadata is not None:metadata.update(result)
+    return lines_pdf(image,result)
+
+
+def lines_pdf(image,result):
     doc=fitz.open();page=doc.new_page(width=image.width,height=image.height)
     font=fitz.Font('helv')
     for line in result['lines']:

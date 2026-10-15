@@ -187,8 +187,12 @@ def native_execution(root,cli,request):
 
 class Worker:
     def __init__(self,request):
+        from .settings import load
+        request={**load(request.get('root')),**request}
         self.request=request;self.queue_path=Path(request['queue']);self.control=Path(request['control'])
         self.data=load_queue(self.queue_path);self.job=None
+        from .queue_store import QueueStore
+        self.store=QueueStore(self.queue_path);self.data=self.store.load(self.data)
         self.root=Path(request['root']);self.cli=Path(request['cli'])
         self.settings={k:request.get(k) for k in ('language','appearance','paper','margin_mm','target_x_mm','ocr_engine','ocr_device','paddle_language','tess_quality')}
         timing=request.get('ocr_timing','during')
@@ -212,16 +216,27 @@ class Worker:
         self.session=Path(str(request.get('request_path',self.queue_path))+'.session.json')
         self.event_log=Path(request['event_log']) if request.get('event_log') else None
         self.session_state='running'
+        from .telemetry import Metrics
+        self.metrics=Metrics()
         self._pending_events=[]
         quality=request.get('tess_quality','best')
         self.settings['ocr_models']={code:file_hash(path) for code in request.get('language','deu').split('+')
             if (path:=resource_path('tessdata_'+quality,self.root)/(code+'.traineddata')).is_file()}
-    def save(self):
+        self.settings.update({k:request[k] for k in ('paddle_version','ocr_compare','ocr_confidence_threshold','ocr_max_edge','kraken','kraken_model') if k in request})
+    def save(self,force=False):
+        if getattr(self,'store',None):
+            self.store.save(self.data,dirty_jobs=None if force or not self.job else {self.job['id']})
+            now=time.monotonic()
+            if now-getattr(self,'_last_publish',0)>=1 or self.session_state!='running':
+                try:self.store.publish(self.data);self._last_publish=now
+                except PermissionError:pass
+            return
         published=save_queue(self.queue_path,self.data)
         if not published and not getattr(self,'_queue_deferred',False):
             print('Arayüz kuyruk dosyasını kullanıyor; ilerleme güvenli yedekte saklandı, işlem sürüyor.',file=sys.stderr,flush=True)
         self._queue_deferred=not published
     def emit(self,stage,detail='',**kwargs):
+        if getattr(self,'metrics',None):self.metrics.event(stage)
         event={'job':self.job['id'] if self.job else '', 'book':self.job['title'] if self.job else '', 'stage':stage,'detail':detail,**kwargs,'time':time.time()}
         if self.job:self.job.update(status=stage,detail=detail)
         try:write_json(self.session,{'pid':os.getpid(),'state':self.session_state,'updated':time.time(),'event':event})
@@ -234,6 +249,12 @@ class Worker:
             pending=getattr(self,'_pending_events',[])
             pending.append(json.dumps(event,ensure_ascii=False)+'\n')
             try:
+                if self.event_log.exists() and self.event_log.stat().st_size>16*1024**2:
+                    # Bounded telemetry; queue checkpoints and reviews are separate.
+                    for index in (2,1):
+                        old=self.event_log.with_name(self.event_log.name+f'.{index}')
+                        if old.exists():os.replace(old,self.event_log.with_name(self.event_log.name+f'.{index+1}'))
+                    os.replace(self.event_log,self.event_log.with_name(self.event_log.name+'.1'))
                 with self.event_log.open('a',encoding='utf8') as log:log.writelines(pending)
                 pending=[];self._log_deferred=False
             except OSError as exc:
@@ -276,19 +297,39 @@ class Worker:
             state=self.effective_control_state()
             if state=='cancel':raise Cancelled()
             if self.revision_waiting():raise RevisionPending()
-            if state!='pause':return
+            if state!='pause' and self.resources_ready():return
+            if state!='pause':
+                time.sleep(.5);continue
             if not paused:self.emit('Duraklatıldı','Devam et düğmesiyle sürdürülebilir.');paused=True
             time.sleep(.15)
+    def resources_ready(self):
+        from .storage import ensure_space, temp_root, StoragePressure
+        from .runtime_layout import data_root
+        now=time.monotonic()
+        if now-getattr(self,'_space_checked',0)<2:return not getattr(self,'_space_pressure',False)
+        self._space_checked=now
+        try:
+            ensure_space([self.data.get('output_root',self.queue_path.parent),self.queue_path.parent,temp_root(self.request),data_root(self.request.get('root'))],
+                needed=64*1024**2,reserve_gib=self.request.get('reserve_gib',2))
+        except StoragePressure as exc:
+            if not getattr(self,'_space_pressure',False):
+                self.session_state='resource_pause';self.emit('Disk alanı bekleniyor',str(exc));self.save()
+            self._space_pressure=True;return False
+        if getattr(self,'_space_pressure',False):
+            self.session_state='running';self.emit('Devam ediliyor','Disk alanı yeniden yeterli.')
+        self._space_pressure=False;return True
     def native(self,args):
         # Native checkpoint control is private to this invocation: requesting a
         # revision can stop the current pass without cancelling the whole queue.
         native_control=self.control.with_name(self.control.name+'.native.json')
         last_control=self.effective_control_state();write_json(native_control,{'state':last_control})
         env=os.environ.copy();env.update(STOU_CONTROL_FILE=str(native_control),STOU_PROGRESS='1')
-        env['OMP_NUM_THREADS']=str(self.request.get('threads',4));env['OMP_THREAD_LIMIT']=env['OMP_NUM_THREADS']
+        from .telemetry import resources
+        budget=resources(self.request.get('resource_profile','balanced'),self.request.get('threads',4))
+        env['OMP_NUM_THREADS']=str(budget['threads']);env['OMP_THREAD_LIMIT']=env['OMP_NUM_THREADS']
         env['STOU_AUTO_WARP']='1' if self.request.get('auto_warp',False) else '0'
         from .memory_budget import bounded_workers
-        env['STOU_OUTPUT_WORKERS']=str(bounded_workers(getattr(self,'native_output_workers',1)))
+        env['STOU_OUTPUT_WORKERS']=str(min(budget['workers'],bounded_workers(getattr(self,'native_output_workers',1))))
         proc=subprocess.Popen([str(getattr(self,'execution_cli',self.cli)),*map(str,args)],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                               env=env,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         recent=[];messages=thread_queue.Queue()
@@ -302,6 +343,7 @@ class Worker:
         try:
             while True:
                 state=self.effective_control_state()
+                if state=='run' and not self.resources_ready():state='pause'
                 if state!='cancel' and self.revision_waiting():priority=True
                 native_state='cancel' if priority else state
                 if native_state!=last_control:write_json(native_control,{'state':native_state});last_control=native_state
@@ -453,9 +495,12 @@ class Worker:
         page_pdfs=[];decisions=geometry_warnings(project)
         decisions.update({r['page']:r['reason'] for r in self.job.get('geometry_timeout_fallbacks',[])})
         warnings=list(decisions);count=len(outputs)
+        from .quality import source_mapping, reasons, inspect_page, integrity
+        mapping=source_mapping(project)
         self.job['pages']=[]
         tools=json.loads((self.root/'local-tools.json').read_text(encoding='utf8'))
         for n,source_name in enumerate(outputs,1):
+            page_started=time.monotonic()
             self.checkpoint();source=Path(source_name);gray_path=Path(str(source)+'.ocr.tif')
             placement=layout['pages'][n-1];pxmm=placement['pxmm']
             if n in decisions:self.emit('Geometriyi kontrol edin',decisions[n],page=n,total=count)
@@ -494,6 +539,7 @@ class Worker:
                             'ocr_cache':str(text_cache),'root':str(self.root),
                             'ocr_engine':self.request.get('ocr_engine','tesseract'),'ocr_device':self.request.get('ocr_device','cpu'),
                             'paddle_language':self.request.get('paddle_language','de'),'language':self.request['language']}
+                        protection_conf.update({k:self.request[k] for k in ('temp_root','reserve_gib','paddle_version','kraken','kraken_model') if k in self.request})
                         boxes=ocr_protection(recognition_gray,protection_conf,notify=lambda message:self.emit('Başlık / numara korunuyor',message,page=n-1,total=count))
                         mask,cleanup=analyze(np.asarray(gray),allow_closed_frame=override.get('allow_closed_frame',False),protected_boxes=boxes,
                                              reviewed_components=override.get('reviewed_components',[]))
@@ -526,7 +572,8 @@ class Worker:
                 # OCR uses the unthresholded, uncleaned geometry-identical copy;
                 # recognition protects text before display-only debris removal.
                 if override.get('verified_blank'):recognition_gray=Image.new('L',recognition_gray.size,255)
-                recognition_gray.thumbnail((4200,4200),Image.Resampling.LANCZOS);recognition_gray.save(ocr,dpi=(300,300),compress_level=1)
+                max_edge=int(self.request.get('ocr_max_edge',4200))
+                recognition_gray.thumbnail((max_edge,max_edge),Image.Resampling.LANCZOS);recognition_gray.save(ocr,dpi=(300,300),compress_level=1)
                 # White canvas gives all A4 pages the SAME mm/pixel scale. No
                 # binarization setting can alter it.
                 image_mm=placement['image_mm'];page_mm=placement['page_mm']
@@ -543,6 +590,9 @@ class Worker:
                     visual_conf={**conf,'ocr_engine':'none'}
                     config=cache/'visual-export.json';write_json(config,visual_conf)
                 self.emit('OCR / PDF' if timing=='during' else 'Görüntülü PDF',source.name,page=n-1,total=count,preview=str(visible))
+                conf.update({k:self.request[k] for k in ('temp_root','reserve_gib','ocr_compare','ocr_confidence_threshold','paddle_version','ocr_max_edge','kraken','kraken_model') if k in self.request})
+                write_json(cache/'export.json',conf)
+                write_json(config,{**conf,'ocr_engine':'none'} if timing!='during' else conf)
                 report=export(config,page_pdf,notify=lambda message:self.emit('OCR / PDF' if timing=='during' else 'Görüntülü PDF',message,page=n-1,total=count))
                 chars=report['checks'][0]['ocr_characters']
                 count_estimate=(placement['body_measurement'] or {}).get('components',0)
@@ -550,17 +600,36 @@ class Worker:
                 if weak_ocr:warnings.append(n)
                 with fitz.open(page_pdf) as doc:doc[0].get_pixmap(dpi=100,alpha=False).save(preview)
                 record={'sha256':file_hash(page_pdf),'cache_key':key,'chars':chars,'pdf':str(page_pdf),'weak_ocr':weak_ocr,
+                        'pixels_sha256':report['checks'][0]['pixels_sha256'],
+                        'confidence':report['checks'][0].get('ocr_metadata',{}).get('confidence'),
+                        'comparison':report['checks'][0].get('ocr_metadata',{}).get('comparison'),
                         'ocr_pending':timing=='after','ocr_timing':timing,
                         'cleanup':cleanup,'cleanup_mask':str(cache/'cleanup-mask.png')};write_json(receipt,record)
             else:
                 page_pdf=Path(record.get('pdf',str(page_pdf)))
                 if record.get('weak_ocr') or (timing=='during' and record.get('chars',0)<15):warnings.append(n)
+                if not preview.is_file():
+                    with fitz.open(page_pdf) as doc:doc[0].get_pixmap(dpi=100,alpha=False).save(preview)
+            from .storage import register
+            register(preview,owner=str(page_pdf),root=self.root)
             page_pdfs.append(page_pdf)
             uncertain=record.get('cleanup',{}).get('uncertain',[])
             if uncertain:warnings.append(n)
             placement['cleanup']=record.get('cleanup',{})
             page_event={'page':n,'total':count,'preview':str(preview),'page_pdf':str(page_pdf),'warning':n in warnings,'chars':record['chars'],
                         'cleaned_regions':len(record.get('cleanup',{}).get('removed',[])),'cleanup_mask':record.get('cleanup_mask','')}
+            page_event.update(mapping[n-1] if n<=len(mapping) else {})
+            page_event.update(pixels_sha256=record.get('pixels_sha256'),confidence=record.get('confidence'),
+                seconds=round(time.monotonic()-page_started,3),pdf_sha256=record['sha256'])
+            page_event['reasons']=reasons(chars=record['chars'],expected_text=timing=='during',geometry=decisions.get(n,''),
+                placement=placement.get('warning',''),uncertain=uncertain,confidence=record.get('confidence'),
+                threshold=self.request.get('ocr_confidence_threshold',.85))
+            if record.get('comparison',{}):
+                comparison=record['comparison'];page_event['ocr_comparison']=comparison
+                if comparison.get('agreement',1)<.8:
+                    page_event['reasons'].append({'code':'engine_disagreement','severity':'warning','detail':'Paddle ve Tesseract metinleri belirgin farklı.'})
+            with fitz.open(page_pdf) as document:page_event['reasons'].extend(inspect_page(document[0]))
+            if page_event['reasons']:warnings.append(n);page_event['warning']=True
             self.job['pages'].append(page_event)
             pending=timing=='after' and record.get('ocr_pending',False)
             if pending:deferred.append((n,cache,record,placement))
@@ -569,9 +638,25 @@ class Worker:
             delay=int(self.request.get('delay_ms',0));
             if delay:time.sleep(delay/1000)
         # Deferred mode finishes every visible page before any recognition.
+        if deferred and not self.job.get('visual_pdf_signature')==current:
+            visual=next_path(folder,safe_name(self.job['title'])+' - OCR Bekliyor','.pdf')
+            private=folder/('.visual-'+uuid.uuid4().hex+'.pdf')
+            try:
+                writer=PdfWriter()
+                for path in page_pdfs:writer.append(path)
+                with private.open('xb') as stream:writer.write(stream)
+                del writer
+                with fitz.open(private) as doc:
+                    if len(doc)!=count:raise ValueError('Görüntülü PDF sayfa sayısı uyuşmuyor.')
+                from .pdf_profiles import publish
+                publish(private,visual)
+            finally:private.unlink(missing_ok=True)
+            self.job.update(visual_pdf=str(visual),visual_pdf_signature=current)
+            self.emit('Görüntülü PDF hazır','OCR en son yapılacak; bu PDF şimdi incelenebilir.',preview=str(visual));self.save()
         # Completed OCR receipts survive interruption; the next run resumes
         # only pending pages and never repeats native geometry or display work.
         for n,cache,record,placement in deferred:
+            ocr_started=time.monotonic()
             self.checkpoint();conf=json.loads((cache/'export.json').read_text(encoding='utf8'))
             self.emit('Çıktı sonrası OCR',f'{n}/{count}',page=n-1,total=count)
             if self.request.get('page_cleanup',True) and self.request.get('appearance')!='native' and not (placement.get('body_measurement') or {}).get('sideways'):
@@ -593,9 +678,21 @@ class Worker:
             weak=chars<15 or (estimate>200 and chars<estimate*.35)
             if weak:warnings.append(n)
             record.update(sha256=file_hash(page_pdf),chars=chars,pdf=str(page_pdf),weak_ocr=weak,ocr_pending=False)
+            record.update(confidence=report['checks'][0].get('ocr_metadata',{}).get('confidence'),
+                comparison=report['checks'][0].get('ocr_metadata',{}).get('comparison'),pixels_sha256=report['checks'][0]['pixels_sha256'])
             write_json(cache/'verified.json',record);page_pdfs[n-1]=page_pdf
             with fitz.open(page_pdf) as doc:doc[0].get_pixmap(dpi=100,alpha=False).save(cache/'preview.png')
             event=self.job['pages'][n-1];event.update(page_pdf=str(page_pdf),chars=chars,warning=n in warnings,cleaned_regions=len(record.get('cleanup',{}).get('removed',[])))
+            event.update(pdf_sha256=record['sha256'],confidence=record.get('confidence'),pixels_sha256=record['pixels_sha256'],
+                seconds=event.get('seconds',0)+round(time.monotonic()-ocr_started,3),
+                reasons=reasons(chars=chars,confidence=record.get('confidence'),geometry=decisions.get(n,''),placement=placement.get('warning',''),
+                    uncertain=record.get('cleanup',{}).get('uncertain',[]),threshold=self.request.get('ocr_confidence_threshold',.85)))
+            if record.get('comparison'):
+                event['ocr_comparison']=record['comparison']
+                if record['comparison'].get('agreement',1)<.8:event['reasons'].append({'code':'engine_disagreement','severity':'warning','detail':'Paddle ve Tesseract metinleri belirgin farklı.'})
+            with fitz.open(page_pdf) as doc:event['reasons'].extend(inspect_page(doc[0]))
+            if event['reasons']:warnings.append(n);event['warning']=True
+            register(cache/'preview.png',owner=str(page_pdf),root=self.root)
             self.emit('Sayfa hazır',f'{n}/{count} · {chars} OCR karakteri',**event);self.save()
         self.checkpoint();self.emit('PDF birleştiriliyor',f'{count} sayfa',page=count,total=count)
         write_json(folder/'layout-plan.json',layout)
@@ -633,11 +730,23 @@ class Worker:
         self.checkpoint()
         temp.unlink();temp=packed
         self.job['lossless_packing']=packing
+        if self.job.get('source_text') and (Path(self.job['source_text'])/'import.json').is_file():
+            from .pdf_metadata import restore_import
+            annotated=folder/('.metadata-'+uuid.uuid4().hex+'.pdf')
+            self.job['source_navigation']=restore_import(temp,annotated,self.job['source_text'],self.job['pages'])
+            temp.unlink();temp=annotated
         os.link(temp,destination);temp.unlink()
         warnings=sorted(set(warnings))
         self.job.update(pdf=str(destination),pdf_hash=file_hash(destination),signature=fingerprint(project,{**self.settings,'cleanup_overrides':self.job.get('cleanup_overrides',{})}),warnings=warnings)
         self.job['verification']={'pages':count,'all_pages_render_identical':True,'image_pixels_verified':True,
                                   'packing_verified':packing,'checked_at':time.time(),'ocr_timing':timing}
+        self.job['integrity']=integrity(self.job['pages'],len(mapping))
+        for issue in self.job['integrity']:
+            if issue.get('page'):
+                row=self.job['pages'][issue['page']-1]
+                row.update(reasons=[*row.get('reasons',[]),issue],warning=True)
+                warnings.append(issue['page'])
+        self.job['warnings']=sorted(set(warnings))
         self.emit('Kontrol gerekli' if warnings else 'Tamamlandı',f'{count} sayfa · {destination.stat().st_size/1024/1024:.2f} MB'+(f' · {len(warnings)} sayfada OCR / yerleşim kontrolü' if warnings else ''),page=count,total=count,preview=str(destination))
     def finalize_layout(self,folder):
         """Cheap, reversible paper placement after the expensive OCR pipeline."""
@@ -666,6 +775,8 @@ class Worker:
             row=dict(event)
             row['page_pdf']=row.pop('base_page_pdf',row['page_pdf'])
             row['preview']=row.pop('base_preview',row['preview'])
+            if Path(row['page_pdf']).is_file():row['pdf_sha256']=file_hash(row['page_pdf'])
+            row['reasons']=row.pop('base_reasons',row.get('reasons',[]))
             row.pop('layout_scale',None)
             row['warning']=row['page'] in base_warnings
             base_pages.append(row)
@@ -703,7 +814,13 @@ class Worker:
                     pix.save(preview)
                 if row['warning']:warnings.add(n)
                 updated={**event,'base_page_pdf':event['page_pdf'],'base_preview':event['preview'],
-                         'page_pdf':str(single),'preview':str(preview),'layout_scale':row['scale'],'warning':n in warnings}
+                         'base_reasons':event.get('reasons',[]),'page_pdf':str(single),'pdf_sha256':file_hash(single),
+                         'preview':str(preview),'layout_scale':row['scale'],'warning':n in warnings}
+                from .quality import inspect_page
+                updated['reasons']=[*event.get('reasons',[]),*inspect_page(page)]
+                if row['warning']:updated['reasons'].append({'code':'placement','severity':'warning','detail':row['warning']})
+                from .storage import register
+                register(preview,owner=str(single),root=self.root)
                 events.append(updated)
                 self.emit('Sayfa hazır',f'{n}/{len(doc)} · içerik ölçeği ×{row["scale"]:.2f}',**updated)
                 fitz.TOOLS.store_shrink(100)
@@ -732,13 +849,23 @@ class Worker:
             jobs=pending_edits+[j for j in jobs if j['id'] not in pending_ids]
         from .revision_queue import accept_revisions,revision_export_options
         while True:
-            revised,revision_errors=accept_revisions(self.data,self.queue_path,self.save)
+            if getattr(self,'store',None):
+                added,command_errors=self.store.apply_commands(self.data)
+                present={j['id'] for j in self.data['jobs']};jobs=[j for j in jobs if j['id'] in present]
+                queued={j['id'] for j in jobs}
+                jobs.extend(j for j in self.data['jobs'] if j['id'] in added and j['id'] not in queued)
+                jobs.sort(key=lambda j:-j.get('priority',0))
+                for error in command_errors:self.emit('Kuyruk isteği hatası',error)
+            revised,revision_errors=accept_revisions(self.data,self.queue_path,(lambda:self.save(force=True)) if getattr(self,'store',None) else self.save)
             for error in revision_errors:self.emit('Düzeltme isteği hatası',error)
             if revised:
                 jobs=[j for j in self.data['jobs'] if j['id'] in revised]+[j for j in jobs if j['id'] not in revised]
             if not jobs:break
             job=jobs.pop(0)
             self.job=job
+            if getattr(self,'metrics',None):
+                from .telemetry import Metrics
+                self.metrics=Metrics()
             self._revision_pause_bypass=(self.revision_in_progress() and self.control_state()=='pause' and job.get('edit_run_while_paused',True))
             original_request,original_settings=self.request,self.settings
             self.request=revision_export_options(original_request,job)
@@ -763,8 +890,7 @@ class Worker:
                 job.pop('error',None)
                 self.checkpoint();self.emit('Hazırlanıyor',job['title']);self.save()
                 Path(self.data['output_root']).mkdir(parents=True,exist_ok=True)
-                if shutil.disk_usage(self.data['output_root']).free<10*1024**3:
-                    raise OSError('Çıktı diskinde 10 GB’den az boş alan kaldı. Yer açıp devam edin.')
+                self.checkpoint()
                 folder,project,out=self.prepare()
                 before={str(p):file_hash(p) for p in source_paths(project)}
                 if self.request['mode']=='prepare':
@@ -773,6 +899,7 @@ class Worker:
                 else:
                     self.export(folder,project,out)
                     self.finalize_layout(folder)
+                    self.finish_book(folder)
                 if any(file_hash(p)!=sha for p,sha in before.items()):raise ValueError('İşlem sırasında kaynak dosya değişmiş.')
                 if self.request.get('reclaim_intermediates',False) and job.get('pdf'):
                     from .work_cleanup import reclaim
@@ -793,6 +920,12 @@ class Worker:
                 self.session_state='stopped';self.emit('Durduruldu','Tamamlanan sayfalar korunuyor.');self.save();return 2
             except Exception as exc:
                 from .memory_budget import is_memory_failure
+                from .recovery import classify
+                if classify(exc)=='disk':
+                    self._space_checked=0;self._space_pressure=False
+                    job['resource_retry']=True;jobs.insert(0,job)
+                    self.emit('Disk alanı bekleniyor',str(exc))
+                    continue
                 if is_memory_failure(exc):
                     # Resource exhaustion affects every later book as well.
                     # Stop at this checkpoint instead of marking the rest of
@@ -811,10 +944,44 @@ class Worker:
         self.session_state='finished';self.job=None;self.emit('Kuyruk tamamlandı',f'{len(self.data["jobs"])} kitap · {errors} hata')
         return 1 if errors else 0
 
+    def finish_book(self,folder):
+        """Optional derivatives never replace the verified reading PDF."""
+        job=self.job
+        if not job.get('pdf') or not job.get('verification'):return
+        if self.request.get('structured_text',True) and not job.get('text_exports',{}).get('pdf_hash')==job.get('pdf_hash'):
+            from .quality import export_text
+            target=Path(folder)/('text-'+job['pdf_hash'][:12])
+            if target.exists():target=Path(folder)/('text-'+uuid.uuid4().hex[:12])
+            self.emit('Metin dışa aktarılıyor','TXT, Markdown, ALTO ve okuma sırası kutuları.')
+            job['text_exports']={'pdf_hash':job['pdf_hash'],**export_text(job['pdf'],target)}
+        profile=self.request.get('compression_profile','lossless')
+        if profile!='lossless' and (job.get('compressed',{}).get('source_hash')!=job['pdf_hash'] or job.get('compressed',{}).get('profile')!=profile):
+            from .pdf_profiles import compress
+            target=next_path(folder,safe_name(job['title'])+' - '+profile,'.pdf')
+            job['compressed']={**compress(job['pdf'],target,profile),'source_hash':job['pdf_hash']}
+        if self.request.get('output_format')=='pdfa' and job.get('pdfa',{}).get('source_hash')!=job['pdf_hash']:
+            from .archive_pdf import convert_pdfa
+            target=next_path(folder,safe_name(job['title'])+' - PDFA','.pdf')
+            job['pdfa']={**convert_pdfa(job['pdf'],target,self.request),'source_hash':job['pdf_hash']}
+        if getattr(self,'metrics',None):
+            job['metrics']=self.metrics.report();write_json(Path(folder)/'metrics.json',job['metrics'])
+        from .storage import cleanup_plan,apply_cleanup
+        try:
+            cleanup=cleanup_plan(getattr(self,'root',None))
+            if cleanup['files']:job['cache_cleanup']=apply_cleanup(cleanup,getattr(self,'root',None))
+        except (OSError,ValueError) as exc:job['cache_cleanup_note']=str(exc)
+        self.emit('Kontrol gerekli' if job.get('warnings') else 'Tamamlandı',
+            f'{len(job.get("pages",[]))} sayfa · PDF ve seçilen ek çıktılar hazır.',preview=job['pdf'])
+
 def main():
     request=json.loads(Path(sys.argv[1]).read_text(encoding='utf8'))
     request['request_path']=str(Path(sys.argv[1]).resolve())
     from .queue_lock import exclusive_queue
-    with exclusive_queue(request['queue']):return Worker(request).run()
+    with exclusive_queue(request['queue']):
+        worker=Worker(request)
+        try:return worker.run()
+        finally:
+            try:worker.store.publish(worker.data)
+            finally:worker.store.close()
 
 if __name__=='__main__':raise SystemExit(main())

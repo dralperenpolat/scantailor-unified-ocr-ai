@@ -26,7 +26,7 @@ class UnifiedOcrOptions : public QWidget {
 public:
     explicit UnifiedOcrOptions(QString const& root,QWidget* parent=nullptr):QWidget(parent),m_root(root) {
         auto form=new QFormLayout(this);form->setRowWrapPolicy(QFormLayout::WrapLongRows);QSettings s;
-        m_engine=new QComboBox;m_engine->addItem("Tesseract · CPU","tesseract");m_engine->addItem("PaddleOCR · PP-OCRv5","paddle");form->addRow(unified_i18n::text("OCR motoru"),m_engine);
+        m_engine=new QComboBox;m_engine->addItem("Tesseract · CPU","tesseract");m_engine->addItem("PaddleOCR · PP-OCRv5 / v6","paddle");m_engine->addItem(unified_i18n::text("Kraken · isteğe bağlı tarihî metin modeli"),"kraken");form->addRow(unified_i18n::text("OCR motoru"),m_engine);
         m_device=new QComboBox;m_device->addItem("CPU","cpu");m_device->addItem("NVIDIA GPU · CUDA","gpu");form->addRow(unified_i18n::text("PaddleOCR cihazı"),m_device);
         m_paddleLang=new QComboBox;
         for(auto p:QList<QPair<QString,QString>>{{"Almanca","de"},{"Türkçe","tr"},{"İngilizce","en"},{"Fransızca","fr"},{"İtalyanca","it"},{"İspanyolca","es"},{"Portekizce","pt"},{"Felemenkçe","nl"},{"Lehçe","pl"},{"Rusça","ru"},{"Ukraynaca","uk"},{"Arapça","ar"},{"Farsça","fa"},{"Yunanca","el"},{"Çince","ch"},{"Japonca","japan"},{"Korece","korean"}})m_paddleLang->addItem(unified_i18n::display(p.first),p.second);
@@ -77,6 +77,9 @@ public:
         if(opts.value("ocr_engine")=="paddle") {
             QString device=opts.value("ocr_device").toString();
             if(!QFileInfo::exists(unified_runtime::resource(m_root,"paddle-"+device+"-ready.json")))return unified_i18n::text("PaddleOCR cihazı doğrulanmadı. Paketi kurun ve cihaz testini çalıştırın.");
+        } else if(opts.value("ocr_engine")=="kraken") {
+            QFile file(unified_runtime::data(m_root)+"/preferences.json");QJsonObject settings;if(file.open(QIODevice::ReadOnly))settings=QJsonDocument::fromJson(file.readAll()).object();
+            if(!QFileInfo(settings.value("kraken").toString()).isFile()||!QFileInfo(settings.value("kraken_model").toString()).isFile())return unified_i18n::text("Kraken aracı ve modelini Çalışma merkezi’nden seçin.");
         } else {
             auto codes=opts.value("language").toString().split('+',Qt::SkipEmptyParts);if(codes.isEmpty())return unified_i18n::text("En az bir OCR dili seçin.");
             for(auto code:codes)if(!QFileInfo::exists(unified_runtime::resource(m_root,"tessdata_"+m_quality->currentData().toString()+"/"+code+".traineddata")))return unified_i18n::text("Eksik OCR dili: ")+code+unified_i18n::text(". Önce seçilen dilleri indirin.");

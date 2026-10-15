@@ -81,7 +81,10 @@ def data_root(root=None):
 def resource_path(name, root=None, *, writable=False):
     root = Path(root) if root else app_root()
     local = data_root(root) / 'resources' / name
-    return local if writable or local.exists() else root / 'resources' / name
+    if writable or local.exists():return local
+    bundled=root/'resources'/name
+    shared=os.environ.get('STOU_ASSET_ROOT')
+    return Path(shared)/'resources'/name if shared and not bundled.exists() else bundled
 
 
 def environment_python(directory):
@@ -89,6 +92,7 @@ def environment_python(directory):
 
 
 def python_path(root=None):
+    if os.environ.get('STOU_PYTHON'):return Path(os.environ['STOU_PYTHON'])
     root = Path(root) if root else app_root()
     for path in (root / 'runtime/python.exe', root / 'runtime/bin/python3', environment_python(root / '.venv')):
         if path.is_file():
@@ -98,16 +102,18 @@ def python_path(root=None):
 
 def paddle_python(root, device):
     name = 'paddle' if device.startswith('gpu') else 'paddle_cpu'
-    for base in (data_root(root), Path(root)):
+    for base in (data_root(root), Path(root),Path(os.environ.get('STOU_ASSET_ROOT',root))):
         candidate = environment_python(base / 'resources/runtimes' / name)
         if candidate.is_file():
             return candidate
     # Distribution bundles the complete CPU stack in its own interpreter.
     bundled = python_path(root)
     if (Path(root) / 'release.json').is_file():
-        return bundled
+        import json
+        if json.loads((Path(root)/'release.json').read_text('utf8')).get('cpu_bundled',True):return bundled
+        return environment_python(data_root(root)/'resources/runtimes'/name)
     # Older local development installations used the CUDA wheel for CPU too.
-    return environment_python(Path(root) / 'resources/runtimes/paddle')
+    return environment_python(Path(os.environ.get('STOU_ASSET_ROOT',root)) / 'resources/runtimes/paddle')
 
 
 def initialize(root=None):

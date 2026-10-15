@@ -8,6 +8,8 @@
 #include "UnifiedQueueSelection.h"
 #include "UnifiedQueueEditing.h"
 #include "UnifiedPdfToolsDialog.h"
+#include "UnifiedWorkspaceDialog.h"
+#include "UnifiedStartupDialog.h"
 #include <QCryptographicHash>
 #include "BasicImageView.h"
 #include "acceleration/NonAcceleratedOperations.h"
@@ -48,9 +50,9 @@ QString queueReadPath(QString const& path){
     QFileInfo primary(path),pending(path+".pending.json");
     return pending.exists()&&(!primary.exists()||pending.lastModified()>primary.lastModified())?pending.absoluteFilePath():path;
 }
-void writeJson(QString const& path,QJsonObject const& value) {
+bool writeJson(QString const& path,QJsonObject const& value) {
     QDir().mkpath(QFileInfo(path).absolutePath());
-    QSaveFile f(path); if(f.open(QIODevice::WriteOnly)){f.write(QJsonDocument(value).toJson());f.commit();}
+    QSaveFile f(path); if(f.open(QIODevice::WriteOnly)){auto bytes=QJsonDocument(value).toJson();if(f.write(bytes)!=bytes.size())return false;return f.commit();}return false;
 }
 }
 UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
@@ -68,6 +70,15 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto outer=new QVBoxLayout(this);
     outer->setContentsMargins(5,3,5,3);
     auto sizing=new QHBoxLayout;outer->addLayout(sizing);
+    auto workspace=new QPushButton(trU("Çalışma merkezi"));workspace->setObjectName("unifiedWorkspaceButton");sizing->addWidget(workspace);
+    auto setup=new QPushButton(trU("Başlangıç ayarları"));setup->setObjectName("unifiedStartupButton");sizing->addWidget(setup);connect(setup,&QPushButton::clicked,this,&UnifiedPanel::startupSettings);
+    connect(workspace,&QPushButton::clicked,this,[this]{
+        auto dialog=new UnifiedWorkspaceDialog(m_root,m_queuePath,m_output,this);
+        dialog->currentJobs=[this]{loadQueue();refreshBooks();return m_jobs;};
+        dialog->currentOptions=[this]{auto value=m_ocr->options();auto layout=pdfLayoutOptions();for(auto i=layout.begin();i!=layout.end();++i)value.insert(i.key(),i.value());value.insert("appearance",m_appearance->currentData().toString());value.insert("page_cleanup",m_cleanup->isChecked());return value;};
+        dialog->applyProfile=[this](QJsonObject const& value){m_ocr->setOptions(value);if(value.contains("paper"))setPdfLayoutOptions(value);int i=m_appearance->findData(value.value("appearance").toString());if(i>=0)m_appearance->setCurrentIndex(i);if(value.contains("page_cleanup"))m_cleanup->setChecked(value.value("page_cleanup").toBool());if(value.contains("auto_warp"))m_autoWarp->setChecked(value.value("auto_warp").toBool());if(value.contains("ocr_timing"))m_ocrTiming->setCurrentIndex(qMax(0,m_ocrTiming->findData(value.value("ocr_timing").toString())));};
+        dialog->show();
+    });
     sizing->addWidget(new QLabel(trU("Panel yüksekliği ↕")));
     m_panelHeight=new QSlider(Qt::Horizontal);m_panelHeight->setRange(140,1800);m_panelHeight->setValue(QSettings().value("unified/panel_height",370).toInt());m_panelHeight->setMaximumWidth(260);
     m_panelHeight->setToolTip(trU("Alt panelin yüksekliğini ayarlar. Üst ayırıcıyı sürükleyerek de değiştirebilirsiniz."));sizing->addWidget(m_panelHeight);
@@ -79,18 +90,18 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     m_queueContext=new QLabel(trU("Kuyrukta seçili kitap: yok"));m_queueContext->setObjectName("unifiedQueueContext");m_queueContext->setWordWrap(true);jl->addWidget(m_queueContext);
     auto buttons=new QGridLayout;jl->addLayout(buttons);int buttonIndex=0;
     auto button=[&](char const* text,char const* help,auto action) {auto b=new QPushButton(trU(text));b->setToolTip(trU(help));buttons->addWidget(b,buttonIndex/3,buttonIndex%3);++buttonIndex;connect(b,&QPushButton::clicked,action);return b;};
-    m_capture=button("Açık projeyi kuyruğa ekle","Düzenleyicide açık projenin şu anki ayarlarıyla bir kopyasını kuyruğa ekler. Aşağıda seçilen kitabı kullanmaz.",[this]{if(busy()){m_status->setText(trU("Yeni kitap eklemek için önce kuyruğu durdurun. Mevcut kitabı düzeltmek için Kaydet ve PDF'yi güncelle kullanılabilir."));return;}emit captureRequested();});
+    m_capture=button("Açık projeyi kuyruğa ekle","Düzenleyicide açık projenin şu anki ayarlarıyla bir kopyasını kuyruğa ekler. Aşağıda seçilen kitabı kullanmaz.",[this]{emit captureRequested();});
     m_capture->setObjectName("unifiedCaptureProject");m_capture->setEnabled(false);
-    button("Fotoğraf klasöründen kitap ekle","JPG / TIFF / PNG fotoğrafları içeren tek klasörü yeni kitap olarak ekler. Daha önce kaydedilmiş ScanTailor ayarlarını yüklemez.",[this]{if(busy()){m_status->setText(trU("Yeni kitap eklemek için önce kuyruğu durdurun."));return;}auto f=QFileDialog::getExistingDirectory(this,trU("Fotoğrafların bulunduğu kitap klasörü"));if(!f.isEmpty())addFolder(f);});
+    button("Fotoğraf klasöründen kitap ekle","JPG / TIFF / PNG fotoğrafları içeren tek klasörü yeni kitap olarak ekler. Daha önce kaydedilmiş ScanTailor ayarlarını yüklemez.",[this]{auto f=QFileDialog::getExistingDirectory(this,trU("Fotoğrafların bulunduğu kitap klasörü"));if(!f.isEmpty())addFolder(f);});
     button("Alt klasörleri ayrı kitap olarak ekle","Seçtiğiniz üst klasördeki fotoğraf içeren alt klasörlerin her birini ayrı kitap olarak kuyruğa ekler.",[this]{
-        if(busy())return;auto f=QFileDialog::getExistingDirectory(this,trU("Alt klasörlerin her biri ayrı kitap"));if(f.isEmpty())return;
+        auto f=QFileDialog::getExistingDirectory(this,trU("Alt klasörlerin her biri ayrı kitap"));if(f.isEmpty())return;
         QDirIterator it(f,QDir::Dirs|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);
         while(it.hasNext()) {QString p=it.next();QString relative=QDir(f).relativeFilePath(p).toLower();
             auto parts=relative.split('/');bool skip=false;for(auto part:parts)if(part=="out"||part=="output"||part=="cache"||part.startsWith('.'))skip=true;
             if(!skip && !QFileInfo(p).isSymLink())addFolder(p);
         }
     });
-    button("Kayıtlı ScanTailor projesini ekle","Diskten bir .ScanTailor dosyası seçer; kayıtlı bölme, geometri, içerik ve kenar ayarlarıyla kuyruğa ekler.",[this]{if(busy()){m_status->setText(trU("Yeni kitap eklemek için önce kuyruğu durdurun."));return;}for(auto p:QFileDialog::getOpenFileNames(this,trU("Kayıtlı ScanTailor projeleri"),{},"ScanTailor (*.ScanTailor)"))addProject(QFileInfo(p).baseName(),p,{});});
+    button("Kayıtlı ScanTailor projesini ekle","Diskten bir .ScanTailor dosyası seçer; kayıtlı bölme, geometri, içerik ve kenar ayarlarıyla kuyruğa ekler.",[this]{for(auto p:QFileDialog::getOpenFileNames(this,trU("Kayıtlı ScanTailor projeleri"),{},"ScanTailor (*.ScanTailor)"))addProject(QFileInfo(p).baseName(),p,{});});
     button("PDF çıktı klasörünü seç","Yeni PDF dosyalarının kaydedileceği klasör. Kaynak fotoğrafları değiştirmez.",[this]{if(busy())return;auto f=QFileDialog::getExistingDirectory(this,trU("Kitap çıktıları"),m_output);if(!f.isEmpty()){m_output=f;m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));saveQueue();m_status->setText(f);}});
     button("PDF’den kitap ekle","PDF’den sayfaları ve metni çıkar; düzeltme kuyruğuna ekle veya görüntüyü değiştirmeden sıkıştır.",[this]{
         openPdfTools();
@@ -109,7 +120,7 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     connect(m_pause,&QPushButton::clicked,[this]{if(!busy())return;QFile f(m_controlPath);QString state;if(f.open(QIODevice::ReadOnly)){state=QJsonDocument::fromJson(f.readAll()).object().value("state").toString();f.close();}if(state=="cancel")return;m_paused=state!="pause";control(m_paused?"pause":"run");m_pause->setText(trU(m_paused?"Devam et":"Duraklat"));m_status->setText(trU(m_paused?"Duraklatma istendi; mevcut sayfa bitince bekleyecek.":"Devam ediyor"));});
     connect(stopButton,&QPushButton::clicked,this,&UnifiedPanel::stop);
     connect(edit,&QPushButton::clicked,[this]{editPreview();});
-    connect(remove,&QPushButton::clicked,[this]{if(busy()||!m_books->currentItem())return;m_jobs.removeAt(m_books->currentItem()->data(0,Qt::UserRole).toInt());saveQueue();refreshBooks();});
+    connect(remove,&QPushButton::clicked,[this]{if(busy()||!m_books->currentItem())return;int index=m_books->currentItem()->data(0,Qt::UserRole).toInt();auto token=uid();writeJson(m_queuePath+".commands/"+token+".request.json",{{"id",token},{"action","remove"},{"job_id",m_jobs.at(index).toObject().value("id")}});m_jobs.removeAt(index);saveQueue();refreshBooks();});
     auto placement=new QPushButton(trU("Sayfa yerleşimini incele"));row->addWidget(placement);
     connect(placement,&QPushButton::clicked,[this]{
         auto selected=m_books->currentItem();if(!selected)return;
@@ -193,7 +204,19 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     m_margin->setValue(QSettings().value("unified/pdf_margin",10).toDouble());m_targetText->setValue(QSettings().value("unified/pdf_text_height",0).toDouble());
     auto layoutChanged=[this]{auto v=pdfLayoutOptions();QSettings s;s.setValue("unified/pdf_paper",v.value("paper").toString());s.setValue("unified/pdf_margin",v.value("margin_mm").toDouble());s.setValue("unified/pdf_text_height",v.value("target_x_mm").toDouble());s.setValue("unified/pdf_content_fit",v.value("content_fit").toBool());emit pdfLayoutSettingsChanged(v);};
     connect(m_paper,qOverload<int>(&QComboBox::currentIndexChanged),this,layoutChanged);connect(m_margin,qOverload<double>(&QDoubleSpinBox::valueChanged),this,layoutChanged);connect(m_targetText,qOverload<double>(&QDoubleSpinBox::valueChanged),this,layoutChanged);connect(m_fitContent,&QCheckBox::toggled,this,layoutChanged);
+    QFile startupPreferences(unified_runtime::data(m_root)+"/preferences.json");
+    if(startupPreferences.open(QIODevice::ReadOnly)){
+        auto saved=QJsonDocument::fromJson(startupPreferences.readAll()).object();
+        if(saved.contains("preferred_output"))m_output=saved.value("preferred_output").toString(m_output);
+        if(saved.contains("auto_warp"))m_autoWarp->setChecked(saved.value("auto_warp").toBool());
+    }
+    connect(m_autoWarp,&QCheckBox::toggled,this,[](bool enabled){QSettings().setValue("unified/auto_warp",enabled);});
+    if(QSettings().contains("unified/auto_warp"))m_autoWarp->setChecked(QSettings().value("unified/auto_warp").toBool());
     loadQueue();refreshBooks();applyResources();
+    if(QCoreApplication::applicationName().startsWith("scantailor-ocr-unified")&&!qEnvironmentVariableIsSet("STOU_SKIP_SETUP")){
+        QFile preferences(unified_runtime::data(m_root)+"/preferences.json");QJsonObject value;if(preferences.open(QIODevice::ReadOnly))value=QJsonDocument::fromJson(preferences.readAll()).object();
+        if(!value.value("setup_complete").toBool())QTimer::singleShot(0,this,[this]{if(!busy())startupSettings();});
+    }
     m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));
     m_monitorRequest=qEnvironmentVariable("STOU_MONITOR_REQUEST");
     if(!m_monitorRequest.isEmpty()){
@@ -215,11 +238,28 @@ QString UnifiedPanel::snapshotPath(){QString dir=unified_runtime::data(m_root)+"
 QJsonObject UnifiedPanel::pdfLayoutOptions()const{return {{"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"target_x_mm",m_targetText->value()},{"content_fit",m_fitContent->isChecked()}};}
 void UnifiedPanel::setPdfLayoutOptions(QJsonObject const& v){m_paper->setCurrentIndex(qMax(0,m_paper->findData(v.value("paper").toString())));m_margin->setValue(v.value("margin_mm").toDouble(10));m_targetText->setValue(v.value("target_x_mm").toDouble());m_fitContent->setChecked(v.value("content_fit").toBool(true));}
 bool UnifiedPanel::busy()const{return m_externalRunning || m_worker.state()!=QProcess::NotRunning || (m_ocr&&m_ocr->busy());}
-void UnifiedPanel::saveQueue(){writeJson(m_queuePath,{{"schema",1},{"output_root",m_output},{"jobs",m_jobs}});}
+void UnifiedPanel::saveQueue(){writeJson(m_queuePath,{{"schema",QFileInfo::exists(m_queuePath+".sqlite3")?2:1},{"output_root",m_output},{"jobs",m_jobs}});}
+void UnifiedPanel::enqueueJob(QJsonObject const& job){
+    auto token=uid();writeJson(m_queuePath+".commands/"+token+".request.json",{{"id",token},{"action","enqueue"},{"job",job}});
+    m_jobs.append(job);if(!busy())saveQueue();refreshBooks();m_status->setText(trU("Kitap eklendi; çalışan iş bittikten sonra kuyrukta işlenecek."));
+}
+void UnifiedPanel::startupSettings(){
+    if(busy()){m_status->setText(trU("Başlangıç ayarlarını kuyruk boşta olduğunda açın. Çalışan iş mevcut ayarlarıyla devam ediyor."));return;}
+    auto path=unified_runtime::data(m_root)+"/preferences.json";QFile file(path);QJsonObject saved;if(file.open(QIODevice::ReadOnly))saved=QJsonDocument::fromJson(file.readAll()).object();file.close();
+    auto dialog=new UnifiedStartupDialog(saved,m_output,this);dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog,&QDialog::accepted,this,[this,dialog,path,saved]()mutable{
+        auto value=dialog->values();for(auto it=value.begin();it!=value.end();++it)saved.insert(it.key(),it.value());
+        if(!writeJson(path,saved)){m_status->setText(trU("Başlangıç ayarları kaydedilemedi; disk alanını ve yazma iznini kontrol edin."));return;}
+        m_ocr->setOptions(value);setOcrTiming(value.value("ocr_timing").toString());setPdfLayoutOptions(value);setOutputFinish({});
+        m_appearance->setCurrentIndex(qMax(0,m_appearance->findData(value.value("appearance").toString())));m_cleanup->setChecked(value.value("page_cleanup").toBool());m_autoWarp->setChecked(value.value("auto_warp").toBool());
+        m_output=value.value("preferred_output").toString(m_output);m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));saveQueue();
+        QSettings().setValue("unified/ui_language",value.value("ui_language").toString());m_status->setText(trU("Başlangıç ayarları kaydedildi. OCR motoru / dil paketleri sekmesinden model durumunu görebilirsiniz."));
+    });dialog->show();
+}
 void UnifiedPanel::loadQueue(){
     QFile f(queueReadPath(m_queuePath));if(!f.open(QIODevice::ReadOnly))return;
     auto bytes=f.readAll();f.close();
-    auto d=QJsonDocument::fromJson(bytes).object();if(d.value("schema").toInt()!=1)return;
+    auto d=QJsonDocument::fromJson(bytes).object();if(d.value("schema").toInt()!=1&&d.value("schema").toInt()!=2)return;
     auto saved=d.value("jobs").toArray();
     for(auto value:saved){auto after=value.toObject();if(after.value("id").toString()!=m_previewJob)continue;
         for(auto old:m_jobs)if(old.toObject().value("id")==after.value("id")){adoptJobRevision(old.toObject(),after);break;}
@@ -331,13 +371,13 @@ bool UnifiedPanel::submitRevision(QJsonObject const& binding,QString const& snap
     return true;
 }
 void UnifiedPanel::addProject(QString const& title,QString const& path,QJsonArray const& outputs){
-    if(busy())return;for(auto value:m_jobs)if(value.toObject().value("source_project").toString()==path)return;
-    m_jobs.append(QJsonObject{{"id",uid()},{"title",title},{"source_project",path},{"outputs",outputs},{"status",QString::fromUtf8("Bekliyor")}});saveQueue();refreshBooks();
+    for(auto value:m_jobs)if(value.toObject().value("source_project").toString()==path)return;
+    enqueueJob(QJsonObject{{"id",uid()},{"title",title},{"source_project",path},{"outputs",outputs},{"status",QString::fromUtf8("Bekliyor")}});
 }
 void UnifiedPanel::addFolder(QString const& path){
     QDir dir(path);if(dir.entryList({"*.jpg","*.jpeg","*.png","*.tif","*.tiff","*.bmp"},QDir::Files).isEmpty())return;
     for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(path).absoluteFilePath())return;
-    m_jobs.append(QJsonObject{{"id",uid()},{"title",dir.dirName()},{"folder",dir.absolutePath()},{"split",m_split->currentData().toString()},{"status",QString::fromUtf8("Bekliyor")}});saveQueue();refreshBooks();
+    enqueueJob(QJsonObject{{"id",uid()},{"title",dir.dirName()},{"folder",dir.absolutePath()},{"split",m_split->currentData().toString()},{"status",QString::fromUtf8("Bekliyor")}});
 }
 void UnifiedPanel::applyResources(){
     QSettings s;s.setValue("settings/batch_processing_threads",m_threads->value());s.setValue("unified/cpu_limit",m_cpu->value());s.setValue("unified/single_gpu",m_singleGpu->isChecked());s.setValue("unified/page_delay_ms",m_delay->value());s.setValue("unified/protect_numbers",m_numbers->isChecked());s.sync();
@@ -371,7 +411,8 @@ void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     request.insert("margin_mm",m_margin->value());request.insert("target_x_mm",m_targetText->value());
     request.insert("content_fit",m_fitContent->isChecked());QSettings().setValue("unified/pdf_content_fit",m_fitContent->isChecked());
     request.insert("revision_only",revisionsOnly);request.insert("replay_cached_pages",false);
-    request.insert("page_cleanup",m_cleanup->isChecked());request.insert("native_scale",3);request.insert("reclaim_intermediates",true);QSettings().setValue("unified/pdf_cleanup",m_cleanup->isChecked());
+    QFile preferences(unified_runtime::data(m_root)+"/preferences.json");QJsonObject prefs;if(preferences.open(QIODevice::ReadOnly))prefs=QJsonDocument::fromJson(preferences.readAll()).object();
+    request.insert("page_cleanup",m_cleanup->isChecked());request.insert("native_scale",prefs.value("native_scale").toDouble(3));request.insert("reclaim_intermediates",true);QSettings().setValue("unified/pdf_cleanup",m_cleanup->isChecked());
     QSettings stored;stored.setValue("unified/pdf_appearance",m_appearance->currentData());stored.setValue("unified/pdf_paper",m_paper->currentData());stored.setValue("unified/pdf_margin",m_margin->value());stored.setValue("unified/pdf_text_height",m_targetText->value());stored.sync();
     m_requestPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/request-"+uid()+".json";writeJson(m_requestPath,request);
     m_buffer.clear();m_pages->clear();m_progress->setValue(0);m_start->setEnabled(false);m_prepare->setEnabled(false);
@@ -395,7 +436,7 @@ void UnifiedPanel::pollExternal(){
     if(m_monitorRequest.isEmpty()||m_worker.state()!=QProcess::NotRunning)return;
     QFile status(m_monitorRequest+".session.json");QJsonObject state;
     if(status.open(QIODevice::ReadOnly)){auto bytes=status.readAll();status.close();state=QJsonDocument::fromJson(bytes).object();}
-    bool running=state.value("state").toString()=="running" && unifiedProcessRunning(qint64(state.value("pid").toDouble()));
+    bool running=(state.value("state").toString()=="running"||state.value("state").toString()=="resource_pause") && unifiedProcessRunning(qint64(state.value("pid").toDouble()));
     bool changed=running!=m_externalRunning;m_externalRunning=running;
     m_start->setEnabled(!running);m_prepare->setEnabled(!running);
     auto now=QDateTime::currentMSecsSinceEpoch();
@@ -480,7 +521,6 @@ void UnifiedPanel::importPdf(QString const& path){
     openPdfTools("import");m_pdfTools->selectSource(path,true);
 }
 bool UnifiedPanel::addImportedPdf(QJsonObject const& result){
-    if(busy())return false;
     const QString folder=result.value("folder").toString();
     if(folder.isEmpty()||!QFileInfo(folder).isDir()||result.value("pages").toInt()<1)return false;
     if(QDir(folder).entryList({"page-*.png"},QDir::Files).size()!=result.value("pages").toInt())return false;
@@ -489,15 +529,10 @@ bool UnifiedPanel::addImportedPdf(QJsonObject const& result){
     for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(folder).absoluteFilePath())return true;
     QString split=result.value("split").toString("1");if(split!="1"&&split!="2"&&split!="auto")split="1";
     const QString id=uid();
-    auto updated=m_jobs;
-    updated.append(QJsonObject{{"id",id},{"title",QFileInfo(result.value("source").toString()).completeBaseName()},
+    enqueueJob(QJsonObject{{"id",id},{"title",QFileInfo(result.value("source").toString()).completeBaseName()},
         {"folder",QFileInfo(folder).absoluteFilePath()},{"split",split},{"status",QString::fromUtf8("Bekliyor")},
         {"source_pdf",result.value("source")},{"source_text",result.value("text_folder")},
         {"source_pdf_sha256",result.value("source_sha256")},{"pdf_import",result}});
-    QDir().mkpath(QFileInfo(m_queuePath).absolutePath());QSaveFile file(m_queuePath);
-    if(!file.open(QIODevice::WriteOnly))return false;
-    const auto bytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",m_output},{"jobs",updated}}).toJson();
-    if(file.write(bytes)!=bytes.size()||!file.commit())return false;
-    m_jobs=updated;refreshBooks();previewBook(id);return true;
+    previewBook(id);return true;
 }
 void UnifiedPanel::setCleanupEnabled(bool enabled){m_cleanup->setChecked(enabled);}

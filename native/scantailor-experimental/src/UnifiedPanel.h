@@ -104,6 +104,8 @@ private:
     QPlainTextEdit* m_log;
     QPushButton *m_start, *m_prepare, *m_pause;
     void saveQueue();
+    void enqueueJob(QJsonObject const& job);
+    void startupSettings();
     void loadQueue();
     void refreshBooks();
     void showBookSelection(QTreeWidgetItem* item);

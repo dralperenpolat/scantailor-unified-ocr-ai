@@ -18,6 +18,9 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDateTime>
+#include <QTimer>
+#include <QDesktopServices>
+#include <QUrl>
 #include <functional>
 
 // Kept under the original name for callers; this is now an embedded tools tab.
@@ -32,6 +35,7 @@ public:
         m_mode=new QComboBox;m_mode->setObjectName("pdfToolsMode");
         m_mode->addItem(unified_i18n::text("Sayfaları ScanTailor’da düzeltmek için içe aktar"),"import");
         m_mode->addItem(unified_i18n::text("Görünümü koru · kayıpsız sıkıştır"),"compact");
+        m_mode->addItem(unified_i18n::text("Dijital metni koru · yalnız metinsiz sayfalara OCR"),"smart");
         form->addRow(unified_i18n::text("İşlem"),m_mode);
         m_strategy=new QComboBox;m_strategy->setObjectName("pdfImportStrategy");
         m_strategy->addItem(unified_i18n::text("Otomatik · tarama resimlerini özgün çözünürlükte çıkar"),"auto");
@@ -49,6 +53,9 @@ public:
         auto sourceRow=new QHBoxLayout;sourceRow->addWidget(m_source);
         m_browse=new QPushButton(unified_i18n::text("PDF seç ve hazırla"));m_browse->setObjectName("pdfImportBrowse");sourceRow->addWidget(m_browse);
         form->addRow(unified_i18n::text("Kaynak PDF"),sourceRow);
+        m_range=new QLineEdit;m_range->setObjectName("pdfImportPageRange");m_range->setPlaceholderText("1-5,8,12-20");form->addRow(unified_i18n::text("Sayfa aralığı · boşsa tümü"),m_range);
+        m_language=new QComboBox;m_language->addItem(unified_i18n::text("Almanca"),"deu");m_language->addItem(unified_i18n::text("Türkçe"),"tur");m_language->addItem(unified_i18n::text("İngilizce"),"eng");form->addRow(unified_i18n::text("PDF OCR dili"),m_language);
+        auto inspect=new QPushButton(unified_i18n::text("Kaynak PDF’yi önizle"));form->addRow(inspect);connect(inspect,&QPushButton::clicked,this,[this]{QDesktopServices::openUrl(QUrl::fromLocalFile(m_source->text()));});
         m_destination=new QLineEdit(unified_runtime::data(m_root)+"/projects/PDFImports");m_destination->setObjectName("pdfToolsDestination");
         auto outRow=new QHBoxLayout;outRow->addWidget(m_destination);
         m_output=new QPushButton(unified_i18n::text("Klasör seç"));outRow->addWidget(m_output);
@@ -63,13 +70,13 @@ public:
         m_stop=new QPushButton(unified_i18n::text("Durdur"));m_stop->setObjectName("pdfImportStop");buttons->addWidget(m_stop);
         m_add=new QPushButton(unified_i18n::text("Hazır kitabı kuyruğa ekle"));m_add->setObjectName("pdfImportAddReady");m_add->hide();form->addRow(m_add);
         connect(m_browse,&QPushButton::clicked,[this]{
-            auto path=QFileDialog::getOpenFileName(this,unified_i18n::text("İşlenecek PDF"),{},"PDF (*.pdf *.PDF)");
-            if(!path.isEmpty())selectSource(path,m_mode->currentData()=="import");
+            auto paths=QFileDialog::getOpenFileNames(this,unified_i18n::text("İşlenecek PDF’ler"),{},"PDF (*.pdf *.PDF)");
+            if(!paths.isEmpty()){auto first=paths.takeFirst();m_sources=paths;selectSource(first,m_mode->currentData()=="import");}
         });
         connect(m_output,&QPushButton::clicked,[this]{auto path=QFileDialog::getExistingDirectory(this,unified_i18n::text("Yeni çıktı klasörü"),m_destination->text());if(!path.isEmpty())m_destination->setText(path);});
         connect(m_stop,&QPushButton::clicked,[this]{
             if(!running())return;
-            m_cancelled=true;m_process.kill();
+            m_cancelled=true;m_sources.clear();m_process.kill();
             m_status->setText(unified_i18n::text("Durduruldu. İçe aktarmada bitmiş sayfalar saklandı; Başlat ile devam edebilirsin."));
         });
         connect(m_mode,qOverload<int>(&QComboBox::currentIndexChanged),[this]{updateControls();});
@@ -81,6 +88,7 @@ public:
             receive();updateControls();
             if(code&&!m_cancelled)m_status->setText(unified_i18n::text("İşlem tamamlanamadı: ")+m_lastError+QString::fromUtf8(m_errors.right(1000)));
             if(!m_completed)m_progress->setRange(0,1);
+            if(!code&&m_completed&&!m_cancelled&&!m_sources.isEmpty())QTimer::singleShot(0,this,[this]{selectSource(m_sources.takeFirst(),true);});
         });
         connect(&m_process,&QProcess::errorOccurred,[this](QProcess::ProcessError error){
             if(error==QProcess::FailedToStart){updateControls();m_progress->setRange(0,1);m_status->setText(m_process.errorString());}
@@ -98,16 +106,16 @@ public:
         return true;
     }
 private:
-    QString m_root,m_lastError,m_runSplit;
-    QLineEdit *m_source,*m_destination;
-    QComboBox *m_mode,*m_dpi,*m_strategy,*m_split;
+    QString m_root,m_lastError,m_runSplit;QStringList m_sources;
+    QLineEdit *m_source,*m_destination,*m_range;
+    QComboBox *m_mode,*m_dpi,*m_strategy,*m_split,*m_language;
     QPushButton *m_start,*m_stop,*m_browse,*m_output,*m_add;
     QLabel* m_status;QProgressBar* m_progress;
     QProcess m_process;QByteArray m_buffer,m_errors;QJsonObject m_pending;
     bool m_cancelled=false,m_completed=false;
     void updateControls(){
         const bool idle=!running(),importing=m_mode->currentData()=="import";
-        for(QWidget* widget:QList<QWidget*>{m_start,m_mode,m_source,m_destination,m_browse,m_output})widget->setEnabled(idle);
+        for(QWidget* widget:QList<QWidget*>{m_start,m_mode,m_source,m_destination,m_browse,m_output,m_range,m_language})widget->setEnabled(idle);
         for(auto combo:{m_dpi,m_strategy,m_split})combo->setEnabled(idle&&importing);
         m_stop->setEnabled(!idle);m_add->setEnabled(idle);
         m_browse->setText(unified_i18n::text(importing?"PDF seç ve hazırla":"PDF seç"));
@@ -131,12 +139,13 @@ private:
         if(m_destination->text().trimmed().isEmpty()){m_status->setText(unified_i18n::text("Yeni çıktı klasörü seçin."));return;}
         QString source=input.absoluteFilePath(),mode=m_mode->currentData().toString(),out=m_destination->text();
         if(mode=="compact")out=QDir(out).filePath(input.completeBaseName()+" - Kucuk_"+QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_zzz")+".pdf");
-        auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("PYTHONIOENCODING","utf-8");
+        if(mode=="smart")out=QDir(out).filePath(input.completeBaseName()+" - OCR_"+QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_zzz")+".pdf");
+        auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("PYTHONIOENCODING","utf-8");env.insert("PYTHONPATH",m_root+"/src");
         m_process.setProcessEnvironment(env);m_process.setWorkingDirectory(m_root);
         m_buffer.clear();m_errors.clear();m_lastError.clear();m_pending={};m_add->hide();m_cancelled=false;m_completed=false;
         m_runSplit=m_split->currentData().toString();m_progress->setRange(0,0);m_status->setText(unified_i18n::text("PDF okunuyor…"));
-        m_process.start(unified_runtime::python(m_root),{"-u",m_root+"/src/scantailor_ocr_unified/pdf_tools.py",mode,source,out,
-            "--dpi",QString::number(m_dpi->currentData().toInt()),"--strategy",m_strategy->currentData().toString()});
+        m_process.start(unified_runtime::python(m_root),{"-u","-m","scantailor_ocr_unified.pdf_tools",mode,source,out,
+            "--dpi",QString::number(m_dpi->currentData().toInt()),"--strategy",m_strategy->currentData().toString(),"--pages",m_range->text(),"--language",m_language->currentData().toString()});
         updateControls();
     }
     void receive(){
@@ -153,7 +162,8 @@ private:
                 m_completed=true;
                 if(value.value("mode")=="import"){
                     value.insert("split",m_runSplit);m_pending=value;addReady();
-                }else m_status->setText(unified_i18n::text("Doğrulandı: %1 → %2 MB. Metin ve 150 DPI kontrol görüntüleri aynı.\n%3")
+                }else if(value.value("mode")=="smart")m_status->setText(unified_i18n::text("PDF hazır: ")+value.value("pdf").toString());
+                else m_status->setText(unified_i18n::text("Doğrulandı: %1 → %2 MB. Metin ve 150 DPI kontrol görüntüleri aynı.\n%3")
                     .arg(value.value("before_bytes").toDouble()/1048576.,0,'f',2).arg(value.value("after_bytes").toDouble()/1048576.,0,'f',2).arg(value.value("pdf").toString()));
             }
         }

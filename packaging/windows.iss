@@ -1,13 +1,16 @@
 #ifndef StageDir
   #error StageDir must point to the verified clean distribution
 #endif
+#ifndef Variant
+  #define Variant "full"
+#endif
 #ifndef ReleaseDir
   #error ReleaseDir must point to the release output directory
 #endif
 [Setup]
 AppId={{B1C80F8C-0C43-463A-B351-093BC6E10C43}
 AppName=ScanTailor OCR Unified
-AppVersion=0.4.5
+AppVersion=0.5.0
 AppPublisher=Alperen Polat and ScanTailor contributors
 AppPublisherURL=https://alperenpolat.net
 DefaultDirName={localappdata}\Programs\scantailor-ocr-unified
@@ -17,7 +20,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir={#ReleaseDir}
-OutputBaseFilename=scantailor-ocr-unified-0.4.5-windows-x64-setup
+OutputBaseFilename=scantailor-ocr-unified-0.5.0-windows-x64-{#Variant}-setup
 Compression=lzma2/fast
 SolidCompression=yes
 LZMANumBlockThreads=2
@@ -44,6 +47,13 @@ english.LaunchProgram=Open ScanTailor OCR Unified
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Only application-owned dependencies are replaced on upgrade. This also
+; prevents a full -> minimal upgrade from retaining large AI libraries.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\runtime"
+Type: filesandordirs; Name: "{app}\resources\paddle-models"
+Type: filesandordirs; Name: "{app}\resources\UVDoc"
 
 [Icons]
 Name: "{group}\ScanTailor OCR Unified"; Filename: "{app}\native\bin\scantailor-ocr-unified.exe"; WorkingDir: "{app}"

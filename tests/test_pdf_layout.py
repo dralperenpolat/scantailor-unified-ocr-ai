@@ -85,14 +85,17 @@ class PrintedAreaLayout(unittest.TestCase):
                     one.insert_pdf(doc,from_page=n,to_page=n)
                     one.save(path)
                 doc[n].get_pixmap(dpi=72).save(preview)
-                pages.append({'page':n+1,'page_pdf':str(path),'preview':str(preview),'total':len(doc)})
+                pages.append({'page':n+1,'page_pdf':str(path),'preview':str(preview),'total':len(doc),'pdf_sha256':file_hash(path),'reasons':[]})
         original_hash = file_hash(self.source)
         worker=object.__new__(Worker)
+        worker.root=self.root
         worker.job={'title':'Test','pdf':str(self.source),'pdf_hash':original_hash,'pages':pages,'warnings':[]}
         worker.request={'paper':'a4_text','content_fit':True,'margin_mm':10,'target_x_mm':0}
         worker.checkpoint=lambda:None;worker.emit=lambda *a,**k:None;worker.save=lambda:None
         worker.finalize_layout(self.root)
         first=worker.job['pdf'];first_scales=[p['layout_scale'] for p in worker.job['pages']]
+        for page in worker.job['pages']:
+            self.assertEqual(page['pdf_sha256'],file_hash(page['page_pdf']))
         worker.finalize_layout(self.root)
         self.assertEqual(worker.job['pdf'],first)
         worker.request['content_fit']=False;worker.finalize_layout(self.root)
