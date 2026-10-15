@@ -150,6 +150,20 @@ int main(int argc,char** argv){
             check(!added&&!add->isHidden(),"prepared import retained when queue is busy");accept=true;add->click();
             check(added&&add->isHidden(),"retry queues prepared pages with selected two-page layout");
         }
+        panel->findChild<QPushButton*>("unifiedStartupButton")->click();app.processEvents();
+        auto startup=static_cast<UnifiedStartupDialog*>(panel->findChild<QWidget*>("unifiedStartup"));check(startup,"startup settings can be reopened from the panel");
+        startup->next();startup->next();startup->findChild<QLineEdit*>("setupOutputFolder")->setText(temp.path()+"/saved-output");
+        startup->button(QWizard::FinishButton)->click();app.processEvents();
+        QFile preferences(temp.path()+"/preferences.json");check(preferences.open(QIODevice::ReadOnly),"startup preferences were saved");
+        check(QJsonDocument::fromJson(preferences.readAll()).object().value("preferred_output")==temp.path()+"/saved-output","selected output is persisted");preferences.close();
+        check(queue.open(QIODevice::ReadOnly),"read selected output from queue");
+        check(QJsonDocument::fromJson(queue.readAll()).object().value("output_root")==temp.path()+"/saved-output","queue uses selected startup output");queue.close();
+        panel->findChild<QPushButton*>("unifiedWorkspaceButton")->click();app.processEvents();
+        auto workspace=panel->findChild<QDialog*>("unifiedWorkspace");check(workspace,"workspace opens");
+        auto preset=workspace->findChild<QComboBox*>("workspaceProfile");QElapsedTimer service;service.start();
+        while(preset->count()==0&&service.elapsed()<30000){app.processEvents();QThread::msleep(20);}
+        check(preset->findData("cpu_fast")>=0,"workspace service loads CPU Fast profile");
+        if(argc>1)check(workspace->grab().save(QString::fromLocal8Bit(argv[1])+"/workspace-en.png"),"English workspace screenshot");workspace->close();
         window.close();app.removeTranslator(&english);
         check(unified_i18n::text("▶ Hazırla")==QString::fromUtf8("▶ Hazırla"),"Turkish text restored without translator");
         {
