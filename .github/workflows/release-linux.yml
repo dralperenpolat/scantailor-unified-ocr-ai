@@ -64,7 +64,7 @@ jobs:
           "$STAGE/runtime/bin/python3" packaging/smoke_pdf_import.py --root "$STAGE" --work "$QA/pdf"
           native/release-linux/unified-review-state-test
           native/release-linux/unified-stage-tools-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
-          native/release-linux/unified-i18n-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
+          STOU_TEST_WORKFLOW=1 native/release-linux/unified-i18n-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
           python packaging/smoke_install.py --work "$QA/install" --previous "$RUNNER_TEMP/baseline" --stage "$STAGE"
           mkdir -p release
           python - <<'PY'

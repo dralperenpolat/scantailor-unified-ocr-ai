@@ -87,6 +87,7 @@ jobs:
           & native/release050/unified-stage-tools-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Stage UI test failed' }
           Write-Output 'Checking language and startup settings'
+          $env:STOU_TEST_WORKFLOW='1'
           & native/release050/unified-i18n-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Language/setup UI test failed' }
       - name: Build installer and test upgrade and uninstall

@@ -70,14 +70,23 @@ def process(source,destination,conf=None,notify=lambda value:None):
                     from .pdf_tools import render_page
                     dpi=min(int(conf.get('dpi',300)),max(72,int(float(conf.get('ocr_max_edge',6000))*72/max(page.rect.width,page.rect.height))))
                     pix,_=render_page(page,dpi,index+1);pix.set_dpi(dpi,dpi)
-                    if conf.get('ocr_engine') in ('paddle','kraken'):
-                        from PIL import Image
-                        from .ocr_backend import recognize_pdf
-                        image=Image.frombytes('RGB',(pix.width,pix.height),pix.samples)
-                        data=recognize_pdf(image,conf,work)
+                    from PIL import Image
+                    engine=conf.get('ocr_engine','tesseract')
+                    tessdata=resource_path('tessdata_'+conf.get('tess_quality','best'),conf.get('root'))
+                    language=conf.get('language','deu')
+                    image=Image.frombytes('RGB',(pix.width,pix.height),pix.samples)
+                    def recognize():
+                        if engine in ('paddle','kraken'):
+                            from .ocr_backend import recognize_pdf
+                            return recognize_pdf(image,conf,work)
+                        return pix.pdfocr_tobytes(language=language,tessdata=native_model_directory(tessdata))
+                    if conf.get('ocr_cache'):
+                        from .pdf_export import recognition_signature,text_layer_cache
+                        signature=recognition_signature(conf,engine,tessdata,language)
+                        data=text_layer_cache(image,0,signature,conf['ocr_cache'],recognize,
+                            lambda message:notify({'stage':message,'page':number,'total':len(indices)}))
                     else:
-                        tessdata=resource_path('tessdata_'+conf.get('tess_quality','best'),conf.get('root'))
-                        data=pix.pdfocr_tobytes(language=conf.get('language','deu'),tessdata=native_model_directory(tessdata))
+                        data=recognize()
                     writer=PdfWriter();writer.clone_document_from_reader(PdfReader(io.BytesIO(data)));writer.remove_images()
                     stream=io.BytesIO();writer.write(stream)
                     rotation=target.rotation;target.set_rotation(0)

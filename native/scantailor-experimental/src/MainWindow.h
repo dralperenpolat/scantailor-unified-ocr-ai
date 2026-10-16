@@ -24,6 +24,7 @@
 #include <QLabel>
 #include <QElapsedTimer>
 class UnifiedPanel;
+class UnifiedProjectCache;
 class UnifiedQueuePreview;
 class UnifiedQueueThumbnails;
 class UnifiedStageReviewBar;
@@ -51,6 +52,7 @@ class QStackedWidget;
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
+#include <QJsonArray>
 #include <QString>
 #include <QByteArray>
 #include <QVariant>
@@ -120,6 +122,7 @@ class OutOfMemoryDialog;
 class QLineF;
 class QRectF;
 class QLayout;
+class QProcess;
 
 class MainWindow :
     public QMainWindow,
@@ -151,6 +154,36 @@ public slots:
     void dispatchUnifiedBatch();
 private:
     friend class UnifiedWindowTest;
+    friend class UnifiedWorkflowTest;
+    void initWorkflow();
+    bool selectWorkflowRow(int row);
+    void runWorkflowStep(QString const& id);
+    void showWorkflowTools();
+    void importWorkflowImages(QStringList files);
+    void startWorkflowProcess(QString const& mode);
+    void refreshWorkflowState();
+    void saveWorkflowState();
+    void syncWorkflowCache(bool scan=false);
+    void finishWorkflowProject(bool discard);
+    void cancelWorkflowProcess();
+    UnifiedProjectCache* m_workflowCache=nullptr;
+    QByteArray workflowFingerprint() const;
+    QJsonArray workflowPages() const;
+    QJsonArray m_workflowLastPages;
+    std::set<PageId> m_workflowPageTargets;
+    bool m_workflowPartial=false;
+    QWidget *m_workflowInput=nullptr,*m_workflowTools=nullptr,*m_workflowHelp=nullptr,*m_workflowCleanup=nullptr;
+    QLabel *m_workflowTitle=nullptr,*m_workflowStatus=nullptr,*m_cleanupStatus=nullptr,*m_workflowDirty=nullptr;
+    QPushButton *m_workflowRun=nullptr,*m_workflowStop=nullptr;
+    QComboBox* m_cleanupScope=nullptr;
+    QProcess* m_workflowProcess=nullptr;
+    QString m_workflowVisualPdf,m_workflowVisualHash;
+    QString m_workflowStep="input",m_workflowPending,m_workflowResult,m_workflowReview,m_workflowPdf,m_workflowProjectKey;
+    QJsonObject m_workflowReceipt;
+    QByteArray m_workflowPdfStamp;
+    QElapsedTimer m_workflowElapsed,m_aiGeometryElapsed,m_aiContentElapsed;
+    bool m_aiGeometryRunning=false,m_aiContentRunning=false;
+    bool m_workflowReady=false;
     QByteArray m_defaultPanelState;
     UnifiedPanel* m_unified = nullptr;
     QDockWidget* m_unifiedDock = nullptr;

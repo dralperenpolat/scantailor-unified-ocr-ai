@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Application.h"
+#include "TiffMetadataLoader.h"
+#include "FastImageMetadataLoader.h"
 #include "MainWindow.h"
 #include "CommandLine.h"
 #include "UnifiedI18n.h"
@@ -19,6 +21,7 @@
 #include <iostream>
 
 static void check(bool ok,char const* why){if(!ok)throw std::runtime_error(why);}
+#include "native_workflow.h"
 int main(int argc,char** argv){
     Application app(argc,argv);app.setOrganizationName("Scan Tailor Tests");app.setApplicationName("Language test");
 #ifdef Q_OS_WIN
@@ -28,6 +31,7 @@ int main(int argc,char** argv){
     QTemporaryDir temp;QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());
     qputenv("STOU_ROOT",argc>2?QByteArray(argv[2]):temp.path().toUtf8());qputenv("STOU_DATA",temp.path().toUtf8());qputenv("STOU_QUEUE_PATH",(temp.path()+"/queue.json").toUtf8());qunsetenv("STOU_MONITOR_REQUEST");qunsetenv("STOU_UI_LANGUAGE");
     CommandLine::set(CommandLine(QStringList{},true));
+    TiffMetadataLoader::registerMyself();FastImageMetadataLoader::registerMyself();
     if(argc>1)QDir().mkpath(QString::fromLocal8Bit(argv[1]));
     try {
         QSettings().setValue("unified/ocr_languages","deu+eng");QSettings().setValue("unified/paddle_language","de");
@@ -95,7 +99,7 @@ int main(int argc,char** argv){
         check(QSettings().value("unified/ocr_languages")=="deu+eng","language menu does not alter OCR settings");
         languageEn->trigger();
         auto panel=window.findChild<UnifiedPanel*>();check(panel,"queue panel exists");
-        panel->showToolsTab(0);panel->parentWidget()->show();QApplication::processEvents();
+        window.findChild<StageListView*>("filterList")->selectStep("settings");panel->showToolsTab(0);QApplication::processEvents();
         check(panel->findChild<QPushButton*>("unifiedCaptureProject")->text()=="Add open project to queue","English queue controls");
         auto books=panel->findChild<QTreeWidget*>("unifiedBooks");check(books&&books->topLevelItemCount()==1,"synthetic queue loaded");
         const auto row=books->topLevelItem(0);
@@ -165,7 +169,9 @@ int main(int argc,char** argv){
         while(preset->count()==0&&service.elapsed()<30000){app.processEvents();QThread::msleep(20);}
         check(preset->findData("cpu_fast")>=0,"workspace service loads CPU Fast profile");
         if(argc>1)check(workspace->grab().save(QString::fromLocal8Bit(argv[1])+"/workspace-en.png"),"English workspace screenshot");workspace->close();
-        window.close();app.removeTranslator(&english);
+        if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){UnifiedWorkflowTest::run(window,temp.path(),argc>1?QString::fromLocal8Bit(argv[1]):QString());UnifiedWorkflowTest::editorImport(argc>3?QString::fromLocal8Bit(argv[3]):QString());}
+        window.close();app.removeTranslator(&english);app.setProperty("unifiedUiLanguage","tr");
+        if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){MainWindow trWindow;trWindow.show();UnifiedWorkflowTest::layout(trWindow,argc>1?QString::fromLocal8Bit(argv[1]):QString(),"tr");}
         check(unified_i18n::text("▶ Hazırla")==QString::fromUtf8("▶ Hazırla"),"Turkish text restored without translator");
         {
             UnifiedStartupDialog setup({},temp.path()+"/output");setup.show();setup.next();setup.next();app.processEvents();

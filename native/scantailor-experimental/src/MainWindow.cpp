@@ -17,6 +17,7 @@
 */
 
 #include "UnifiedI18n.h"
+#include "UnifiedWorkflow.h"
 #include <QActionGroup>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -236,7 +237,7 @@ MainWindow::MainWindow()
         const auto path=QFileDialog::getOpenFileName(this,unified_i18n::text("İşlenecek PDF"),{},"PDF (*.pdf *.PDF)");
         if(!path.isEmpty())m_unified->importPdf(path);
     });
-    connect(m_unified,&UnifiedPanel::toolsRequested,this,[this]{m_unifiedDock->show();m_unifiedDock->raise();});
+    connect(m_unified,&UnifiedPanel::toolsRequested,this,[this]{showWorkflowTools();});
     unifiedMenu->addAction(unified_i18n::text("Kitap düzenine göre içerik denetimi…"),this,&MainWindow::reviewBookContent);
     auto aiAction=unifiedMenu->addAction(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni…"),this,&MainWindow::reviewAiContent);
     auto geometryAction=unifiedMenu->addAction(unified_i18n::text("Eğriliği karşılaştır · AI dahil…"),this,&MainWindow::reviewGeometry);geometryAction->setShortcut(QKeySequence("Ctrl+Shift+G"));
@@ -252,8 +253,8 @@ MainWindow::MainWindow()
     viewMenu->addAction(m_unifiedDock->toggleViewAction());
     connect(viewMenu->addAction(unified_i18n::text("Açık proje görüntüsüne dön")),&QAction::triggered,this,&MainWindow::returnToProjectView);
     unifiedMenu->addAction(m_unifiedDock->toggleViewAction());
-    for(int tab:{0,1}){auto b=new QPushButton(unified_i18n::text(tab==0?"Kitaplar ▴":"PDF / OCR ▴"));b->setToolTip(unified_i18n::text("Alt paneli bu bölümde aç. Aynı düğmeye tekrar basınca gizle."));QMainWindow::statusBar()->addPermanentWidget(b);connect(b,&QPushButton::clicked,[this,tab]{auto tabs=m_unified->findChild<QTabWidget*>("unifiedToolTabs");if(m_unifiedDock->isVisible()&&tabs&&tabs->currentIndex()==tab)m_unifiedDock->hide();else{m_unified->showToolsTab(tab);m_unifiedDock->show();m_unifiedDock->raise();}});}
-    auto pdfImportButton=new QPushButton(unified_i18n::text("PDF içe aktar ▴"));pdfImportButton->setObjectName("unifiedPdfImportShortcut");
+    for(int tab:{0,1}){auto b=new QPushButton((tab==0?unified_workflow::text("Kitaplar","Books"):QString("PDF / OCR")));b->setToolTip(unified_workflow::text("Ayarlar ekranında bu bölümü aç.","Open this section in Settings."));QMainWindow::statusBar()->addPermanentWidget(b);connect(b,&QPushButton::clicked,[this,tab]{showWorkflowTools();m_unified->showToolsTab(tab);});}
+    auto pdfImportButton=new QPushButton(unified_workflow::text("PDF içe aktar","Import PDF"));pdfImportButton->setObjectName("unifiedPdfImportShortcut");
     QMainWindow::statusBar()->addPermanentWidget(pdfImportButton);
     connect(pdfImportButton,&QPushButton::clicked,this,[this]{m_unified->openPdfTools();});
     auto audit=new UnifiedPageAudit(this);
@@ -275,7 +276,7 @@ MainWindow::MainWindow()
     audit->navigate=[this](int index,int stage){
         if(!isProjectLoaded()||isBatchProcessingInProgress())return;
         auto pages=m_ptrPages->toPageSequence(PAGE_VIEW);if(index<0||size_t(index)>=pages.numPages())return;
-        filterList->selectRow(stage);m_ptrThumbSequence->setSelection(pages.pageAt(index).id());
+        filterList->selectFilter(stage);m_ptrThumbSequence->setSelection(pages.pageAt(index).id());
     };
     auto fitAction=unifiedMenu->addAction(unified_i18n::text("Sayfayı ekrana sığdır · yalnız görünüm"));
     fitAction->setShortcut(QKeySequence("Ctrl+0"));fitAction->setToolTip(unified_i18n::text("Tek seferlik yakınlaştırma komutu. PDF boyutu ve içerik alanı değişmez; tekerlekle yeniden yakınlaşabilirsiniz."));
@@ -284,7 +285,7 @@ MainWindow::MainWindow()
     connect(unifiedMenu->addAction(unified_i18n::text("Bu kitabı OCR kuyruğuna ekle")), &QAction::triggered, this, &MainWindow::captureUnifiedProject);
     connect(unifiedMenu->addAction(unified_i18n::text("Parmak temizle · Fill Zones")), &QAction::triggered, [this] {
         if (!isProjectLoaded() || isBatchProcessingInProgress()) return;
-        filterList->selectRow(m_ptrStages->outputFilterIdx());
+        filterList->selectFilter(m_ptrStages->outputFilterIdx());
         QMessageBox::information(this, unified_i18n::text("Parmak temizleme"), unified_i18n::text("Output aşamasında sağdaki Fill Zones / Parmak temizle sekmesini açın. Parmak çevresinde çokgen çizip başlangıç noktasına dönün; dolgu rengini beyaz seçin. Metin üzerini örten parmak, eksik harfler yeniden çekilmeden düzeltilemez."));
     });
     connect(m_unified, &UnifiedPanel::captureRequested, this, &MainWindow::captureUnifiedProject);
@@ -303,7 +304,7 @@ MainWindow::MainWindow()
         m_queueThumbnails->setImages(images,m_queuePreview->currentPath());
         m_queueThumbStack->setCurrentWidget(m_queueThumbnails);
         // Editing controls still belong to the preserved open project.
-        dockWidgetFilters->widget()->setEnabled(false);
+        filterOptions->setEnabled(false);
         dockWidgetFilters->setWindowTitle(unified_i18n::text("Aşamalar · üstte Bu sayfayı düzenle'yi seçin"));
         dockWidgetThumbnails->setWindowTitle(unified_i18n::text("Küçük resimler · ")+title);
     });
@@ -319,7 +320,7 @@ MainWindow::MainWindow()
     m_ptrProcessingIndicationWidget.reset(new ProcessingIndicationWidget);
 
     filterList->setStages(m_ptrStages);
-    filterList->selectRow(0);
+    filterList->selectFilter(0);
 
     setupThumbView(); // Expects m_ptrThumbSequence to be initialized.
 
@@ -456,6 +457,7 @@ MainWindow::MainWindow()
 
     setDockNestingEnabled(true);
 
+    initWorkflow();
     m_systemPalette = QApplication::palette();
 
     QString stylesheetFilePath = settings.value("settings/stylesheet", "").toString();
@@ -568,7 +570,7 @@ MainWindow::switchToNewProject(
     {
         ScopedIncDec<int> guard(m_ignoreSelectionChanges);
         filterList->setStages(m_ptrStages);
-        filterList->selectRow(0);
+        filterList->selectFilter(0);
         m_curFilter = 0;
 
         // Setting a data model also implicitly sets a new
@@ -618,6 +620,7 @@ MainWindow::switchToNewProject(
     updateProjectActions();
     updateWindowTitle();
     updateMainArea();
+    if(m_workflowReady){auto step=isProjectLoaded()?"orientation":"input";filterList->selectStep(step);selectWorkflowRow(unified_workflow::row(step));refreshWorkflowState();}
 
     if (!QDir(out_dir).exists())
     {
@@ -756,6 +759,7 @@ MainWindow::setupThumbView()
 void
 MainWindow::closeEvent(QCloseEvent* const event)
 {
+    if(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning){cancelWorkflowProcess();event->ignore();QTimer::singleShot(300,this,[this]{close();});return;}
     if (m_unified && m_unified->busy() && !m_unified->monitoringExternalWorker()) {
         m_unified->stop(); event->ignore();
         QTimer::singleShot(500, this, [this] { close(); });
@@ -1396,6 +1400,8 @@ MainWindow::filterSelectionChanged(QItemSelection const& selected)
         return;
     }
 
+    if (m_workflowReady && !selectWorkflowRow(selected.front().top())) return;
+    if (filterList->filterForRow(selected.front().top()) < 0) return;
     m_ptrInteractiveQueue->cancelAndClear();
     if (m_ptrBatchQueue.get())
     {
@@ -1405,7 +1411,7 @@ MainWindow::filterSelectionChanged(QItemSelection const& selected)
 
     bool const was_below_fix_orientation = isBelowFixOrientation(m_curFilter);
     bool const was_below_select_content = isBelowSelectContent(m_curFilter);
-    m_curFilter = selected.front().top();
+    m_curFilter = filterList->filterForRow(selected.front().top());
     bool const now_below_fix_orientation = isBelowFixOrientation(m_curFilter);
     bool const now_below_select_content = isBelowSelectContent(m_curFilter);
 
@@ -1439,6 +1445,8 @@ MainWindow::filterSelectionChanged(QItemSelection const& selected)
     resetThumbSequence(currentPageOrderProvider());
 
     updateMainArea();
+    if(m_geometryReviewBar)m_geometryReviewBar->setVisible(m_workflowStep=="ai_geometry");
+    if(m_contentReviewBar)m_contentReviewBar->setVisible(m_workflowStep=="ai_content");
 }
 
 void
@@ -1481,6 +1489,7 @@ MainWindow::startBatchProcessing()
 
     auto const enqueuePage = [this](PageInfo const& page)
     {
+        if(m_workflowPartial&&!m_workflowPageTargets.count(page.id()))return;
         ++m_batchTotal;
         m_ptrBatchQueue->addProcessingTask(
             page, createCompositeTask(page, m_curFilter, /*batch=*/true, m_debug)
@@ -1541,7 +1550,7 @@ MainWindow::startBatchProcessing()
     }
 
     m_liveProgress->setRange(0,m_batchTotal);m_liveProgress->setValue(0);
-    m_liveLabel->setText(unified_i18n::text("%1 · 0/%2 sayfa").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchTotal));
+    m_liveLabel->setText(unified_i18n::text("%1 · 0/%2 sayfa").arg(unified_workflow::steps().at(unified_workflow::row(filterList->currentStep())).title).arg(m_batchTotal));
     // Display the batch processing screen.
     updateMainArea();
 }
@@ -1554,6 +1563,7 @@ MainWindow::stopBatchProcessing(MainAreaAction main_area)
         return;
     }
 
+    m_workflowPending.clear();m_workflowPartial=false;m_workflowPageTargets.clear();
     PageInfo const page(m_ptrBatchQueue->selectedPage());
     if (!page.isNull())
     {
@@ -1609,7 +1619,7 @@ MainWindow::filterResult(BackgroundTaskPtr const& task, FilterResultPtr const& r
             m_curFilter = idx;
 
             ScopedIncDec<int> selection_guard(m_ignoreSelectionChanges);
-            filterList->selectRow(idx);
+            filterList->selectFilter(idx);
         }
     }
 
@@ -1617,7 +1627,7 @@ MainWindow::filterResult(BackgroundTaskPtr const& task, FilterResultPtr const& r
         ++m_batchDone; m_liveProgress->setValue(m_batchDone);
         auto fileTask = dynamic_cast<LoadFileTask*>(task.get());
         QString label = fileTask ? QFileInfo(fileTask->pageId().imageId().filePath()).fileName() : QString();
-        m_liveLabel->setText(unified_i18n::text("%1 · %2/%3 · %4 · %5 sn").arg(m_ptrStages->filterAt(m_curFilter)->getName()).arg(m_batchDone).arg(m_batchTotal).arg(label).arg(m_batchElapsed.elapsed()/1000));
+        m_liveLabel->setText(unified_i18n::text("%1 · %2/%3 · %4 · %5 sn").arg(unified_workflow::steps().at(unified_workflow::row(filterList->currentStep())).title).arg(m_batchDone).arg(m_batchTotal).arg(label).arg(m_batchElapsed.elapsed()/1000));
     }
     // This needs to be done even if batch processing is taking place,
     // for instance because thumbnail invalidation is done from here.
@@ -1631,7 +1641,9 @@ MainWindow::filterResult(BackgroundTaskPtr const& task, FilterResultPtr const& r
     {
         if (m_ptrBatchQueue->allProcessed())
         {
+            QString pending=m_workflowPending;m_workflowPending.clear();
             stopBatchProcessing();
+            if(!pending.isEmpty())QTimer::singleShot(0,this,[this,pending]{filterList->selectStep(pending);startWorkflowProcess(pending);});
 
             QApplication::alert(this); // Flash the taskbar entry.
             if (m_checkBeepWhenFinished())
@@ -2173,17 +2185,19 @@ MainWindow::closeProjectInteractive()
 
     if (m_projectFile.isEmpty())
     {
-        switch (promptProjectSave())
+        auto decision=promptProjectSave();
+        switch (decision)
         {
         case SAVE:
             saveProjectTriggered();
-        // fall through
+            if(m_projectFile.isEmpty())return false;
+            break;
         case DONT_SAVE:
             break;
         case CANCEL:
             return false;
         }
-        closeProjectWithoutSaving();
+        finishWorkflowProject(decision==DONT_SAVE);
         return true;
     }
 
@@ -2200,17 +2214,18 @@ MainWindow::closeProjectInteractive()
     {
         // Backup file could not be written???
         QFile::remove(backup_file_path);
-        switch (promptProjectSave())
+        auto decision=promptProjectSave();
+        switch (decision)
         {
         case SAVE:
-            saveProjectTriggered();
-        // fall through
+            if(!saveProjectWithFeedback(m_projectFile))return false;
+            break;
         case DONT_SAVE:
             break;
         case CANCEL:
             return false;
         }
-        closeProjectWithoutSaving();
+        finishWorkflowProject(decision==DONT_SAVE);
         return true;
     }
 
@@ -2218,11 +2233,12 @@ MainWindow::closeProjectInteractive()
     {
         // The project hasn't really changed.
         QFile::remove(backup_file_path);
-        closeProjectWithoutSaving();
+        finishWorkflowProject(false);
         return true;
     }
 
-    switch (promptProjectSave())
+    auto decision=promptProjectSave();
+    switch (decision)
     {
     case SAVE:
         if (!Utils::overwritingRename(
@@ -2242,7 +2258,7 @@ MainWindow::closeProjectInteractive()
         return false;
     }
 
-    closeProjectWithoutSaving();
+    finishWorkflowProject(decision==DONT_SAVE);
     return true;
 }
 
@@ -2668,9 +2684,9 @@ void MainWindow::returnToProjectView() {
     m_unifiedViewStack->setCurrentWidget(m_editorHost);
     m_queueThumbStack->setCurrentIndex(0);
     if(m_unified)m_unified->clearPreviewSelection();
-    dockWidgetFilters->widget()->setEnabled(true);
+    dockWidgetFilters->widget()->setEnabled(true);filterOptions->setEnabled(true);
     dockWidgetThumbnails->widget()->setEnabled(true);
-    dockWidgetFilters->setWindowTitle(tr("Stages"));
+    dockWidgetFilters->setWindowTitle(unified_workflow::text("Aşamalar · resimden PDF’ye","Stages · images to PDF"));
     dockWidgetThumbnails->setWindowTitle(tr("Thumbnails"));
 }
 void MainWindow::captureUnifiedProject() {
@@ -2683,7 +2699,7 @@ void MainWindow::captureUnifiedProject() {
     for (size_t i=0;i<sequence.numPages();++i) outputs.append(m_outFileNameGen.filePathFor(sequence.pageAt(i).id()));
     QString title=m_editBinding.value("title").toString(m_projectFile.isEmpty()?QFileInfo(m_outFileNameGen.outDir()).dir().dirName():QFileInfo(m_projectFile).baseName());
     m_unified->addProject(title,snapshot,outputs);
-    m_unifiedDock->show();m_unifiedDock->raise();
+    showWorkflowTools();
 }
 
 void MainWindow::openQueuePage(QJsonObject const& target,int stage){
@@ -2707,7 +2723,7 @@ void MainWindow::selectQueueEditPage(QJsonObject const& target,int stage){
         QMainWindow::statusBar()->showMessage(unified_i18n::text("Sayfa bölme değişmiş. Kaynak sayfayı sağdaki küçük resimlerden seçin."),9000);return;
     }
     returnToProjectView();m_editFillRequested=stage==6;
-    filterList->selectRow(qBound(0,stage==6?5:stage,5));goToPage(selected);
+    filterList->selectFilter(qBound(0,stage==6?5:stage,5));goToPage(selected);
     dockWidgetFilters->show();dockWidgetThumbnails->show();
     m_editLabel->setText(target.value("title").toString()+unified_i18n::text(" · sayfa %1 · ").arg(target.value("page").toInt())+QFileInfo(selected.imageId().filePath()).fileName()+" · "+selected.subPageAsString());
 }
@@ -2717,7 +2733,7 @@ void MainWindow::reviewBookContent(){
     auto stages=m_ptrStages;
     auto samples=unified_content::collect(*m_ptrPages,*stages);
     auto dialog=new UnifiedContentReviewDialog(std::move(samples),int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this);
-    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages!=stages)return;filterList->selectRow(3);goToPage(page);};
+    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages!=stages)return;filterList->selectFilter(3);goToPage(page);};
     dialog->apply=[this,stages](unified_content::Proposal const& p,unified_content::Sample const& s){
         if(m_ptrStages!=stages||!unified_content::apply(p,s,*stages))return false;
         invalidateThumbnail(s.page.id());if(m_ptrThumbSequence->selectionLeader().id()==s.page.id())reloadRequested();return true;
@@ -2739,18 +2755,18 @@ void MainWindow::publishQueueEdit(){
     if(m_unified->submitRevision(m_editBinding,snapshot))QMainWindow::statusBar()->showMessage(unified_i18n::text("Düzeltme kaydedildi. Yeni PDF sıraya alındı; önceki PDF saklanıyor."),12000);
 }
 void MainWindow::reviewAiContent(){
-    ensureAiContentReview(true);
+    filterList->selectStep("ai_content");
 }
 UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     if(!isProjectLoaded()||isBatchProcessingInProgress())return nullptr;
     if(auto existing=findChild<QDialog*>("unifiedAiReview")){if(show){existing->show();existing->raise();}return static_cast<UnifiedAiReviewDialog*>(existing);}
     auto stages=m_ptrStages;auto samples=unified_content::collect(*m_ptrPages,*stages);
-    if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önce Geometric Distortions ve Select Content aşamalarını işle."),12000);return nullptr;}
+    if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_workflow::text("Önce 3 · Geometrik düzeltme ve 5 · İçerik seçimi aşamalarını işle.","First process 3 · Geometric correction and 5 · Select content."),12000);return nullptr;}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
     dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.5.0"));
-    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectRow(3);goToPage(page);}};
+    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(3);goToPage(page);}};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_content::collect(*m_ptrPages,*stages):std::vector<unified_content::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,QRectF const* applied){return m_ptrStages==stages&&unified_content::matchesCurrent(sample,*stages,applied);};
     dialog->apply=[this,stages](unified_content::Proposal const& p,unified_content::Sample const& s,bool manual){if(m_ptrStages!=stages||!unified_content::applyAi(p,s,*stages,manual))return false;invalidateThumbnail(s.page.id());if(m_ptrThumbSequence->selectionLeader().id()==s.page.id())reloadRequested();return true;};
@@ -2758,7 +2774,7 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     if(show)dialog->show();return dialog;
 }
 void MainWindow::reviewGeometry(){
-    ensureGeometryReview(true);
+    filterList->selectStep("ai_geometry");
 }
 UnifiedGeometryReviewDialog* MainWindow::ensureGeometryReview(bool show){
     if(!isProjectLoaded()||isBatchProcessingInProgress())return nullptr;
@@ -2769,7 +2785,7 @@ UnifiedGeometryReviewDialog* MainWindow::ensureGeometryReview(bool show){
     auto dialog=new UnifiedGeometryReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,this,m_editBinding.value("job_id").toString(m_projectFile));
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_geometry::collect(*m_ptrPages,*stages):std::vector<unified_geometry::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,unified_geometry::Candidate const* applied){return m_ptrStages==stages&&unified_geometry::matchesCurrent(sample,*stages,applied);};
-    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectRow(2);goToPage(page);}};
+    dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(2);goToPage(page);}};
     dialog->apply=[this,stages](auto const& s,auto const& c,bool manual){if(m_ptrStages!=stages||!unified_geometry::apply(s,c,*stages,manual))return false;invalidateThumbnail(s.page.id());if(m_ptrThumbSequence->selectionLeader().id()==s.page.id())reloadRequested();return true;};
     dialog->undo=[this,stages](auto const& s,auto const& c){if(m_ptrStages!=stages||!unified_geometry::undo(s,c,*stages))return false;invalidateThumbnail(s.page.id());if(m_ptrThumbSequence->selectionLeader().id()==s.page.id())reloadRequested();return true;};
     if(show)dialog->show();return dialog;
@@ -2782,10 +2798,11 @@ void MainWindow::bindStageReviews(){
     m_geometryReviewBar=new UnifiedStageReviewBar(true,geometry);m_contentReviewBar=new UnifiedStageReviewBar(false,content);
     if(auto box=qobject_cast<QVBoxLayout*>(geometry->layout()))box->insertWidget(0,m_geometryReviewBar);
     if(auto box=qobject_cast<QVBoxLayout*>(content->layout()))box->insertWidget(0,m_contentReviewBar);
+    m_geometryReviewBar->setVisible(m_workflowStep=="ai_geometry");m_contentReviewBar->setVisible(m_workflowStep=="ai_content");
     m_geometryReviewBar->action=[this](auto a){stageReviewAction(true,int(a));};m_contentReviewBar->action=[this](auto a){stageReviewAction(false,int(a));};
     auto group=m_ptrStages->outputFilter()->optionsWidget()->findChild<QGroupBox*>("unifiedOutputTools");
-    if(group){auto settings=new QPushButton(unified_i18n::text("PDF / OCR ayarları"));settings->setObjectName("stageOcrSettings");group->layout()->addWidget(settings);connect(settings,&QPushButton::clicked,[this]{m_unified->showToolsTab(1);m_unifiedDock->show();m_unifiedDock->raise();});
-        auto book=new QPushButton(unified_i18n::text("Kitabı kuyruğa ekle"));book->setObjectName("stageQueueBook");book->setToolTip(unified_i18n::text("Açık projeyi mevcut ayarlarıyla kuyruğa ekler. Başlatmak için alttaki PDF oluştur düğmesini kullan."));group->layout()->addWidget(book);connect(book,&QPushButton::clicked,[this]{m_unified->showToolsTab(0);m_unifiedDock->show();m_unifiedDock->raise();if(m_unified->busy())QMainWindow::statusBar()->showMessage(unified_i18n::text("Kuyruk çalışıyor. Bu kitapta yaptığın düzeltmeleri Kaydet ve PDF’yi güncelle ile gönder."),14000);else captureUnifiedProject();});}
+    if(group){auto settings=new QPushButton(unified_i18n::text("PDF / OCR ayarları"));settings->setObjectName("stageOcrSettings");group->layout()->addWidget(settings);connect(settings,&QPushButton::clicked,[this]{m_unified->showToolsTab(1);showWorkflowTools();});
+        auto book=new QPushButton(unified_i18n::text("Kitabı kuyruğa ekle"));book->setObjectName("stageQueueBook");book->setToolTip(unified_i18n::text("Açık projeyi mevcut ayarlarıyla kuyruğa ekler. Başlatmak için alttaki PDF oluştur düğmesini kullan."));group->layout()->addWidget(book);connect(book,&QPushButton::clicked,[this]{m_unified->showToolsTab(0);showWorkflowTools();if(m_unified->busy())QMainWindow::statusBar()->showMessage(unified_i18n::text("Kuyruk çalışıyor. Bu kitapta yaptığın düzeltmeleri Kaydet ve PDF’yi güncelle ile gönder."),14000);else captureUnifiedProject();});}
     if(group)if(auto button=group->findChild<QPushButton*>("stageFinishPreview"))connect(button,&QPushButton::clicked,this,&MainWindow::previewOutputFinish);
 }
 void MainWindow::previewOutputFinish(){
@@ -2835,6 +2852,9 @@ void MainWindow::refreshStageReviews(){
         if(bar==m_geometryReviewBar){auto params=m_ptrStages->deskewFilter()->getSettings()->getPageParams(page);if(params){auto type=params->distortionType();s.nativeMethod=unified_i18n::text(type==deskew::DistortionType::WARP?"Curved lines · eğrilik":type==deskew::DistortionType::PERSPECTIVE?"Perspektif":type==deskew::DistortionType::ROTATION?"Döndürme / eğiklik":"Düzeltme yok");s.nativeMethod+=params->mode()==MODE_AUTO?" · Auto":" · Manual";}}
         else {auto params=m_ptrStages->selectContentFilter()->getSettings()->getPageParams(page);if(params)s.nativeMethod=params->mode()==MODE_AUTO?unified_i18n::text("Otomatik içerik seçimi · Auto"):unified_i18n::text("Kayıtlı içerik kutusu · Manual");}
         if(s.stale&&bar->previewing())returnToProjectView();
+        bool geo=bar==m_geometryReviewBar;bool& running=geo?m_aiGeometryRunning:m_aiContentRunning;auto& clock=geo?m_aiGeometryElapsed:m_aiContentElapsed;
+        if(s.running&&!running)clock.start();
+        if(clock.isValid()&&(s.running||running))filterList->setStepStatus(geo?"ai_geometry":"ai_content",QString::number(clock.elapsed()/1000)+" s");running=s.running;
         bar->showState(s);bar->setEnabled(!isBatchProcessingInProgress());
     };
     update(static_cast<UnifiedGeometryReviewDialog*>(findChild<QDialog*>("unifiedGeometryReview")),m_geometryReviewBar);

@@ -59,6 +59,21 @@ def workspace(conf=None, needed=0):
         folder = Path(folder).resolve()
         if folder.parent != root: raise ValueError('Invalid temporary workspace')
         (folder/'.stou-owner.json').write_text(json.dumps({'pid':os.getpid(),'created':time.time(),'kind':'transient'}))
+        owner = conf.get('cache_owner')
+        if owner:
+            # Only a workflow-created project may own a transient directory.
+            # Record the exact folder before work starts, including cancellation.
+            owner = Path(owner).resolve()
+            marker = owner/'.stou-cache-owner.json'
+            if marker.is_file() and json.loads(marker.read_text('utf8')).get('project') == owner.as_posix():
+                from .settings import atomic_json
+                atomic_json(folder/'.stou-cache-owner.json', {'project':owner.as_posix(), 'role':'temporary'})
+                manifest = owner/'.project-cache.json'
+                record = json.loads(manifest.read_text('utf8')) if manifest.exists() else {}
+                roots = record.setdefault('roots', [])
+                entry = {'path':folder.as_posix(), 'role':'temporary'}
+                if entry not in roots: roots.append(entry)
+                atomic_json(manifest, record)
         yield folder
 
 def estimate(images, sample=8):

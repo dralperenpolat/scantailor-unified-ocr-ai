@@ -145,7 +145,7 @@ SET(
     UnifiedPanel.cpp UnifiedPanel.h UnifiedResources.cpp UnifiedResources.h
     UnifiedQueuePreview.cpp UnifiedQueuePreview.h UnifiedQueueSelection.h
     UnifiedQueueThumbnails.cpp UnifiedQueueThumbnails.h
-    MainWindow.cpp MainWindow.h
+    MainWindow.cpp MainWindow.h MainWindowWorkflow.cpp UnifiedWorkflow.h UnifiedWorkflowHelp.h UnifiedProjectCache.h
     main.cpp
 )
 

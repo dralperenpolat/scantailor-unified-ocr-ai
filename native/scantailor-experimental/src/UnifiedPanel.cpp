@@ -2,6 +2,7 @@
 #include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedPanel.h"
+#include "UnifiedWorkflow.h"
 #include "UnifiedResources.h"
 #include "UnifiedOcrOptions.h"
 #include "UnifiedWheelGuard.h"
@@ -79,10 +80,10 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
         dialog->applyProfile=[this](QJsonObject const& value){m_ocr->setOptions(value);if(value.contains("paper"))setPdfLayoutOptions(value);int i=m_appearance->findData(value.value("appearance").toString());if(i>=0)m_appearance->setCurrentIndex(i);if(value.contains("page_cleanup"))m_cleanup->setChecked(value.value("page_cleanup").toBool());if(value.contains("auto_warp"))m_autoWarp->setChecked(value.value("auto_warp").toBool());if(value.contains("ocr_timing"))m_ocrTiming->setCurrentIndex(qMax(0,m_ocrTiming->findData(value.value("ocr_timing").toString())));};
         dialog->show();
     });
-    sizing->addWidget(new QLabel(trU("Panel yüksekliği ↕")));
+    auto heightLabel=new QLabel(trU("Panel yüksekliği ↕"));heightLabel->setObjectName("legacyPanelHeightLabel");sizing->addWidget(heightLabel);
     m_panelHeight=new QSlider(Qt::Horizontal);m_panelHeight->setRange(140,1800);m_panelHeight->setValue(QSettings().value("unified/panel_height",370).toInt());m_panelHeight->setMaximumWidth(260);
     m_panelHeight->setToolTip(trU("Alt panelin yüksekliğini ayarlar. Üst ayırıcıyı sürükleyerek de değiştirebilirsiniz."));sizing->addWidget(m_panelHeight);
-    auto sizingNote=new QLabel(trU("Üst kenarı sürükle · İçerik sığmazsa panel içinde kaydır"));sizingNote->setWordWrap(true);sizingNote->setMinimumWidth(80);sizing->addWidget(sizingNote,1);
+    auto sizingNote=new QLabel(trU("Üst kenarı sürükle · İçerik sığmazsa panel içinde kaydır"));sizingNote->setObjectName("legacyPanelHeightNote");sizingNote->setWordWrap(true);sizingNote->setMinimumWidth(80);sizing->addWidget(sizingNote,1);
     connect(m_panelHeight,&QSlider::valueChanged,this,&UnifiedPanel::panelHeightRequested);
     auto tabs=new QTabWidget;tabs->setObjectName("unifiedToolTabs");tabs->setUsesScrollButtons(true);tabs->setElideMode(Qt::ElideRight);tabs->tabBar()->setExpanding(false);tabs->setMinimumWidth(100);outer->addWidget(tabs);
     auto jobs=new QWidget;auto jl=new QVBoxLayout(jobs);tabs->addTab(jobs,trU("İşler ve canlı ilerleme"));
@@ -150,7 +151,7 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     m_outputFinish=QJsonDocument::fromJson(QSettings().value("unified/output_finish").toByteArray()).object();
     m_appearance=new QComboBox;m_appearance->addItem(trU("Experimental çıktısını koru"),"native");m_appearance->addItem(trU("Yumuşak siyah-beyaz · gri harf kenarları"),"soft");m_appearance->addItem(trU("Yerel yumuşak S/B · soluk çizgiler / gölge"),"soft_local");m_appearance->addItem(trU("Gri ton · eşikleme yok"),"gray");form->addRow(trU("PDF görünümü"),m_appearance);
     m_cleanup=new QCheckBox(trU("PDF’de metinden ayrık parmak / kitap kenarlarını temizle"));m_cleanup->setChecked(QSettings().value("unified/pdf_cleanup",true).toBool());form->addRow(m_cleanup);
-    auto cleanupNote=new QLabel(trU("Gri / yumuşak PDF’de uygulanır. Tablo, resim ve yazıyla çakışan belirsiz bölgeler korunup kontrol için işaretlenir. Sonucu tamamlanan sayfanın PDF önizlemesinde görürsünüz."));cleanupNote->setWordWrap(true);form->addRow(cleanupNote);
+    auto cleanupNote=new QLabel(trU("Gri / yumuşak PDF’de uygulanır. Tablo, resim ve yazıyla çakışan belirsiz bölgeler korunup kontrol için işaretlenir. Sonucu tamamlanan sayfanın PDF önizlemesinde görürsünüz."));cleanupNote->setObjectName("workflowLegacyCleanupNote");cleanupNote->setWordWrap(true);form->addRow(cleanupNote);
     m_paper=new QComboBox;m_paper->addItem(trU("A4 · kitap boyunca aynı piksel ölçeği"),"a4");m_paper->addItem(trU("A4 · yazı yüksekliğini eşitle (kontrollü)"),"a4_text");m_paper->addItem(trU("A4'ü doldur · her sayfayı ayrı sığdır"),"a4_fill");m_paper->addItem(trU("Experimental boyutu · 300 DPI"),"native");form->addRow(trU("Sayfa boyutu"),m_paper);
     m_margin=new QDoubleSpinBox;m_margin->setRange(0,70);m_margin->setSuffix(" mm");m_margin->setValue(10);form->addRow(trU("A4 dış kenar payı · tüm sayfalar"),m_margin);
     m_fitContent=new QCheckBox(trU("Fazla beyaz kenarları çıkar · basılı alanı A4’e yerleştir"));m_fitContent->setObjectName("unifiedFitContent");m_fitContent->setChecked(QSettings().value("unified/pdf_content_fit",true).toBool());form->addRow(m_fitContent);
@@ -159,8 +160,8 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto placementNote=new QLabel(trU("A4'ü doldur: oran korunur, yazı boyu sayfalar arasında değişebilir.\nYazıyı eşitle: gri kopyadaki gövde harfleri ölçülür. A4'e sığmayan / güvenilir ölçülemeyen sayfalar ayrıca işaretlenir.\nEkrana sığdır, bu PDF yerleşimlerinden bağımsızdır."));placementNote->setWordWrap(true);form->addRow(placementNote);
     m_split=new QComboBox;m_split->addItem(trU("Otomatik"),"auto");m_split->addItem(trU("Çift sayfa fotoğrafı"),"2");m_split->addItem(trU("Tek sayfa"),"1");form->addRow(trU("Yeni klasörlerde sayfa bölme"),m_split);
     m_autoWarp=new QCheckBox(trU("Yeni sayfalarda eğrilik düzelt · bozuk modelde güvenli eğikliğe dön"));m_autoWarp->setChecked(true);form->addRow(m_autoWarp);
-    auto scope=new QLabel(trU("Kapsam: bu PDF ayarları kuyruktaki bütün kitapların bütün sayfalarına uygulanır.\nDeğişiklik yalnız sonraki oluşturmayı etkiler; önceki PDF dosyaları değişmez.\nMevcut projelerin elle ayarlanmış geometri ve alanları korunur."));scope->setWordWrap(true);form->addRow(scope);
-    auto note=new QLabel(trU("Mevcut .ScanTailor projesinin bölme, geometri, içerik, kenar ve çıktı ayarları kullanılır.\nOCR, eşiklemeden önce kaydedilen gri kopyadan yapılır. Görünür sayfa ayrı tutulur.\nRenk modu sayfa geometrisini değiştirmez. Yumuşak çıktı, 1 bit çıktıya göre daha büyük olabilir.\nParmak: Output → Fill Zones / Parmak temizle. Metin üstünü beyazla silmeyin."));note->setWordWrap(true);form->addRow(note);
+    auto scope=new QLabel(trU("Kapsam: bu PDF ayarları kuyruktaki bütün kitapların bütün sayfalarına uygulanır.\nDeğişiklik yalnız sonraki oluşturmayı etkiler; önceki PDF dosyaları değişmez.\nMevcut projelerin elle ayarlanmış geometri ve alanları korunur."));scope->setObjectName("workflowPdfScope");scope->setWordWrap(true);form->addRow(scope);
+    auto note=new QLabel(trU("Mevcut .ScanTailor projesinin bölme, geometri, içerik, kenar ve çıktı ayarları kullanılır.\nOCR, eşiklemeden önce kaydedilen gri kopyadan yapılır. Görünür sayfa ayrı tutulur.\nRenk modu sayfa geometrisini değiştirmez. Yumuşak çıktı, 1 bit çıktıya göre daha büyük olabilir.\nParmak: Output → Fill Zones / Parmak temizle. Metin üstünü beyazla silmeyin."));note->setObjectName("workflowPdfNote");note->setWordWrap(true);form->addRow(note);
 
     m_pdfTools=new UnifiedPdfToolsDialog(m_root,this);
     m_pdfTools->importReady=[this](QJsonObject const& result){return addImportedPdf(result);};
@@ -234,14 +235,38 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
         }
     }
 }
+void UnifiedPanel::setWorkflowContext(QString const& stage){
+    m_panelHeight->hide();for(auto name:{"legacyPanelHeightLabel","legacyPanelHeightNote"})if(auto widget=findChild<QWidget*>(name))widget->hide();
+    using unified_workflow::text;bool single=stage=="pdf"||stage=="ocr";
+    if(auto form=qobject_cast<QFormLayout*>(m_ocrTiming->parentWidget()->layout())){
+        for(QWidget* widget:{static_cast<QWidget*>(m_ocrTiming),static_cast<QWidget*>(m_cleanup),static_cast<QWidget*>(m_autoWarp),static_cast<QWidget*>(m_split)}){
+            widget->setVisible(!single);if(auto label=form->labelForField(widget))label->setVisible(!single);
+        }
+    }
+    if(auto label=findChild<QLabel*>("workflowLegacyCleanupNote"))label->setVisible(!single);
+    if(auto label=findChild<QLabel*>("workflowPdfScope"))label->setText(single?text("Kapsam: yalnız düzenleyicide açık kitap. 10. aşama güncel Çıktı görüntülerinden PDF üretir; OCR 11. aşamada eklenir.","Scope: only the book open in the editor. Stage 10 builds a PDF from current Output images; stage 11 adds OCR."):text("Ayarlar ortak kullanılır. Aşama düğmeleri yalnız açık kitabı; İşler sekmesindeki başlatma düğmeleri kuyruktaki kitapları işler.","Settings are shared. Stage buttons process only the open book; start buttons in Jobs process queued books."));
+    if(auto label=findChild<QLabel*>("workflowPdfNote"))label->setText(text("Yerleşim ve görünüm ayarları bir sonraki PDF sürümüne uygulanır. Önceki dosyalar korunur. 9. aşamadaki temizlik ayrıca onaylanır. 11. aşama son PDF görüntüsünden OCR yapar; görüntü görünümü korunur.","Layout and appearance apply to the next PDF version. Previous files are preserved. Cleanup at stage 9 requires separate application. Stage 11 recognizes the final PDF and preserves its appearance."));
+    m_cleanup->setText(text("Kitap kuyruğunda otomatik kenar temizliği","Automatic edge cleanup in the book queue"));
+}
+QJsonObject UnifiedPanel::workflowOptions()const {
+    auto value=m_ocr->options();auto layout=pdfLayoutOptions();for(auto it=layout.begin();it!=layout.end();++it)value.insert(it.key(),it.value());
+    value.insert("root",m_root);value.insert("output_finish",outputFinish());value.insert("appearance",appearance());value.insert("threads",m_threads->value());return value;
+}
+QString UnifiedPanel::workflowOcrValidation()const{return m_ocr->validation();}
+void UnifiedPanel::chooseWorkflowOutput(){
+    auto folder=QFileDialog::getExistingDirectory(this,trU("PDF çıktı klasörünü seç"),m_output);if(folder.isEmpty())return;
+    m_output=folder;QSettings().setValue("unified/output_dir",folder);
+    auto prefsPath=unified_runtime::data(m_root)+"/preferences.json";QFile f(prefsPath);QJsonObject prefs;if(f.open(QIODevice::ReadOnly))prefs=QJsonDocument::fromJson(f.readAll()).object();f.close();prefs.insert("schema",1);prefs.insert("preferred_output",folder);writeJson(prefsPath,prefs);
+    m_pdfTools->useOutputFolder(QDir(folder).filePath("PDFImports"));if(!busy())saveQueue();
+}
 QString UnifiedPanel::snapshotPath(){QString dir=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/snapshots";QDir().mkpath(dir);return dir+"/"+uid()+".ScanTailor";}
 QJsonObject UnifiedPanel::pdfLayoutOptions()const{return {{"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"target_x_mm",m_targetText->value()},{"content_fit",m_fitContent->isChecked()}};}
 void UnifiedPanel::setPdfLayoutOptions(QJsonObject const& v){m_paper->setCurrentIndex(qMax(0,m_paper->findData(v.value("paper").toString())));m_margin->setValue(v.value("margin_mm").toDouble(10));m_targetText->setValue(v.value("target_x_mm").toDouble());m_fitContent->setChecked(v.value("content_fit").toBool(true));}
-bool UnifiedPanel::busy()const{return m_externalRunning || m_worker.state()!=QProcess::NotRunning || (m_ocr&&m_ocr->busy());}
+bool UnifiedPanel::busy()const{return m_externalRunning || m_worker.state()!=QProcess::NotRunning || (m_ocr&&m_ocr->busy()) || (m_pdfTools&&m_pdfTools->running());}
 void UnifiedPanel::saveQueue(){writeJson(m_queuePath,{{"schema",QFileInfo::exists(m_queuePath+".sqlite3")?2:1},{"output_root",m_output},{"jobs",m_jobs}});}
 void UnifiedPanel::enqueueJob(QJsonObject const& job){
     auto token=uid();writeJson(m_queuePath+".commands/"+token+".request.json",{{"id",token},{"action","enqueue"},{"job",job}});
-    m_jobs.append(job);if(!busy())saveQueue();refreshBooks();m_status->setText(trU("Kitap eklendi; çalışan iş bittikten sonra kuyrukta işlenecek."));
+    m_jobs.append(job);if(!m_externalRunning&&m_worker.state()==QProcess::NotRunning)saveQueue();refreshBooks();m_status->setText(trU("Kitap eklendi; çalışan iş bittikten sonra kuyrukta işlenecek."));
 }
 void UnifiedPanel::startupSettings(){
     if(busy()){m_status->setText(trU("Başlangıç ayarlarını kuyruk boşta olduğunda açın. Çalışan iş mevcut ayarlarıyla devam ediyor."));return;}
@@ -384,7 +409,7 @@ void UnifiedPanel::applyResources(){
     m_limits->setText(unifiedApplyCpuLimit(m_cpu->value()));emit accelerationChanged();
 }
 void UnifiedPanel::control(QString const& state){writeJson(m_controlPath,{{"state",state}});}
-void UnifiedPanel::stop(){m_revisionStartPending=false;if(m_externalRunning || m_worker.state()!=QProcess::NotRunning){control("cancel");m_status->setText(trU("Durduruluyor; mevcut sayfanın tamamlanması bekleniyor."));}else if(m_ocr->busy())m_status->setText(trU("OCR paketi işleminin tamamlanması bekleniyor."));}
+void UnifiedPanel::stop(){m_revisionStartPending=false;if(m_pdfTools&&m_pdfTools->running())m_pdfTools->stop();if(m_externalRunning || m_worker.state()!=QProcess::NotRunning){control("cancel");m_status->setText(trU("Durduruluyor; mevcut sayfanın tamamlanması bekleniyor."));}else if(m_ocr->busy())m_status->setText(trU("OCR paketi işleminin tamamlanması bekleniyor."));}
 void UnifiedPanel::updateRevisionStatus(){
     QFile ctl(m_controlPath);if(ctl.open(QIODevice::ReadOnly)){auto state=QJsonDocument::fromJson(ctl.readAll()).object().value("state").toString();ctl.close();m_paused=state=="pause";m_pause->setText(trU(m_paused?"Devam et":"Duraklat"));}
     if(m_revisionStartPending&&!busy()){m_revisionStartPending=false;start(false,true);}
@@ -517,16 +542,20 @@ void UnifiedPanel::showToolsTab(int index){if(auto tabs=findChild<QTabWidget*>("
 void UnifiedPanel::openPdfTools(QString const& mode){
     m_pdfTools->setMode(mode);showToolsTab(m_pdfToolsTab);emit toolsRequested();
 }
-void UnifiedPanel::importPdf(QString const& path){
-    openPdfTools("import");m_pdfTools->selectSource(path,true);
+void UnifiedPanel::importPdf(QString const& path,bool editorOnly){
+    if(m_pdfTools->running())return;
+    m_importEditorOnly=editorOnly;openPdfTools("import");
+    if(editorOnly){auto folder=QDir(m_output).filePath(".stou-imports/"+uid());QDir().mkpath(folder);writeJson(folder+"/.stou-import-session.json",{{"source",path}});m_pdfTools->useOutputFolder(folder);}
+    m_pdfTools->selectSource(path,true);
 }
 bool UnifiedPanel::addImportedPdf(QJsonObject const& result){
     const QString folder=result.value("folder").toString();
     if(folder.isEmpty()||!QFileInfo(folder).isDir()||result.value("pages").toInt()<1)return false;
     if(QDir(folder).entryList({"page-*.png"},QDir::Files).size()!=result.value("pages").toInt())return false;
+    if(m_importEditorOnly){m_importEditorOnly=false;emit importedImagesReady(folder);return true;}
     // Re-importing the same receipt must not reset an already edited book.
     loadQueue();
-    for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(folder).absoluteFilePath())return true;
+    for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(folder).absoluteFilePath()){return true;}
     QString split=result.value("split").toString("1");if(split!="1"&&split!="2"&&split!="auto")split="1";
     const QString id=uid();
     enqueueJob(QJsonObject{{"id",id},{"title",QFileInfo(result.value("source").toString()).completeBaseName()},

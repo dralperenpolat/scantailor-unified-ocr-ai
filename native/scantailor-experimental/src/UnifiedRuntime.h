@@ -39,9 +39,10 @@ inline QString python(QString const& base) {
 }
 inline QString paddlePython(QString const& base,QString const& device) {
     QString name=device.startsWith("gpu")?"paddle":"paddle_cpu";
-    for(auto const& dir:QStringList{data(base),base}){auto p=venvPython(dir+"/resources/runtimes/"+name);if(QFileInfo::exists(p))return p;}
+    auto shared=qEnvironmentVariable("STOU_ASSET_ROOT");
+    for(auto const& dir:QStringList{data(base),base,shared}){if(dir.isEmpty())continue;auto p=venvPython(dir+"/resources/runtimes/"+name);if(QFileInfo::exists(p))return p;}
     if(QFileInfo::exists(base+"/release.json"))return python(base);
-    return venvPython(base+"/resources/runtimes/paddle");
+    return venvPython((shared.isEmpty()?base:shared)+"/resources/runtimes/paddle");
 }
 inline QString cli() {
 #ifdef Q_OS_WIN
