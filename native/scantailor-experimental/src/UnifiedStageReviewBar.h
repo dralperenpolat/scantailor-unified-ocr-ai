@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "UnifiedI18n.h"
+#include "UnifiedWorkflow.h"
 #include <QGroupBox>
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -75,7 +76,7 @@ public:
         if(m_pageKey!=s.page){resetView();m_pageKey=s.page;}m_page->setText(s.page);m_status->setText(feedback.isEmpty()?s.detail:feedback);
         m_selected->setText(scope()=="page"?unified_i18n::text("Seçili: ")+(s.selectedMethod.isEmpty()?unified_i18n::text("henüz öneri yok"):s.selectedMethod):unified_i18n::text("Toplu işlem: her sayfanın kendi önerilen adayı."));
         m_applied->setText(unified_i18n::text("Bu sayfada uygulanan: ")+(s.stale?unified_i18n::text("eski öneri geçersiz; yeniden hesaplanmalı"):s.appliedMethod.isEmpty()?unified_i18n::text("henüz uygulanmadı"):s.appliedMethod));
-        m_native->setText(unified_i18n::text("Stages yanındaki üst ▶: kitabı bu aşamaya kadar kayıtlı Auto / Manual ayarlarıyla işler. AI için buradaki ▶ düğmelerini kullan.")+(s.nativeMethod.isEmpty()?QString():unified_i18n::text("\nBu sayfanın kayıtlı ayarı: ")+s.nativeMethod));
+        m_native->setText(unified_workflow::text("Bu AI aşamasındaki ▶ öneri hazırlar. Uygula ile kaydedin. Normal aşama aynı kayıtlı ayarı kullanır; iki ekranda da elle düzenleyebilirsiniz.","▶ in this AI stage prepares proposals. Apply saves them. The standard stage uses the same saved settings; manual editing is available on both screens.")+(s.nativeMethod.isEmpty()?QString():unified_i18n::text("\nBu sayfanın kayıtlı ayarı: ")+s.nativeMethod));
         if(m_revision!=s.revision||m_choices!=s.choices){QSignalBlocker b(m_choice);m_choice->clear();m_choice->addItems(s.choices);m_choice->setCurrentIndex(s.choice);m_revision=s.revision;m_choices=s.choices;}
         m_choice->setEnabled(!s.choices.isEmpty()&&!s.stale);m_manual->setVisible(s.manual&&scope()=="page");
         m_analyze->setEnabled(!s.running&&!s.page.isEmpty());m_stop->setEnabled(s.running);m_device->setEnabled(!s.running);m_kind->setEnabled(!s.running);

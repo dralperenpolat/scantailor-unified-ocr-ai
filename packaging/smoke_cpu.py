@@ -13,7 +13,7 @@ import sys
 import time
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--work',required=True);parser.add_argument('--ai',action='store_true');a=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--work',required=True);parser.add_argument('--ai',action='store_true');parser.add_argument('--fast',action='store_true');a=parser.parse_args()
     root=Path(a.root).resolve();work=Path(a.work).resolve();work.mkdir(parents=True,exist_ok=True)
     os.environ.update(STOU_ROOT=str(root),STOU_DATA=str(work/'user'),STOU_CPU_ONLY='1',STOU_SETTINGS_NAME='scantailor-release-cpu-test',CUDA_VISIBLE_DEVICES='-1',PYTHONNOUSERSITE='1',PYTHONPATH=str(root/'src'),OMP_NUM_THREADS='2',OMP_THREAD_LIMIT='2',QT_QPA_PLATFORM='offscreen')
     sys.path.insert(0,str(root/'src'))
@@ -37,18 +37,31 @@ def main():
     control.write_text('{"state":"run"}','utf8')
     cli=root/('native/bin/scantailor-experimental-cli'+('.exe' if os.name=='nt' else ''))
     request={'root':str(root),'cli':str(cli),'queue':str(queue),'control':str(control),'mode':'export','language':'eng','appearance':'soft_local','ocr_timing':'during','paper':'a4_text','margin_mm':10,'threads':2,'auto_warp':False,'native_scale':2,'page_cleanup':True,'ocr_engine':'tesseract','ocr_device':'cpu','tess_quality':'best','output_finish':{'lines':True,'white':True,'fine':True}}
+    if a.fast:
+        from scantailor_ocr_unified.settings import PROFILES
+        request.update(PROFILES['cpu_fast'],output_finish={})
+    request['reclaim_intermediates']=True
     req=work/'request.json';req.write_text(json.dumps(request),'utf8');start=time.monotonic()
     with (work/'worker.log').open('w',encoding='utf8') as log:
         subprocess.run([sys.executable,'-u','-m','scantailor_ocr_unified.native_worker',str(req)],env=os.environ,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=300)
     data=json.loads(queue.read_text('utf8'));job=data['jobs'][0]
     assert not job.get('error'),job
+    assert job['status'] in ('Tamamlandı','Kontrol gerekli'),job['status']
+    from scantailor_ocr_unified.queue_store import read_pages
+    for row in read_pages(queue,job['id'])['pages']:
+        assert hashlib.sha256(Path(row['page_pdf']).read_bytes()).hexdigest()==row['pdf_sha256']
     with fitz.open(job['pdf']) as pdf:
         assert len(pdf)==2
         chars=[len(p.get_text()) for p in pdf]
         assert min(chars)>900,chars
         for n,page in enumerate(pdf):page.get_pixmap(matrix=fitz.Matrix(1,1)).save(work/f'pdf-page-{n+1}.png')
     assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in hashes.items())
-    result={'pdf':job['pdf'],'pages':2,'ocr_chars':chars,'seconds':round(time.monotonic()-start,2),'gpu_enabled':False,'source_unchanged':True}
+    result={'pdf':job['pdf'],'pages':2,'ocr_chars':chars,'seconds':round(time.monotonic()-start,2),'gpu_enabled':False,'source_unchanged':True,'profile':'cpu_fast' if a.fast else 'quality'}
+    if a.fast:
+        assert Path(job['visual_pdf']).is_file(),job
+        with fitz.open(job['visual_pdf']) as visual:assert len(visual)==2 and not any(p.get_text().strip() for p in visual)
+        assert job['verification']['ocr_timing']=='after'
+        result['image_pdf_before_ocr']=True
     if a.ai:
         from scantailor_ocr_unified.ocr_backend import PaddleClient
         client=PaddleClient(root,'cpu')

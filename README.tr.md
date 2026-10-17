@@ -1,10 +1,12 @@
-# ScanTailor OCR Unified · 0.4.5
+# ScanTailor OCR Unified · 0.5.0 geliştirme
 
 [English](README.md) | **Türkçe**
 
+0.5.0 çalışması; çıktı ve geçici klasör seçilen başlangıç sihirbazı, Tesseract Fast ile hızlı CPU profili, OCR’ı sona bırakma, SQLite kuyruk ve depolama/PDF/kontrol merkezini ekler. [Yeni sürümün kullanım ve derleme notları](packaging/BUILD-0.5.0.md). Aşağıdaki kurulum bilgileri, 0.5.0 paket denetimleri tamamlanana kadar yayımlanmış 0.4.5 sürümüne aittir.
+
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 
-[ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental) arayüzünü ve altı aşamasını korur. Kitap kuyruğu, OCR, PDF çıktısı, UVDoc eğrilik önerileri ve Paddle ile içerik incelemesi ekler. Belgeler bilgisayarda işlenir. GPU zorunlu değildir.
+[ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental) altı görüntü işleme filtresini temel alır. Kitap kuyruğu, OCR, PDF çıktısı, UVDoc eğrilik önerileri ve Paddle ile içerik incelemesi ekler. Belgeler bilgisayarda işlenir. GPU zorunlu değildir.
 
 ## Arayüz dili
 
@@ -27,31 +29,28 @@ Paket Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini, Lati
 
 ## İlk kitap
 
-1. **OCR / Kitaplar → Fotoğraf klasöründen kitap ekle** ile kitabı ekleyin. Birden fazla kitap için **Alt klasörleri ayrı kitaplar olarak ekle** kullanın.
-2. **Projeleri hazırla**, ardından **Seçili kitabı düzenle** ile sayfa yönünü ve tek/çift sayfa ayrımını kontrol edin.
-3. **Geometric Distortions** içinde eğiklik, perspektif veya eğri çizgileri ayarlayın. AI önerisini mevcut görünümle karşılaştırın. Elle düzenlenen sayfalar otomatik olarak değiştirilmez.
-4. **Select Content** içinde dipnot, sayfa numarası ve kenar yazılarının içeride kaldığını kontrol edin. Küçük resimleri genişlik ve yüksekliğe göre sıralamak hatalı seçimleri bulmayı kolaylaştırır.
-5. **Margins / PDF yerleşimi** ile kenarları ve ortak yazı ölçeğini seçin. Her sayfayı ayrı ayrı A4'e doldurmak sayfalar arasında yazı boyutunu değiştirebilir.
-6. **Output** içinde görünümü seçin: Experimental çıktısı, siyah-beyaz, gri veya yumuşak siyah-beyaz. Beyaz zemin, ince yazı ve satır düzeltme işlemlerini önizleyin. **PDF için seç** ile dışa aktarma görünümünü belirleyin.
-7. OCR dilini ve **işlem sırasında / sonrasında / yapma** seçimini yapıp PDF üretin. Hazır sayfalar işlem tamamlanmadan incelenebilir.
+Geliştirme arayüzünde işlem sırası, ayrı çalıştırma düğmeleri ve süreleriyle **Aşamalar** bölümündedir:
 
-Önce kapak, küçük dipnot ve eğri çekim içeren birkaç sayfayı deneyin. Bir ayarı bütün kitaba uygulamadan önce örneği kontrol edin. **Kaydet ve PDF'yi güncelle**, düzenleme anlık görüntüsünü kuyruğa aktarır. Kuyruk işçisi sayfa sınırında güvenli biçimde işler; duraklatılmışsa **Devam et** gerekir. Aynı kuyruğu iki pencerede eşzamanlı çalıştırmayın.
+**0 Girdi → 1 Yön → 2 Bölme → 3 Geometri → 4 AI geometri → 5 İçerik → 6 AI içerik → 7 Kenarlar → 8 Çıktı → 9 Parmak/leke → 10 PDF → 11 OCR → 12 Önbellek temizliği.**
 
-### Hangi ▶ düğmesi ne yapıyor?
+1. **0 Girdi:** resim, klasör, üst klasör veya PDF seçin. Üst klasör ayrı kitapları kuyruğa ekler; bu ekrandan seçilen PDF doğrudan düzenlemeye açılır.
+2. Normal geometri ve içerik ayarlarını kontrol edin. AI aşamalarının ▶ düğmesi öneri hazırlar; önizleyip ayrıca uygulayın. Normal ve AI ekranları aynı sayfa ayarını kullanır; ikisinde de elle düzeltme yapılabilir.
+3. **8 Çıktı:** görünümü belirleyin. **9 Parmak/leke:** bu sayfa, seçili sayfalar veya kitap için temizlik önerisini hazırlayıp inceleyin ve uygulayın.
+4. **10 PDF:** görünür **PDF çıktı klasörü / Gözat** alanından kayıt yerini seçin. Kâğıt, sığdırma, kenar ve yazı boyutunu ayarlayın. Yazı eşitleme OCR başlatmadan görüntüden ölçülür.
+5. **11 OCR:** son PDF’ye aranabilir metin ekleyin. GPU olmayan cihazlar için CPU Hızlı / Tesseract Fast kullanılabilir.
+6. **12 Önbellek temizliği:** kategori boyutlarını, saklama seçimlerini ve temizlik zamanını görün. **Ayarlar** ve düğme görselleri içeren aranabilir **Yardım** Türkçe/İngilizcedir.
 
-- **Stages yanındaki üst ▶:** kitabı seçili aşamaya kadar, her sayfanın kayıtlı Auto / Manual ayarıyla işler.
-- **Yöntemin yanındaki ▶ Hazırla:** seçtiğiniz kapsamdaki sayfaları inceler ve öneri hazırlar. Henüz sayfayı değiştirmez.
-- **Adayın yanındaki ▶ Uygula:** seçili adayı bu sayfaya uygular. Başka bir geometri adayı seçilirse öncekinin yerine geçer; geri alma önceki adayı geri getirir. Toplu kapsamda her sayfanın kendi önerilen adayı kullanılır.
+Önce birkaç örnek sayfayı kontrol edin. Normal aşama ▶ düğmeleri kitabı seçili filtreye kadar işler. AI ▶ seçilen kapsamda öneri hazırlar; Uygula kayıtlı ayarı değiştirir. Çıktı, temizlik, PDF ve OCR ayrı çalışır.
 
-**Seçili** ve **Bu sayfada uygulanan** ayrı gösterilir. Sonradan geometri, yön, bölme veya içerik değişirse ilgili eski öneri **yeniden hesaplanmalı** olur. Güvenilir içerik önerisi bulunamazsa **Öneri yok** yazılır ve uygulama düğmesi kapanır. Elle yapılan yeni değişiklikler eski öneriyle ezilmez.
+Bir sayfadaki düzeltme yalnız o sayfanın sonraki görüntü ve PDF işlemlerini yeniler. Diğer sayfaların mevcut OCR metni korunur. Önceden OCR’lı PDF yenilendiğinde yalnız değişen sayfaya otomatik OCR eklenir. Uyuşmayan temizlik maskesi yalnız o sayfada atlanır ve inceleme uyarısı gösterilir. Ortak kâğıt boyutu gibi genel ayarlar ilgili bütün sayfaları; bir çift fotoğrafın yönü/bölünmesi iki alt sayfayı etkileyebilir. Her PDF ayrı sürüm olarak kaydedilir.
 
 ## PDF’den başlama
 
-**PDF’den içe aktar** sekmesinde **PDF seç ve hazırla** düğmesini kullanın. PDF’yi **Dosya → Aç** ile açmak, ana pencereye tek PDF sürüklemek veya başlatıcıya PDF yolu vermek de aynı hazırlık adımını başlatır. Kaynak PDF değişmez.
+Tek kitabı düzenlemek için **0 Girdi → PDF seç ve düzenle**, kuyruğa eklemek için PDF araçları sekmesini kullanın. PDF’yi **Dosya → Aç** ile açmak, ana pencereye tek PDF sürüklemek veya başlatıcıya PDF yolu vermek de aynı hazırlık adımını başlatır. Kaynak PDF değişmez.
 
 **Otomatik**, uygun tarama resmini özgün piksel boyutuyla çıkarır; beyaz kenarları ve sayfa dönüşünü korur. Çıkarma ancak bütün pikseller PDF’nin o ölçekteki görünümüyle aynıysa kabul edilir. Görünür metin, çizim, maske, açıklama veya birden çok resim bulunan sayfalarda sayfanın tamamı seçilen DPI ile görüntüye çevrilir. DPI artırmak kaynakta bulunmayan ayrıntıyı geri getirmez. Eski OCR ayrıca saklanır; geometri değişince yeniden OCR yapılır.
 
-Her PDF sayfası, sırası korunmuş bir giriş resmine dönüşür. Varsayılan **Tek sayfa · yeniden bölme** seçeneğidir. Çift sayfa çekimlerinde **Her PDF sayfasında iki kitap sayfası** seçin. Hazırlık bitince kitap kuyruğa eklenir; **Projeleri hazırla** ile ilerleyip bölmeyi kontrol edin. Kuyruk çalışıyorsa boşta olduğunda **Hazır kitabı kuyruğa ekle** düğmesini kullanın. Kesilen içe aktarma doğrulanmış sayfalardan sürer; aynı kitabı tekrar eklemek mevcut düzenlemelerini sıfırlamaz.
+Her PDF sayfası, sırası korunmuş bir giriş resmine dönüşür. Varsayılan **Tek sayfa · yeniden bölme** seçeneğidir. Çift sayfa çekimlerinde **Her PDF sayfasında iki kitap sayfası** seçin. 0 Girdi’den yapılan içe aktarma doğrudan düzenleyicide açılır. Kuyruk araçlarından yapılan içe aktarma kitabı kuyruğa ekler; **Projeleri hazırla** ile ilerleyip bölmeyi kontrol edin. Kuyruk çalışıyorsa boşta olduğunda **Hazır kitabı kuyruğa ekle** düğmesini kullanın. Kesilen içe aktarma doğrulanmış sayfalardan sürer; aynı kitabı tekrar eklemek mevcut düzenlemelerini sıfırlamaz.
 
 İlk içe aktarma klasörü kuyruğun çıktı klasörüne göre seçilir. Görüntüler ve sonraki işlem için boş alanı olan bir disk kullanın.
 
@@ -61,7 +60,7 @@ Her PDF sayfası, sırası korunmuş bir giriş resmine dönüşür. Varsayılan
 - **İçerik:** kitabın yaygın sayfa düzenine göre şüpheli uzantılar incelenir. Paddle metin kutuları ve sayfa düzeni önerileri aşama içinde, tek sayfada veya seçilen sayfalarda kullanılabilir. Öneriler hata yapabilir.
 - **Parmak/leke:** Output doldurma alanları ve temkinli kenar temizliği vardır. Parmağın örttüğü yazıyı yeniden üreten bir özellik değildir.
 - **Canlı ilerleme:** kitap, aşama ve sayfa görünür; tamamlanan sayfadan düzenleme ekranına geçilebilir. Kaynak / çıktı / PDF etiketine dikkat edin.
-- **Paneller:** Görünüm menüsünden kapatılan paneli açın veya yerleşimi sıfırlayın. Alt panelin üst kenarı sürüklenebilir; dar alanlarda kaydırma vardır. `Ctrl+S` kaydeder; `Ctrl+0` yalnız görüntüyü ekrana sığdırır, PDF ölçeğini değiştirmez.
+- **Paneller:** Görünüm menüsünden kapatılan paneli açın veya yerleşimi sıfırlayın. Aşama ayarları ayrı paneldedir; işlem sırasının tamamı solda görünür. `Ctrl+S` kaydeder; `Ctrl+0` yalnız görüntüyü ekrana sığdırır, PDF ölçeğini değiştirmez.
 - **Kaynak sınırları:** CPU iş parçacığı ve eşzamanlı sayfa sayısı bellekle sınırlanır. OpenCL isteğe bağlıdır. GPU yüzdesine sert üst sınır garanti edilmez.
 - **Mevcut PDF:** görüntü sayfalarını içe aktarma, OCR ekleme ve kayıpsız yeniden paketleme araçları vardır. Yeni çıktı oluşturulur; imzalı/etkileşimli PDF özelliklerinin aynen korunacağı varsayılmamalıdır.
 
@@ -76,6 +75,10 @@ AI modelleri UVDoc, PaddleOCR ve PP-DocLayout tabanlıdır. Tüm ScanTailor çat
 ## Veriler
 
 Kaynak fotoğraflar değiştirilmez. Kitap projeleri, önbellekler ve PDF'ler seçilen çalışma/çıktı konumunda tutulur. Ek dil, inceleme ve ayar dosyaları Windows'ta `%LOCALAPPDATA%\scantailor-ocr-unified`, Linux'ta `${XDG_DATA_HOME:-~/.local/share}/scantailor-ocr-unified` altındadır. Programın kaldırılması bu kullanıcı dosyalarını silmez.
+
+**12 Önbellek temizliği** kategori boyutlarını ve silme sonucunu gösterir. Kaynak kopyaları, ara TIFF’ler, OCR metin önbelleği ve önizlemeler için saklama seçilebilir. Temizlik elle, başarılı PDF sonrasında, başarılı OCR sonrasında veya proje kapanırken yapılır. Seçimler projede ve yeni projelerin varsayılanlarında saklanır.
+
+Varsayılan açık **kaydetmeden kapatılan yeni projeyi temizle** seçeneği, geçici girdi kopyalarını, OCR önbelleğini ve analiz dosyalarını kaldırır. Görünür Çıktı TIFF’leri, kaynak kitaplar ve nihai PDF’ler korunur. Kaydet/İptal bunu tetiklemez. Kayıtlı projenin gerekli girdileri ve onaylı düzeltmeleri tutulur. Ara TIFF’leri silmek için doğrulanmış PDF gerekir; sonradan yalnız bir sayfa düzeltilince diğer sayfalar bu PDF’den alınır. Yalnız sahipliği kayıtlı dosyalar temizlenir; başka klasörler ve modeller dahil değildir.
 
 Model/dil indirmeleri resmi depolara bağlanır. Kitap görüntüsü bir bulut OCR hizmetine gönderilmez. Kurulum ve kaynak paketleri kullanıcı kitaplarını veya yerel kuyruklarını içermez.
 

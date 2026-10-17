@@ -1,0 +1,118 @@
+name: Build and verify Windows release
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/full-improvements-050]
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+concurrency:
+  group: windows-package-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [minimal, full]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: msys2/setup-msys2@v2
+        id: msys
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-qt5-base
+            mingw-w64-ucrt-x86_64-qt5-tools mingw-w64-ucrt-x86_64-qt5-svg
+            mingw-w64-ucrt-x86_64-boost mingw-w64-ucrt-x86_64-eigen3
+            mingw-w64-ucrt-x86_64-libtiff mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-opencl-headers mingw-w64-ucrt-x86_64-opencl-clhpp
+            mingw-w64-ucrt-x86_64-opencl-icd
+      - name: Install verified baseline in the disposable runner
+        run: |
+          $installer="$env:RUNNER_TEMP\baseline.exe"
+          Invoke-WebRequest https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.4.5/scantailor-ocr-unified-0.4.5-windows-x64-setup.exe -OutFile $installer
+          if ((Get-FileHash -Algorithm SHA256 $installer).Hash -ne '11081c91996cfe2071438a6c13455b42f31701b1969fd311985ae1fa78ba3920') { throw 'Baseline checksum mismatch' }
+          $baseline="$env:RUNNER_TEMP\baseline"
+          $process=Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$baseline`"") -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode) { throw 'Baseline installation failed' }
+          python packaging/fetch_assets.py --variant '${{ matrix.variant }}'
+          if ('${{ matrix.variant }}' -eq 'minimal') { python packaging/minimal_runtime.py --base "$baseline\runtime" --destination "$env:RUNNER_TEMP\minimal-runtime" }
+      - name: Compile and stage
+        run: |
+          $prefix='${{ steps.msys.outputs.msys2-location }}\ucrt64'
+          $env:PATH="$prefix\bin;$env:PATH"
+          ./packaging/build-windows.ps1 -Prefix $prefix
+          if ($LASTEXITCODE) { throw 'Build failed' }
+          & "$prefix\bin\cmake.exe" --build native/release050 --target unified-review-state-test unified-stage-tools-test unified-i18n-test -j2
+          if ($LASTEXITCODE) { throw 'UI test build failed' }
+          $runtime="$env:RUNNER_TEMP\baseline\runtime"
+          if ('${{ matrix.variant }}' -eq 'minimal') { $runtime="$env:RUNNER_TEMP\minimal-runtime" }
+          python packaging/stage_windows.py --destination "$env:RUNNER_TEMP\stage" --runtime $runtime --prefix $prefix --variant '${{ matrix.variant }}'
+          if ($LASTEXITCODE) { throw 'Stage failed' }
+      - name: Installed CPU, PDF and native UI checks
+        timeout-minutes: 12
+        run: |
+          $stage="$env:RUNNER_TEMP\stage"; $qa="$env:RUNNER_TEMP\qa"
+          $env:PATH="$stage\native\bin;$env:PATH"
+          $env:QT_PLUGIN_PATH="$stage\native\bin"
+          $env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'
+          $env:HTTP_PROXY='http://127.0.0.1:9'; $env:HTTPS_PROXY=$env:HTTP_PROXY; $env:ALL_PROXY=$env:HTTP_PROXY
+          & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\cpu" --fast
+          if ($LASTEXITCODE) { throw 'Fast CPU test failed' }
+          if ('${{ matrix.variant }}' -eq 'full') {
+            & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\ai" --ai
+            if ($LASTEXITCODE) { throw 'CPU AI test failed' }
+          }
+          & "$stage\runtime\python.exe" packaging/smoke_pdf_import.py --root $stage --work "$qa\pdf"
+          if ($LASTEXITCODE) { throw 'PDF test failed' }
+          Write-Output 'Checking native review state'
+          & native/release050/unified-review-state-test.exe
+          if ($LASTEXITCODE) { throw 'Review UI test failed' }
+          Write-Output 'Checking native stage controls and PDF import'
+          & native/release050/unified-stage-tools-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
+          if ($LASTEXITCODE) { throw 'Stage UI test failed' }
+          Write-Output 'Checking language and startup settings'
+          $env:STOU_TEST_WORKFLOW='1'
+          & native/release050/unified-i18n-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
+          if ($LASTEXITCODE) { throw 'Language/setup UI test failed' }
+      - name: Build installer and test upgrade and uninstall
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          $iscc=(Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if (!$iscc) { $iscc="${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DStageDir=$env:RUNNER_TEMP\stage" "/DReleaseDir=$PWD\release" '/DVariant=${{ matrix.variant }}' packaging/windows.iss
+          if ($LASTEXITCODE) { throw 'Installer build failed' }
+          $installer=(Get-ChildItem release/*.exe).FullName
+          python packaging/smoke_install.py --work "$env:RUNNER_TEMP\qa\install" --previous "$env:RUNNER_TEMP\baseline.exe" --installer $installer
+          if ($LASTEXITCODE) { throw 'Install/upgrade/uninstall test failed' }
+          python packaging/sbom.py "$env:RUNNER_TEMP\stage" release/sbom.cdx.json
+          Copy-Item "$env:RUNNER_TEMP\qa\cpu\result.json" release/cpu-acceptance.json
+          Copy-Item "$env:RUNNER_TEMP\qa\install\install-result.json" release/
+      - uses: actions/attest@v4
+        with:
+          subject-path: release/*.exe
+      - uses: actions/attest@v4
+        with:
+          subject-path: release/*.exe
+          sbom-path: release/sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-0.5.0-${{ matrix.variant }}
+          path: release/
+          compression-level: 0
+          retention-days: 3

@@ -15,6 +15,7 @@ from .runtime_layout import resource_path
 import fitz
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject
+from functools import lru_cache
 
 import img2pdf
 
@@ -26,17 +27,27 @@ PIXEL_PIPELINE_ID = 'bbb713d9aec2a0c597bc5723d9c75e4fee8c13bc4a94efe48f0e9b135f0
 
 def digest(data): return hashlib.sha256(data).hexdigest()
 
+@lru_cache(maxsize=64)
+def _model_digest(path,size,mtime):
+    with Path(path).open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
+
+def model_digest(path):
+    path=Path(path);st=path.stat();return _model_digest(str(path.resolve()),st.st_size,st.st_mtime_ns)
+
 def recognition_signature(conf,engine,tessdata,language):
     """OCR models/settings, independent of PDF size and visible thresholding."""
     if engine=='tesseract':
-        return [engine,fitz.VersionBind,language,[(code,digest((tessdata/(code+'.traineddata')).read_bytes())) for code in language.split('+')]]
+        return [engine,fitz.VersionBind,language,[(code,model_digest(tessdata/(code+'.traineddata'))) for code in language.split('+')]]
+    if engine=='kraken':
+        model=Path(conf['kraken_model'])
+        return [engine,str(model),model_digest(model),digest(Path(__file__).with_name('optional_engines.py').read_bytes())]
     root=Path(conf['root']);device=conf.get('ocr_device','cpu');ready=resource_path('paddle-'+device+'-ready.json',root)
     version=json.loads(ready.read_text(encoding='utf8')) if ready.exists() else {}
     from .ocr_backend import OCR_PIPELINE_ID
-    return [engine,conf.get('paddle_language','de'),device,'PP-OCRv5',version.get('paddle'),version.get('paddleocr'),
+    return [engine,conf.get('paddle_language','de'),device,conf.get('paddle_version','PP-OCRv5'),version.get('paddle'),version.get('paddleocr'),
             digest(Path(__file__).with_name('paddle_runtime.py').read_bytes()),OCR_PIPELINE_ID]
 
-def text_layer_cache(candidate,rotation,signature,directory,recognize,notify):
+def text_layer_cache(candidate,rotation,signature,directory,recognize,notify,metadata=None):
     if not directory:return recognize()
     directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
     key=digest(json.dumps(['ocr-layer-v1',candidate.size,rotation,signature,digest(candidate.tobytes())],sort_keys=True).encode())
@@ -48,6 +59,7 @@ def text_layer_cache(candidate,rotation,signature,directory,recognize,notify):
         try:
             data=pdf.read_bytes();record=json.loads(receipt.read_text(encoding='utf8'))
             if digest(data)==record['sha256'] and record.get('cache_key',key)==key:
+                if metadata is not None:metadata.update(record.get('metadata',{}))
                 notify('OCR metni önbellekten alındı; görünür sayfa ayrı oluşturuluyor.')
                 return data
         except (OSError,ValueError,KeyError):pass
@@ -55,7 +67,7 @@ def text_layer_cache(candidate,rotation,signature,directory,recognize,notify):
     # Store text only: no duplicate page bitmap in the recognition cache.
     writer=PdfWriter();writer.clone_document_from_reader(PdfReader(io.BytesIO(data)));writer.remove_images()
     stream=io.BytesIO();writer.write(stream);data=stream.getvalue()
-    for destination,content in ((pdf,data),(receipt,json.dumps({'sha256':digest(data),'cache_key':key}).encode())):
+    for destination,content in ((pdf,data),(receipt,json.dumps({'sha256':digest(data),'cache_key':key,'metadata':metadata or {}}).encode())):
         temp=directory/('.write-'+uuid.uuid4().hex[:12]+'.tmp')
         temp.write_bytes(content);os.replace(temp,destination)
     return data
@@ -83,15 +95,17 @@ def ocr_protection(gray,conf,notify=lambda message:None):
     candidate=gray.copy();candidate.thumbnail((4200,4200),Image.Resampling.LANCZOS)
     engine=conf.get('ocr_engine','tesseract');tessdata=Path(conf['tessdata']);language=conf.get('language','deu')
     signature=recognition_signature(conf,engine,tessdata,language)
+    metadata={}
     def recognize():
-        if engine=='paddle':
-            from .ocr_backend import paddle_pdf
-            with tempfile.TemporaryDirectory(prefix='stou_protect_') as work:
-                return paddle_pdf(candidate,conf,Path(work))
+        if engine in ('paddle','kraken'):
+            from .ocr_backend import recognize_pdf
+            from .storage import workspace
+            with workspace(conf) as work:
+                return recognize_pdf(candidate,conf,work,metadata)
         stream=io.BytesIO();candidate.convert('RGB').save(stream,format='PNG')
         pix=fitz.Pixmap(stream.getvalue());pix.set_dpi(300,300)
         return pix.pdfocr_tobytes(language=language,tessdata=native_model_directory(tessdata))
-    data=text_layer_cache(candidate,0,signature,conf.get('ocr_cache'),recognize,notify)
+    data=text_layer_cache(candidate,0,signature,conf.get('ocr_cache'),recognize,notify,metadata)
     boxes=[]
     with fitz.open(stream=data,filetype='pdf') as doc:
         page=doc[0];w,h=page.rect.width,page.rect.height
@@ -102,6 +116,33 @@ def ocr_protection(gray,conf,notify=lambda message:None):
     return boxes
 
 def export(project_path, destination, notify=print):
+    """Verify privately, then publish exclusively; failed exports leave no PDF."""
+    from .storage import workspace, ensure_space
+    from .recovery import retry
+    from .settings import atomic_json
+    project_path=Path(project_path).resolve();destination=Path(destination).resolve()
+    conf=json.loads(project_path.read_text(encoding='utf8'))
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    if destination.exists():raise FileExistsError(destination)
+    ensure_space([destination.parent], reserve_gib=conf.get('reserve_gib',2))
+    def attempt():
+        with workspace(conf, needed=64*1024**2) as work:
+            private=work/'result.pdf'
+            result=_export(project_path,private,notify,work)
+            staged=destination.with_name('.publish-'+uuid.uuid4().hex+'.pdf')
+            try:
+                with private.open('rb') as src,staged.open('xb') as out:
+                    shutil.copyfileobj(src,out);out.flush();os.fsync(out.fileno())
+                if os.name=='nt':os.rename(staged,destination)
+                else:os.link(staged,destination)
+            finally:staged.unlink(missing_ok=True)
+            result.update(output=str(destination),bytes=destination.stat().st_size)
+            atomic_json(destination.with_suffix('.verification.json'),result)
+            return result
+    return retry(attempt,attempts=2,notify=notify)
+
+
+def _export(project_path, destination, notify, work):
     project_path=Path(project_path).resolve();destination=Path(destination).resolve()
     if destination.exists(): raise FileExistsError(destination)
     conf=json.loads(project_path.read_text(encoding='utf8'))
@@ -109,7 +150,7 @@ def export(project_path, destination, notify=print):
     resolve=lambda s: (project_path.parent/s).resolve()
     tessdata=resolve(conf.get('tessdata','.'));language=conf.get('language','deu')
     engine=conf.get('ocr_engine','tesseract')
-    if engine not in ('tesseract','paddle','none'):raise ValueError('Unknown OCR engine: '+engine)
+    if engine not in ('tesseract','paddle','kraken','none'):raise ValueError('Unknown OCR engine: '+engine)
     if engine=='tesseract':
         for lang in language.split('+'):
             if not (tessdata/(lang+'.traineddata')).is_file(): raise FileNotFoundError(f'OCR language missing: {lang}')
@@ -119,8 +160,6 @@ def export(project_path, destination, notify=print):
     destination.parent.mkdir(parents=True,exist_ok=True)
     # Nested book/cache paths exceed MAX_PATH in Paddle's image/JSON I/O on
     # Windows. Keep only transient files in a short, private system temp dir.
-    work_root=Path(tempfile.gettempdir()).resolve()
-    work=Path(tempfile.mkdtemp(prefix='stou_pdf_',dir=work_root)).resolve()
     total=PdfWriter();checks=[];start=time.monotonic()
     for n,entry in enumerate(conf['pages'],1):
         visible=resolve(entry['display_image']);recognition=resolve(entry.get('ocr_image',entry['display_image']))
@@ -170,26 +209,40 @@ def export(project_path, destination, notify=print):
             verify_page(jp,visible)
             best=min([ccitt,jp],key=lambda p:p.stat().st_size)
         if engine=='none':
-            out=best;chars=0;rotation=0
+            out=best;chars=0;rotation=0;selected_metadata={}
         else:
             candidates=[]
             for rotation in entry.get('ocr_rotations',[0]):
                 if rotation not in [0,90,180,270]:raise ValueError('Invalid OCR rotation')
                 candidate=ocr.rotate(-rotation,expand=True) if rotation else ocr
+                metadata={}
                 def recognize():
-                    if engine=='paddle':
-                        from .ocr_backend import paddle_pdf
-                        return paddle_pdf(candidate,conf,work)
+                    if engine in ('paddle','kraken'):
+                        from .ocr_backend import recognize_pdf
+                        return recognize_pdf(candidate,conf,work,metadata)
                     stream=io.BytesIO();candidate.convert('RGB').save(stream,format='PNG',compress_level=1)
                     pix=fitz.Pixmap(stream.getvalue());pix.set_dpi(300,300)
                     return pix.pdfocr_tobytes(language=language,tessdata=native_model_directory(tessdata))
-                candidate_pdf=text_layer_cache(candidate,rotation,ocr_signature,conf.get('ocr_cache'),recognize,notify)
+                candidate_pdf=text_layer_cache(candidate,rotation,ocr_signature,conf.get('ocr_cache'),recognize,notify,metadata)
                 with fitz.open(stream=candidate_pdf,filetype='pdf') as recognized:
                     txt=recognized[0].get_text()
                     words=re.findall(r'[^\W\d_]{3,}',txt,flags=re.UNICODE)
                     score=sum(min(len(word),16) for word in words)
-                candidates.append((score,rotation,candidate_pdf))
-            _,rotation,text_pdf=max(candidates,key=lambda row:row[0])
+                candidates.append((score,rotation,candidate_pdf,metadata,txt))
+            _,rotation,text_pdf,selected_metadata,selected_text=max(candidates,key=lambda row:row[0])
+            confidence=selected_metadata.get('confidence')
+            if engine=='paddle' and conf.get('ocr_compare') and (len(selected_text.strip())<15 or confidence is not None and confidence<float(conf.get('ocr_confidence_threshold',.85))):
+                from difflib import SequenceMatcher
+                try:
+                    candidate=ocr.rotate(-rotation,expand=True) if rotation else ocr
+                    stream=io.BytesIO();candidate.convert('RGB').save(stream,format='PNG')
+                    pix=fitz.Pixmap(stream.getvalue());pix.set_dpi(300,300)
+                    alternate=pix.pdfocr_tobytes(language=language,tessdata=native_model_directory(tessdata))
+                    with fitz.open(stream=alternate,filetype='pdf') as doc:alternate_text=doc[0].get_text()
+                    agreement=SequenceMatcher(None,' '.join(selected_text.split()),' '.join(alternate_text.split()),autojunk=False).ratio()
+                    selected_metadata['comparison']={'engine':'tesseract','agreement':agreement,'text':alternate_text,
+                        'selection':'original engine retained; disagreement requires review'}
+                except (RuntimeError,OSError) as exc:selected_metadata['comparison']={'error':str(exc),'engine':'tesseract'}
             tw=PdfWriter();tw.clone_document_from_reader(PdfReader(io.BytesIO(text_pdf)));tw.remove_images()
             text_page=tw.pages[0]
             one=PdfWriter();one.clone_document_from_reader(PdfReader(best))
@@ -219,6 +272,7 @@ def export(project_path, destination, notify=print):
                        'geometry_id':entry.get('geometry_id'),'source_hashes':hashes})
         checks[-1]['ocr_rotation']=rotation
         checks[-1]['ocr_engine']=engine
+        checks[-1]['ocr_metadata']=selected_metadata
         notify(f'{n}/{len(conf["pages"])} — {entry.get("id",visible.name)} — {chars} OCR characters')
         gc.collect()
     # Avoid overwriting an existing destination even if another process created it.
@@ -233,11 +287,6 @@ def export(project_path, destination, notify=print):
             'checks':checks}
     (work/'verification.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
     destination.with_suffix('.verification.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
-    if not conf.get('keep_export_work',False):
-        # Only this call's fresh, private UUID directory can be reclaimed.
-        if work.resolve().parent!=work_root or not work.name.startswith('stou_pdf_'):
-            raise ValueError('Geçici çıktı yolu doğrulanamadı.')
-        shutil.rmtree(work)
     return result
 
 if __name__=='__main__':

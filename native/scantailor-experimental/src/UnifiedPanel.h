@@ -23,6 +23,13 @@ class UnifiedPanel : public QWidget {
 public:
     explicit UnifiedPanel(QWidget* parent=nullptr);
     QString snapshotPath();
+    QJsonObject workflowOptions() const;
+    void setWorkflowContext(QString const& stage);
+    QString workflowOutput() const {return m_output;}
+    QString workflowOcrValidation() const;
+    void addWorkflowFolder(QString const& folder) {addFolder(folder);}
+    void openStartupSettings() {startupSettings();}
+    void chooseWorkflowOutput();
     void addProject(QString const& title, QString const& path, QJsonArray const& outputs);
     bool busy() const;
     bool monitoringExternalWorker() const { return m_externalRunning; }
@@ -36,7 +43,7 @@ public:
     QJsonObject pdfLayoutOptions() const;
     void setPdfLayoutOptions(QJsonObject const& value);
     void openPdfTools(QString const& mode="import");
-    void importPdf(QString const& path);
+    void importPdf(QString const& path,bool editorOnly=false);
     void showToolsTab(int index);
     QString ocrTiming()const;
     void setOcrTiming(QString const& mode);
@@ -52,6 +59,7 @@ public:
     void previewBook(QString const& id, int page=0);
 signals:
     void toolsRequested();
+    void importedImagesReady(QString const& folder);
     void ocrTimingChanged(QString const& mode);
     void outputFinishChanged(QJsonObject const& value);
     void pdfLayoutSettingsChanged(QJsonObject const& value);
@@ -79,6 +87,7 @@ private:
     QProcess m_worker, m_gpu;
     QByteArray m_buffer;
     bool m_paused=false;
+    bool m_importEditorOnly=false;
     bool m_externalRunning=false;
     QString m_monitorRequest, m_monitorLog;
     qint64 m_monitorOffset=0;
@@ -104,6 +113,8 @@ private:
     QPlainTextEdit* m_log;
     QPushButton *m_start, *m_prepare, *m_pause;
     void saveQueue();
+    void enqueueJob(QJsonObject const& job);
+    void startupSettings();
     void loadQueue();
     void refreshBooks();
     void showBookSelection(QTreeWidgetItem* item);

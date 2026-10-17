@@ -111,26 +111,34 @@ def render_page(page, dpi, number):
                  'pixels': [pix.width, pix.height], 'native_pixels_verified': False}
 
 
-def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strategy='auto'):
+def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strategy='auto', pages='', password=''):
+    from scantailor_ocr_unified.smart_pdf import page_range
+    from scantailor_ocr_unified.storage import ensure_space
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if dpi not in (150, 200, 300, 400, 600): raise ValueError('Geçersiz PDF çözünürlüğü.')
     if strategy not in ('auto', 'render'): raise ValueError('Geçersiz PDF içe aktarma yöntemi.')
     stamp = digest(source)
     name = re.sub(r'[^\w .-]', '_', source.stem)[:70].strip(' .') or 'PDF'
-    folder = destination / f'{name}_{stamp[:12]}_{strategy}_{dpi}dpi_v2'
+    selection_tag=('_'+hashlib.sha256(str(pages).encode()).hexdigest()[:8]) if pages else ''
+    folder = destination / f'{name}_{stamp[:12]}_{strategy}_{dpi}dpi_v2{selection_tag}'
     images = folder/'sayfalar'
     with fitz.open(source) as doc:
         if not doc.is_pdf: raise ValueError('Kaynak dosya PDF değil.')
-        if doc.needs_pass: raise ValueError('PDF şifreli. Önce erişilebilir bir kopyasını açın.')
+        if doc.needs_pass and not doc.authenticate(password): raise ValueError('PDF şifreli; şifre gerekli veya yanlış.')
         if not len(doc): raise ValueError('PDF boş.')
+        indices=page_range(pages,len(doc))
         images.mkdir(parents=True, exist_ok=True)
         manifest = {'schema': 2, 'pipeline': IMPORT_PIPELINE, 'strategy': strategy,
                     'source': str(source), 'source_sha256': stamp,
-                    'dpi': dpi, 'pages': len(doc), 'completed': 0, 'images': str(images),
+                    'dpi': dpi, 'pages': len(indices), 'completed': 0, 'images': str(images),
+                    'page_mapping':[{'output_page':n,'source_page':i+1} for n,i in enumerate(indices,1)],
+                    'metadata':doc.metadata,'toc':doc.get_toc(),'page_labels':doc.get_page_labels(),
                     'extracted': 0, 'rendered': 0, 'complete': False,
                     'text_policy': 'source text retained separately; corrected geometry receives fresh OCR'}
         save_json(folder/'import.json', manifest)
-        for number, page in enumerate(doc, 1):
+        for number,index in enumerate(indices,1):
+            page=doc[index]
+            ensure_space([destination],needed=64*1024**2)
             image_path = images/f'page-{number:05d}.png'
             text_path = folder/f'page-{number:05d}.json'
             # The receipt verifies both artifacts, allowing an interrupted import
@@ -157,7 +165,7 @@ def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strat
                 finally:
                     temporary.unlink(missing_ok=True)
                 words = page.get_text('words')
-                save_json(text_path, {'page': number, 'rect': list(page.rect), 'rotation': page.rotation,
+                save_json(text_path, {'page': number, 'source_page':index+1,'label':page.get_label(),'rect': list(page.rect), 'rotation': page.rotation,
                                      **metadata,
                                      'text': page.get_text(), 'words': words})
                 receipt = {'source': stamp, 'dpi': dpi, 'pipeline': IMPORT_PIPELINE,
@@ -168,7 +176,7 @@ def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strat
             manifest[receipt['method']] += 1
             save_json(folder/'import.json', manifest)
             notify({'stage': 'Tarama resmi çıkarılıyor' if receipt['method'] == 'extracted' else 'PDF sayfası görüntüye çevriliyor',
-                    'page': number, 'total': len(doc), 'cached': reuse, 'method': receipt['method']})
+                    'page': number, 'total': len(indices), 'cached': reuse, 'method': receipt['method']})
             fitz.TOOLS.store_shrink(100)
     if digest(source) != stamp:
         raise ValueError('İçe aktarma sırasında kaynak PDF değişti; yeniden başlatın.')
@@ -176,7 +184,7 @@ def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strat
     save_json(folder/'import.json', manifest)
     return {'ok': True, 'mode': 'import', 'source': str(source), 'source_sha256': stamp,
             'folder': str(images), 'pages': manifest['pages'], 'text_folder': str(folder),
-            'strategy': strategy, 'extracted': manifest['extracted'], 'rendered': manifest['rendered']}
+            'strategy': strategy, 'page_mapping':manifest['page_mapping'],'extracted': manifest['extracted'], 'rendered': manifest['rendered']}
 
 
 def compact_pdf(source, destination, notify=lambda value: None):
@@ -217,16 +225,23 @@ def compact_pdf(source, destination, notify=lambda value: None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=['import', 'compact'])
+    parser.add_argument('mode', choices=['import', 'compact','smart'])
     parser.add_argument('source', type=Path)
     parser.add_argument('destination', type=Path)
     parser.add_argument('--dpi', type=int, default=300)
     parser.add_argument('--strategy', choices=['auto', 'render'], default='auto')
+    parser.add_argument('--pages',default='')
+    parser.add_argument('--language',default='deu')
     args = parser.parse_args()
     def emit(value): print('STOUPDF '+json.dumps(value, ensure_ascii=False), flush=True)
     try:
-        result = (import_pdf(args.source, args.destination, args.dpi, emit, strategy=args.strategy) if args.mode == 'import'
-                  else compact_pdf(args.source, args.destination, emit))
+        if args.mode=='import':result=import_pdf(args.source,args.destination,args.dpi,emit,strategy=args.strategy,pages=args.pages)
+        elif args.mode=='smart':
+            from scantailor_ocr_unified.smart_pdf import process
+            from scantailor_ocr_unified.settings import load
+            from scantailor_ocr_unified.runtime_layout import app_root
+            result=process(args.source,args.destination,{**load(),'root':str(app_root()),'pages':args.pages,'language':args.language,'dpi':args.dpi},emit)
+        else:result=compact_pdf(args.source,args.destination,emit)
         emit(result)
     except Exception as error:
         emit({'ok': False, 'error': str(error)})

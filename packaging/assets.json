@@ -10,6 +10,24 @@
   },
   "assets": [
     {
+      "path": "resources/tessdata_fast/deu.traineddata",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/deu.traineddata",
+      "sha256": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "resources/tessdata_fast/eng.traineddata",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "resources/tessdata_fast/tur.traineddata",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/tur.traineddata",
+      "sha256": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+      "license": "Apache-2.0"
+    },
+    {
       "path": "resources/paddle-models/official_models/PP-OCRv6_small_det/inference.json",
       "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det/resolve/106c97591b235f607453300d9fc8c1cad1b25488/inference.json",
       "sha256": "89240f689a4a77aad75ef55a8df0a15c8e1d4980a327d17e58f24bbadde5aeab",

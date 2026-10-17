@@ -144,6 +144,8 @@ def reframe(source, destination, layout, notify=lambda *_: None):
             notify(n + 1, len(before))
         after.set_metadata(before.metadata)
         after.set_toc(before.get_toc())
+        after.set_page_labels(before.get_page_labels())
+        if before.get_xml_metadata():after.set_xml_metadata(before.get_xml_metadata())
         after.save(destination, garbage=4, deflate=True, use_objstms=1)
     # Check the written PDF, not only in-memory transform parameters.
     whitespace_pages, inherited_pages = [], []

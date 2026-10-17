@@ -9,7 +9,8 @@ import shutil
 import subprocess
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--root',default='.');p.add_argument('--runtime',required=True);p.add_argument('--destination',required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--root',default='.');p.add_argument('--runtime',required=True);p.add_argument('--destination',required=True);p.add_argument('--variant',choices=['full','minimal'],default='full');a=p.parse_args()
+    if a.variant=='minimal':subprocess.run([str(Path(a.runtime)/'bin/python3'),'-c','import importlib.util; assert importlib.util.find_spec("paddle") is None; assert importlib.util.find_spec("torch") is None'],check=True)
     root=Path(a.root).resolve();dest=Path(a.destination).resolve();native=dest/'native/bin';native.mkdir(parents=True,exist_ok=True)
     def copy(src,dst):
         dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dst)
@@ -35,9 +36,10 @@ def main():
     for path in (root/'native/release-linux').rglob('*.qm'):copy(path,native/'translations'/path.name)
     shutil.copytree(root/'src',dest/'src',dirs_exist_ok=True,ignore=ignore)
     assets=json.loads((root/'packaging/assets.json').read_text('utf8'))
-    for item in assets['assets']:copy(root/item['path'],dest/item['path'])
+    for item in assets['assets']:
+        if a.variant=='full' or '/tessdata_' in item['path']:copy(root/item['path'],dest/item['path'])
     copy(root/'resources/ocr-catalog.json',dest/'resources/ocr-catalog.json')
-    (dest/'resources/paddle-cpu-ready.json').write_text(json.dumps({'ok':True,'device':'cpu','paddle':'3.3.0','paddleocr':'3.7.0','bundled':True}))
+    if a.variant=='full':(dest/'resources/paddle-cpu-ready.json').write_text(json.dumps({'ok':True,'device':'cpu','paddle':'3.3.0','paddleocr':'3.7.0','bundled':True}))
     shutil.copytree(Path(a.runtime),dest/'runtime',dirs_exist_ok=True,ignore=ignore)
     for name in ('LICENSE','README.md','README.tr.md','THIRD_PARTY_NOTICES.md'):
         if (root/name).exists():copy(root/name,dest/name)
@@ -51,7 +53,7 @@ def main():
             if notice.exists():copy(notice,dest/'licenses/native-dependencies'/(package+'.txt'))
     (dest/'native-libraries.json').write_text(json.dumps(libraries,indent=2))
     (dest/'local-tools.json').write_text(json.dumps({'tessdata':'resources/tessdata_best','jbig2':None,'uvdoc':'resources/UVDoc'}))
-    (dest/'release.json').write_text(json.dumps({'version':'0.4.5','platform':'linux-x64','glibc_minimum':'2.35','cpu_bundled':True,'native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli').read_bytes()).hexdigest()}))
+    (dest/'release.json').write_text(json.dumps({'version':'0.5.0','platform':'linux-x64','variant':a.variant,'glibc_minimum':'2.35','cpu_bundled':a.variant=='full','native_parallel_workers':2,'native_cli_sha256':hashlib.sha256((native/'scantailor-experimental-cli').read_bytes()).hexdigest()}))
     script='''#!/bin/sh
 set -eu
 APPDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -79,6 +81,10 @@ Categories=Graphics;Office;
 EOF
 printf '%s\\n' 'Kurulum tamamlandı. Uygulama menüsünden ScanTailor OCR Unified açılabilir.'
 ''');(dest/'install-user.sh').chmod(0o755)
+    for action in ('install','uninstall'):
+        entry=dest/(action+'-user.sh')
+        entry.write_text('#!/bin/sh\nset -eu\nHERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$HERE/runtime/bin/python3" "$HERE/packaging/deploy_linux.py" '+action+'\n')
+        entry.chmod(0o755)
     files={p.relative_to(dest).as_posix():hashlib.file_digest(p.open('rb'),'sha256').hexdigest() for p in dest.rglob('*') if p.is_file() and p.name!='FILES-SHA256.json'}
     (dest/'FILES-SHA256.json').write_text(json.dumps(files,indent=2))
     print(json.dumps({'files':len(files),'native_libraries':len(libraries),'destination':str(dest)}))

@@ -20,6 +20,7 @@ class NativeWatchdog(unittest.TestCase):
             'language': 'deu', 'native_page_timeout': .6})
 
     def tearDown(self):
+        self.worker.store.close()
         self.temp.cleanup()
 
     def run_child(self, code):
