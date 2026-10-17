@@ -59,6 +59,6 @@ Native arayüz kontrolleri için derleme dizininde `cmake --build ... --target u
 
 Windows EXE'yi boş bir klasöre kurup aynı testi **kurulan** yorumlayıcıyla tekrar çalıştırın. Linux arşivini başka bir konuma açıp başlatıcıyı ve testi yeniden çalıştırın. Boşluk ve Türkçe karakter içeren yolları dahil edin. `QT_QPA_PLATFORM=offscreen`, `STOU_SETTINGS_NAME=release-test` ve `STOU_SMOKE_SCREENSHOT=/tam/yol/gui.png` ile native arayüzün test ekranı kaydedilebilir. Windows offscreen fontları için `QT_QPA_FONTDIR=C:\Windows\Fonts` gerekebilir.
 
-GitHub Releases'e Windows EXE, Linux arşivi, **eşleşen kaynak ZIP'i**, SHA256SUMS ve test sonuçlarını birlikte yükleyin. Kaynak ZIP'ini üretmek için `python packaging/source_archive.py --destination ...` kullanın. Lisans ve bildirimleri koruyun. Kurulum paketi ile kaynak kodun sürümü eşleşmelidir.
+GitHub Releases'e yalnızca **Windows tam kurulum EXE'sini** yükleyin. Hafif kurulum, Linux arşivleri, SBOM, SHA256SUMS ve test sonuçlarını derleme çıktılarında veya yerel arşivde saklayın. Sürüm açıklamasında tek kurulum bağlantısı verin. Kaynak kodu kurulumla eşleşen Git etiketi üzerinden erişilebilir tutun; GitHub kaynak ZIP/TAR bağlantılarını otomatik ekler. Ayrı kaynak arşivi gerekiyorsa `python packaging/source_archive.py --destination ...` ile yerelde üretin. Lisans ve bildirimleri koruyun.
 
 Arayüz dili testi: `unified-i18n-test` hedefini derleyip `QT_QPA_PLATFORM=offscreen` ile çalıştırın. Test dil seçimi, kalıcılık, ayrı play düğmeleri, ilerleme mesajları ve OCR dil kodlarının korunmasını denetler.

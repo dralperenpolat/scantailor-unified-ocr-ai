@@ -12,18 +12,13 @@ The repository is named **scantailor-unified-ocr-ai**; the application is called
 
 ## Install
 
-| System | Package and use |
-| --- | --- |
-| Windows x64 · full | [Download setup](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe). Includes Python, Qt, Tesseract and CPU AI models. Run the installer and open the app from the Start menu. |
-| Windows x64 · minimal | [Download smaller setup](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-minimal-setup.exe). Includes Python, Qt, Tesseract and PDF tools; AI models are optional. |
-| Linux x64 · full | [Download archive](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz). Includes CPU AI tools. Extract and run `ScanTailor-OCR-Unified`; run `sh install-user.sh` there to add a menu entry. |
-| Linux x64 · minimal | [Download smaller archive](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-minimal.tar.gz). Includes Tesseract and PDF tools. Extract and run `ScanTailor-OCR-Unified`; the same menu installation command applies. |
+**Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-The source-code ZIP is for development, not installation. Release assets include SHA-256 checksums and an acceptance-test summary.
+The release provides one installer. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 
-The Windows package targets Windows 10 version 2004 or later and Windows 11 x64. The Linux package uses Ubuntu 22.04 x64 as its build/test baseline and requires glibc 2.35 or later. These packages do not cover older Linux systems, Alpine/musl, 32-bit systems, ARM or macOS. Desktop integration on other distributions needs separate testing.
+The installer targets Windows 10 version 2004 or later and Windows 11 x64. For Linux, see the [build instructions](packaging/BUILD.en.md); the Linux build/test baseline is Ubuntu 22.04 x64 with glibc 2.35 or later.
 
-Both packages include Tesseract Fast data for Turkish, German and English and Tesseract Best data for Turkish, German, English and French. The full package also includes a Latin Paddle OCR model, UVDoc and layout-analysis models. Additional OCR languages and an optional GPU runtime can be downloaded in the app. GPU setup depends on a supported NVIDIA/CUDA environment. A small acceptance test can run with 4 GB of RAM; 8 GB or more is preferable for large books. Temporary disk-space requirements depend on the book.
+The installer includes Tesseract Fast data for Turkish, German and English and Tesseract Best data for Turkish, German, English and French. It also includes a Latin Paddle OCR model, UVDoc and layout-analysis models. Additional OCR languages and an optional GPU runtime can be downloaded in the app. GPU setup depends on a supported NVIDIA/CUDA environment. A small acceptance test can run with 4 GB of RAM; 8 GB or more is preferable for large books. Temporary disk-space requirements depend on the book.
 
 ## Choose the interface language
 

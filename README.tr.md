@@ -14,20 +14,15 @@ Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygula
 
 ## Kurulum
 
-Dağıtım dosyaları GitHub deposunun **Releases** bölümüne yüklenir. Kaynak kod ZIP'i kurulum dosyası değildir.
+**Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-| Sistem | Dosya ve kullanım |
-| --- | --- |
-| Windows x64 · tam paket | [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe). Python, Qt, Tesseract ve CPU AI modelleri dahildir. Kurulumdan sonra Başlat menüsünden açın. |
-| Windows x64 · hafif paket | [Küçük kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-minimal-setup.exe). Python, Qt, Tesseract ve PDF araçları dahildir; AI modelleri isteğe bağlıdır. |
-| Linux x64 · tam paket | [Arşivi indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz). CPU AI araçları dahildir. Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. |
-| Linux x64 · hafif paket | [Küçük arşivi indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-minimal.tar.gz). Tesseract ve PDF araçları dahildir. Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın; aynı komutla menüye ekleyebilirsiniz. |
+Sürüm sayfasında tek kurulum dosyası bulunur. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
 
-Windows paketi Windows 10 2004 ve sonrası / Windows 11 x64 için hazırlanmıştır. Linux paketi Ubuntu 22.04 x64 üzerinde derlenmiş ve sınanmıştır; glibc 2.35 veya yenisi gerekir. Eski Linux, Alpine/musl, 32 bit, ARM ve macOS bu paketin kapsamı dışındadır. Diğer dağıtımlardaki masaüstü entegrasyonu ayrıca denenmelidir.
+Kurulum Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux için [derleme talimatlarına](packaging/BUILD.md) bakın; Linux derleme ve test ortamı Ubuntu 22.04 x64, glibc 2.35 veya yenisidir.
 
 4 GB RAM ile Ubuntu 22.04 üzerinde iki sayfalık PDF, Tesseract, Paddle CPU, UVDoc ve yerleşim analizi kabul testi geçti. Büyük kitaplar için 8 GB ve üstü daha uygundur. Az boş bellekte Paddle daha hafif metin bulma modelini kullanır; PDF'nin görünür görüntüsü bu seçimden etkilenmez. Kitabın büyüklüğüne bağlı geçici disk alanı gerekir.
 
-Her iki paket Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Tam pakette ayrıca Latin Paddle OCR, UVDoc ve AI inceleme modelleri bulunur. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
+Kurulum Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Latin Paddle OCR, UVDoc ve AI inceleme modelleri de dahildir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
 
 ## İlk kitap
 
