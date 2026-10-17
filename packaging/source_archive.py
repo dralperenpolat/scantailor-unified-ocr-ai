@@ -13,9 +13,9 @@ def main():
         base=root/folder
         if base.exists():files.extend(x for x in base.rglob('*') if x.is_file() and not any(s in ('.git','__pycache__','.cache') or s.endswith('.egg-info') for s in x.relative_to(base).parts) and x.suffix not in ('.pyc','.pyo'))
     # Pure/synthetic regression tests. Local book integrations stay local.
-    for name in ('test_pdf_tools.py','test_release_runtime.py','test_paddle_memory_profile.py','test_native_execution.py','test_memory_budget.py','test_mesh_geometry.py','test_ocr_cache.py','test_pdf_optimize.py','test_pdf_layout.py','test_queue_lock.py','test_revision_queue.py','test_worker_atomic_write.py','test_native_watchdog.py','test_geometry_timeout_fallback.py','test_workspace.py','test_quality_workflow.py'):
+    for name in ('test_pdf_tools.py','test_release_runtime.py','test_native_launcher.py','test_workflow_stages.py','test_workflow_storage.py','test_paddle_memory_profile.py','test_native_execution.py','test_memory_budget.py','test_mesh_geometry.py','test_ocr_cache.py','test_pdf_optimize.py','test_pdf_layout.py','test_queue_lock.py','test_revision_queue.py','test_worker_atomic_write.py','test_native_watchdog.py','test_geometry_timeout_fallback.py','test_workspace.py','test_quality_workflow.py'):
         files.append(root/'tests'/name)
-    for name in ('native_review_state.cpp','native_stage_tools.cpp','native_i18n.cpp'):
+    for name in ('native_review_state.cpp','native_stage_tools.cpp','native_i18n.cpp','native_workflow.h'):
         files.append(root/'tests'/name)
     denied=re.compile(r'(?i)(C:[\\/]Users[\\/](?!Public)|OneDrive_'+'DUZENLENECEK'+r'|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9]{30,})')
     checksums={}

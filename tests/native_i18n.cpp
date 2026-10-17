@@ -169,7 +169,7 @@ int main(int argc,char** argv){
         while(preset->count()==0&&service.elapsed()<30000){app.processEvents();QThread::msleep(20);}
         check(preset->findData("cpu_fast")>=0,"workspace service loads CPU Fast profile");
         if(argc>1)check(workspace->grab().save(QString::fromLocal8Bit(argv[1])+"/workspace-en.png"),"English workspace screenshot");workspace->close();
-        if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){UnifiedWorkflowTest::run(window,temp.path(),argc>1?QString::fromLocal8Bit(argv[1]):QString());UnifiedWorkflowTest::editorImport(argc>3?QString::fromLocal8Bit(argv[3]):QString());}
+        if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){UnifiedWorkflowTest::queueRecovery(window,temp.path());UnifiedWorkflowTest::run(window,temp.path(),argc>1?QString::fromLocal8Bit(argv[1]):QString());UnifiedWorkflowTest::editorImport(argc>3?QString::fromLocal8Bit(argv[3]):QString());}
         window.close();app.removeTranslator(&english);app.setProperty("unifiedUiLanguage","tr");
         if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){MainWindow trWindow;trWindow.show();UnifiedWorkflowTest::layout(trWindow,argc>1?QString::fromLocal8Bit(argv[1]):QString(),"tr");}
         check(unified_i18n::text("▶ Hazırla")==QString::fromUtf8("▶ Hazırla"),"Turkish text restored without translator");
@@ -181,6 +181,7 @@ int main(int argc,char** argv){
             check(trTabs->tabText(trTabs->currentIndex())==QString::fromUtf8("PDF’den içe aktar"),"Turkish PDF tab");
             if(argc>1)check(turkish.grab().save(QString::fromLocal8Bit(argv[1])+"/pdf-import-tr.png"),"Turkish PDF tab screenshot");
         }
+        UnifiedWorkflowTest::profileProject();
         std::cout<<"PASS English/Turkish selection, persistence, separate play buttons, placeholders, filenames, OCR codes and queue controls\n";
         return 0;
     }catch(std::exception const& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}

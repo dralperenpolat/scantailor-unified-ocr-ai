@@ -15,6 +15,7 @@
 #include <QPlainTextEdit>
 #include <QSlider>
 #include <QHash>
+#include <functional>
 class UnifiedOcrOptions;
 class UnifiedPdfToolsDialog;
 class QTimer;
@@ -26,12 +27,17 @@ public:
     QJsonObject workflowOptions() const;
     void setWorkflowContext(QString const& stage);
     QString workflowOutput() const {return m_output;}
+    QString queuePath() const {return m_queuePath;}
+    bool openSavedQueue(QString const& path);
+    std::function<bool(QString const&)> importImagesForEditing;
+    std::function<bool()> editorProcessing;
     QString workflowOcrValidation() const;
     void addWorkflowFolder(QString const& folder) {addFolder(folder);}
     void openStartupSettings() {startupSettings();}
     void chooseWorkflowOutput();
     void addProject(QString const& title, QString const& path, QJsonArray const& outputs);
     bool busy() const;
+    bool pdfImportRunning() const;
     bool monitoringExternalWorker() const { return m_externalRunning; }
     void stop();
     QSize minimumSizeHint() const override { return QSize(300,140); }
@@ -59,7 +65,6 @@ public:
     void previewBook(QString const& id, int page=0);
 signals:
     void toolsRequested();
-    void importedImagesReady(QString const& folder);
     void ocrTimingChanged(QString const& mode);
     void outputFinishChanged(QJsonObject const& value);
     void pdfLayoutSettingsChanged(QJsonObject const& value);
@@ -93,6 +98,7 @@ private:
     qint64 m_monitorOffset=0;
     qint64 m_monitorQueueRead=0;
     void pollExternal();
+    void attachMonitor(QString const& path);
     void updateRevisionStatus();
     QString m_revisionJob,m_revisionToken;
     bool m_revisionStartPending=false;

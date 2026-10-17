@@ -63,7 +63,10 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
         for(int i=0;i<5;++i){if(d.exists("local-tools.json")){m_root=d.path();break;}d.cdUp();}
     }
     if(m_root.isEmpty()) m_root=QCoreApplication::applicationDirPath();
-    m_queuePath=qEnvironmentVariable("STOU_QUEUE_PATH",unified_runtime::data(m_root)+"/projects/Native_Kitaplar/kuyruk.json");
+    auto lastQueue=QSettings().value("unified/last_queue").toString();
+    if(!QFileInfo::exists(queueReadPath(lastQueue)))lastQueue.clear();
+    m_queuePath=qEnvironmentVariable("STOU_QUEUE_PATH");
+    if(m_queuePath.isEmpty())m_queuePath=lastQueue.isEmpty()?unified_runtime::data(m_root)+"/projects/Native_Kitaplar/kuyruk.json":lastQueue;
     m_controlPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/control-"+uid()+".json";
     m_output=unified_runtime::data(m_root)+"/output/Native_Kitaplar";
     m_previewRefresh=new QTimer(this);m_previewRefresh->setSingleShot(true);m_previewRefresh->setInterval(300);
@@ -219,7 +222,11 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
         if(!value.value("setup_complete").toBool())QTimer::singleShot(0,this,[this]{if(!busy())startupSettings();});
     }
     m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));
-    m_monitorRequest=qEnvironmentVariable("STOU_MONITOR_REQUEST");
+    attachMonitor(qEnvironmentVariable("STOU_MONITOR_REQUEST",m_queuePath==lastQueue?QSettings().value("unified/last_request").toString():QString()));
+    auto monitor=new QTimer(this);monitor->setInterval(1000);connect(monitor,&QTimer::timeout,this,&UnifiedPanel::pollExternal);monitor->start();
+}
+void UnifiedPanel::attachMonitor(QString const& path){
+    m_monitorRequest=path;m_monitorLog.clear();m_monitorOffset=0;m_monitorQueueRead=0;m_externalRunning=false;
     if(!m_monitorRequest.isEmpty()){
         QFile request(m_monitorRequest);
         if(request.open(QIODevice::ReadOnly)){
@@ -231,9 +238,49 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
             m_paper->setCurrentIndex(qMax(0,m_paper->findData(r.value("paper").toString())));m_margin->setValue(r.value("margin_mm").toDouble(10));m_targetText->setValue(r.value("target_x_mm").toDouble());m_cleanup->setChecked(r.value("page_cleanup").toBool(true));m_fitContent->setChecked(r.value("content_fit").toBool(true));
             // Existing completed-page records are already loaded. Only tail new events.
             m_monitorOffset=QFileInfo(m_monitorLog).size();pollExternal();
-            auto monitor=new QTimer(this);monitor->setInterval(1000);connect(monitor,&QTimer::timeout,this,&UnifiedPanel::pollExternal);monitor->start();
         }
     }
+}
+bool UnifiedPanel::openSavedQueue(QString const& path){
+    using unified_workflow::text;
+    auto fail=[this](QString const& message){m_status->setText(message);emit toolsRequested();return false;};
+    if(busy()||(editorProcessing&&editorProcessing()))return fail(text("Çalışma kaydını açmadan önce mevcut işlemin bitmesini bekleyin.","Wait for the current operation before opening another saved run."));
+    QString candidate=QFileInfo(path).absoluteFilePath(),requestPath;
+    QJsonObject document;
+    // Accept a queue, an active-batch pointer, a request or its session file.
+    if(candidate.endsWith(".session.json"))candidate.chop(QString(".session.json").size());
+    for(int depth=0;depth<3;++depth){
+        QFile file(queueReadPath(candidate));QJsonParseError error;
+        if(!file.open(QIODevice::ReadOnly))return fail(text("Çalışma kaydı okunamadı: ","Could not read saved run: ")+candidate);
+        auto parsed=QJsonDocument::fromJson(file.readAll(),&error);
+        if(error.error!=QJsonParseError::NoError||!parsed.isObject())return fail(text("Çalışma kaydı geçersiz: ","Invalid saved run: ")+candidate);
+        document=parsed.object();
+        if(document.contains("jobs"))break;
+        auto reference=document.value("queue").toString();
+        if(reference.isEmpty())reference=document.value("request").toString();
+        if(reference.isEmpty())break;
+        auto request=document.value("request").toString();
+        if(!request.isEmpty())requestPath=QDir(QFileInfo(candidate).absolutePath()).absoluteFilePath(request);
+        else if(document.contains("control"))requestPath=candidate;
+        candidate=QDir(QFileInfo(candidate).absolutePath()).absoluteFilePath(reference);
+    }
+    auto schema=document.value("schema").toInt();
+    if((schema!=1&&schema!=2)||!document.value("jobs").isArray())return fail(text("Bu dosya bir kitap kuyruğu veya çalışma kaydı değil.","This file is not a book queue or saved run."));
+    QSet<QString> ids;
+    for(auto value:document.value("jobs").toArray()){
+        auto id=value.toObject().value("id").toString();
+        if(id.isEmpty()||ids.contains(id))return fail(text("Çalışma kaydında eksik veya yinelenen kitap kimliği var.","Saved run contains missing or duplicate book IDs."));
+        ids.insert(id);
+    }
+    m_previewRefresh->stop();++m_selectionRequest;m_previewJob.clear();m_previewPath.clear();m_livePreviews.clear();
+    m_revisionJob.clear();m_revisionToken.clear();m_revisionStartPending=false;m_revisionStatus->hide();
+    m_queuePath=candidate;m_jobs={};m_pages->clear();m_books->clear();m_progress->setValue(0);
+    m_controlPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/control-"+uid()+".json";
+    loadQueue();refreshBooks();m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));
+    attachMonitor(requestPath);QSettings().setValue("unified/last_queue",m_queuePath);QSettings().setValue("unified/last_request",requestPath);
+    m_queueContext->setText(text("Açık çalışma kaydı: ","Open saved run: ")+m_queuePath);
+    m_status->setText(text("Çalışma kaydı açıldı · kitap sayısı: ","Saved run opened · books: ")+QString::number(m_jobs.size())+"\n"+text("Kaydedilmiş sonuçlar korundu. Devam etmek için PDF oluştur / devam et düğmesini kullanın.","Saved results are preserved. Use Create PDF / resume to continue."));
+    showToolsTab(0);emit toolsRequested();return true;
 }
 void UnifiedPanel::setWorkflowContext(QString const& stage){
     m_panelHeight->hide();for(auto name:{"legacyPanelHeightLabel","legacyPanelHeightNote"})if(auto widget=findChild<QWidget*>(name))widget->hide();
@@ -263,6 +310,7 @@ QString UnifiedPanel::snapshotPath(){QString dir=unified_runtime::data(m_root)+"
 QJsonObject UnifiedPanel::pdfLayoutOptions()const{return {{"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"target_x_mm",m_targetText->value()},{"content_fit",m_fitContent->isChecked()}};}
 void UnifiedPanel::setPdfLayoutOptions(QJsonObject const& v){m_paper->setCurrentIndex(qMax(0,m_paper->findData(v.value("paper").toString())));m_margin->setValue(v.value("margin_mm").toDouble(10));m_targetText->setValue(v.value("target_x_mm").toDouble());m_fitContent->setChecked(v.value("content_fit").toBool(true));}
 bool UnifiedPanel::busy()const{return m_externalRunning || m_worker.state()!=QProcess::NotRunning || (m_ocr&&m_ocr->busy()) || (m_pdfTools&&m_pdfTools->running());}
+bool UnifiedPanel::pdfImportRunning()const{return m_pdfTools&&m_pdfTools->running();}
 void UnifiedPanel::saveQueue(){writeJson(m_queuePath,{{"schema",QFileInfo::exists(m_queuePath+".sqlite3")?2:1},{"output_root",m_output},{"jobs",m_jobs}});}
 void UnifiedPanel::enqueueJob(QJsonObject const& job){
     auto token=uid();writeJson(m_queuePath+".commands/"+token+".request.json",{{"id",token},{"action","enqueue"},{"job",job}});
@@ -291,10 +339,13 @@ void UnifiedPanel::loadQueue(){
     }
     m_jobs=saved;m_output=d.value("output_root").toString(m_output);
     QSignalBlocker block(m_pages);m_pages->clear();
-    for(auto value:m_jobs){auto job=value.toObject();for(auto pageValue:job.value("pages").toArray()){
-        auto page=pageValue.toObject();QString path=page.value("preview").toString();if(!QFileInfo::exists(path))continue;
-        auto item=new QTreeWidgetItem(m_pages,{job.value("title").toString()+" · "+QString::number(page.value("page").toInt()),page.value("warning").toBool()?trU("Kontrol edin"):trU("Sayfa hazır"),trU("Kaydedilmiş PDF görünümü")});item->setData(0,Qt::UserRole,path);item->setData(0,Qt::UserRole+1,job.value("id").toString());
-        while(m_pages->topLevelItemCount()>500)delete m_pages->takeTopLevelItem(0);
+    // This view only shows recent records. Do not stat every historical image
+    // on a cloud/network drive at startup; selection validates its own files.
+    for(int j=m_jobs.size()-1;j>=0&&m_pages->topLevelItemCount()<500;--j){auto job=m_jobs.at(j).toObject();auto pages=job.value("pages").toArray();
+    for(int p=pages.size()-1;p>=0&&m_pages->topLevelItemCount()<500;--p){
+        auto page=pages.at(p).toObject();QString path=page.value("preview").toString();if(path.isEmpty())continue;
+        auto item=new QTreeWidgetItem({job.value("title").toString()+" · "+QString::number(page.value("page").toInt()),page.value("warning").toBool()?trU("Kontrol edin"):trU("Sayfa hazır"),trU("Kaydedilmiş PDF görünümü")});item->setData(0,Qt::UserRole,path);item->setData(0,Qt::UserRole+1,job.value("id").toString());
+        m_pages->insertTopLevelItem(0,item);
     }}
 }
 void UnifiedPanel::refreshBooks(){
@@ -426,7 +477,7 @@ void UnifiedPanel::updateRevisionStatus(){
 }
 void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     if(!prepare&&ocrTiming()!="none"){QString error=m_ocr->validation();if(!error.isEmpty()){m_status->setText(error);return;}}
-    if(busy()||m_jobs.isEmpty())return;
+    if(busy()||(editorProcessing&&editorProcessing())||m_jobs.isEmpty())return;
     if(!m_monitorRequest.isEmpty())loadQueue();
     applyResources();if(!revisionsOnly)saveQueue();m_paused=false;control("run");
     QJsonObject request{{"queue",m_queuePath},{"control",m_controlPath},{"root",m_root},{"cli",unified_runtime::cli()},{"mode",prepare?"prepare":"export"},{"appearance",m_appearance->currentData().toString()},{"paper",m_paper->currentData().toString()},{"threads",m_threads->value()},{"delay_ms",m_delay->value()},{"auto_warp",m_autoWarp->isChecked()}};
@@ -517,7 +568,10 @@ void UnifiedPanel::event(QJsonObject const& o){
     }
 }
 void UnifiedPanel::preview(QString const& path){
-    if(path.isEmpty()||!QFileInfo::exists(path))return;if(path.endsWith(".pdf",Qt::CaseInsensitive)){QDesktopServices::openUrl(QUrl::fromLocalFile(path));return;}
+    if(path.isEmpty()||!QFileInfo::exists(path)){
+        m_status->setText(unified_workflow::text("Bu önizleme dosyası artık bulunmuyor. Kitap satırını seçerek mevcut sonuçları açabilirsiniz.","This preview file is no longer available. Select the book row to view its available results."));return;
+    }
+    if(path.endsWith(".pdf",Qt::CaseInsensitive)){QDesktopServices::openUrl(QUrl::fromLocalFile(path));return;}
     auto dialog=new QDialog(this);dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowTitle(QFileInfo(path).fileName()+trU(" · tamamlanan sayfa"));dialog->resize(850,850);
     auto layout=new QVBoxLayout(dialog);auto bar=new QHBoxLayout;layout->addLayout(bar);
     QImage full(path);if(full.isNull()){dialog->deleteLater();m_status->setText(trU("Önizleme resmi okunamadı: ")+path);return;}
@@ -543,8 +597,9 @@ void UnifiedPanel::openPdfTools(QString const& mode){
     m_pdfTools->setMode(mode);showToolsTab(m_pdfToolsTab);emit toolsRequested();
 }
 void UnifiedPanel::importPdf(QString const& path,bool editorOnly){
-    if(m_pdfTools->running())return;
+    if(m_pdfTools->running()||(editorProcessing&&editorProcessing()))return;
     m_importEditorOnly=editorOnly;openPdfTools("import");
+    m_pdfTools->setProperty("editorImport",editorOnly);
     if(editorOnly){auto folder=QDir(m_output).filePath(".stou-imports/"+uid());QDir().mkpath(folder);writeJson(folder+"/.stou-import-session.json",{{"source",path}});m_pdfTools->useOutputFolder(folder);}
     m_pdfTools->selectSource(path,true);
 }
@@ -552,7 +607,10 @@ bool UnifiedPanel::addImportedPdf(QJsonObject const& result){
     const QString folder=result.value("folder").toString();
     if(folder.isEmpty()||!QFileInfo(folder).isDir()||result.value("pages").toInt()<1)return false;
     if(QDir(folder).entryList({"page-*.png"},QDir::Files).size()!=result.value("pages").toInt())return false;
-    if(m_importEditorOnly){m_importEditorOnly=false;emit importedImagesReady(folder);return true;}
+    if(m_importEditorOnly){
+        if(!importImagesForEditing||!importImagesForEditing(folder))return false;
+        m_importEditorOnly=false;return true;
+    }
     // Re-importing the same receipt must not reset an already edited book.
     loadQueue();
     for(auto value:m_jobs)if(QFileInfo(value.toObject().value("folder").toString()).absoluteFilePath()==QFileInfo(folder).absoluteFilePath()){return true;}

@@ -8,6 +8,20 @@ from scantailor_ocr_unified.native_worker import NativeCrash, Worker
 
 
 class ReleaseRuntime(unittest.TestCase):
+    def test_interrupted_language_copy_never_publishes_partial_model(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=root/'app';data=root/'user'
+            source=app/'resources/tessdata_fast/eng.traineddata';source.parent.mkdir(parents=True);source.write_bytes(b'complete model')
+            def interrupted(src,dest):
+                dest.write(b'partial');raise OSError('simulated interrupted copy')
+            with patch.dict(os.environ,{'STOU_DATA':str(data)}):
+                with patch('scantailor_ocr_unified.runtime_layout.shutil.copyfileobj',side_effect=interrupted):
+                    with self.assertRaises(OSError):initialize(app)
+                target=data/'resources/tessdata_fast/eng.traineddata'
+                self.assertFalse(target.exists())
+                self.assertEqual(list(target.parent.iterdir()),[])
+                initialize(app);self.assertEqual(target.read_bytes(),b'complete model')
+
     def test_partial_user_model_cache_does_not_hide_bundled_or_shared_models(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder).resolve();app=root/'app';data=root/'user';shared=root/'shared'
