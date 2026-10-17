@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.5.0 geliştirme
+# ScanTailor OCR Unified · 0.5.0
 
 [English](README.md) | **Türkçe**
 
-0.5.0 çalışması; çıktı ve geçici klasör seçilen başlangıç sihirbazı, Tesseract Fast ile hızlı CPU profili, OCR’ı sona bırakma, SQLite kuyruk ve depolama/PDF/kontrol merkezini ekler. [Yeni sürümün kullanım ve derleme notları](packaging/BUILD-0.5.0.md). Aşağıdaki kurulum bilgileri, 0.5.0 paket denetimleri tamamlanana kadar yayımlanmış 0.4.5 sürümüne aittir.
+0.5.0 sürümü; 0–12 sıralı işlem ekranı, sayfa bazlı PDF/OCR güncellemesi, başlangıç klasörü ayarları, Tesseract Fast ile hızlı CPU profili, OCR’ı sona bırakma, SQLite kitap kuyruğu ve proje önbelleği yönetimini ekler. [0.5.0 sürümünü indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/tag/v0.5.0) · [Kullanım ve derleme notları](packaging/BUILD-0.5.0.md).
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 
@@ -18,18 +18,20 @@ Dağıtım dosyaları GitHub deposunun **Releases** bölümüne yüklenir. Kayna
 
 | Sistem | Dosya ve kullanım |
 | --- | --- |
-| Windows x64 | `scantailor-ocr-unified-0.4.5-windows-x64-setup.exe` dosyasını çalıştırın. Python, Qt, CPU OCR ve AI modelleri dahildir; ayrıca Python kurmayın. Başlat menüsünden açın. |
-| Linux x64 | `scantailor-ocr-unified-0.4.5-linux-x64.tar.gz` arşivini açın. İçindeki `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. |
+| Windows x64 · tam paket | [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe). Python, Qt, Tesseract ve CPU AI modelleri dahildir. Kurulumdan sonra Başlat menüsünden açın. |
+| Windows x64 · hafif paket | [Küçük kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-minimal-setup.exe). Python, Qt, Tesseract ve PDF araçları dahildir; AI modelleri isteğe bağlıdır. |
+| Linux x64 · tam paket | [Arşivi indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz). CPU AI araçları dahildir. Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. |
+| Linux x64 · hafif paket | [Küçük arşivi indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-minimal.tar.gz). Tesseract ve PDF araçları dahildir. Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın; aynı komutla menüye ekleyebilirsiniz. |
 
 Windows paketi Windows 10 2004 ve sonrası / Windows 11 x64 için hazırlanmıştır. Linux paketi Ubuntu 22.04 x64 üzerinde derlenmiş ve sınanmıştır; glibc 2.35 veya yenisi gerekir. Eski Linux, Alpine/musl, 32 bit, ARM ve macOS bu paketin kapsamı dışındadır. Diğer dağıtımlardaki masaüstü entegrasyonu ayrıca denenmelidir.
 
 4 GB RAM ile Ubuntu 22.04 üzerinde iki sayfalık PDF, Tesseract, Paddle CPU, UVDoc ve yerleşim analizi kabul testi geçti. Büyük kitaplar için 8 GB ve üstü daha uygundur. Az boş bellekte Paddle daha hafif metin bulma modelini kullanır; PDF'nin görünür görüntüsü bu seçimden etkilenmez. Kitabın büyüklüğüne bağlı geçici disk alanı gerekir.
 
-Paket Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini, Latin Paddle OCR modelini ve AI inceleme modellerini içerir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
+Her iki paket Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Tam pakette ayrıca Latin Paddle OCR, UVDoc ve AI inceleme modelleri bulunur. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
 
 ## İlk kitap
 
-Geliştirme arayüzünde işlem sırası, ayrı çalıştırma düğmeleri ve süreleriyle **Aşamalar** bölümündedir:
+İşlem sırası, ayrı çalıştırma düğmeleri ve süreleriyle **Aşamalar** bölümündedir:
 
 **0 Girdi → 1 Yön → 2 Bölme → 3 Geometri → 4 AI geometri → 5 İçerik → 6 AI içerik → 7 Kenarlar → 8 Çıktı → 9 Parmak/leke → 10 PDF → 11 OCR → 12 Önbellek temizliği.**
 
