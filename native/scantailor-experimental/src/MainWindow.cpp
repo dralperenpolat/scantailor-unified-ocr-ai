@@ -1819,7 +1819,9 @@ void
 MainWindow::openProject(QString const& project_file)
 {
     if(QFileInfo(project_file).suffix().compare("json",Qt::CaseInsensitive)==0){
-        if(m_unified->openSavedQueue(project_file)&&!isProjectLoaded())setWindowTitle(QFileInfo(m_unified->queuePath()).completeBaseName()+" · "+windowTitle());
+        if(m_unified->openSavedQueue(project_file)&&!isProjectLoaded()){
+            updateWindowTitle();setWindowTitle(QFileInfo(m_unified->queuePath()).completeBaseName()+" · "+windowTitle());
+        }
         return;
     }
     if(QFileInfo(project_file).suffix().compare("pdf",Qt::CaseInsensitive)==0){m_unified->importPdf(project_file);return;}

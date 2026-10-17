@@ -40,6 +40,7 @@ public:
         auto path=folder+"/saved-run.json";auto bytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",folder+"/recovered-output"},{"jobs",QJsonArray{QJsonObject{{"id","recovery"},{"title","Recovered book"},{"status","Durduruldu"},{"pages",pages}}}}}).toJson();put(path,bytes);
         window.openProject(path);check(panel->queuePath()==path,"File/Open routes JSON to run recovery");
         check(window.windowTitle().contains(title),"opening saved run keeps application identity");
+        auto recoveredTitle=window.windowTitle();window.openProject(path);check(window.windowTitle()==recoveredTitle,"repeated saved-run launch keeps a stable window title");
         check(!panel->busy(),"opening saved run never starts processing");
         auto recent=panel->findChild<QTreeWidget*>("unifiedCompletedPages");check(recent->topLevelItemCount()==500,"legacy queue only materializes 500 recent records");
         check(recent->topLevelItem(0)->text(0).endsWith("11501")&&recent->topLevelItem(499)->text(0).endsWith("12000"),"recent records retain correct order even with offline previews");
