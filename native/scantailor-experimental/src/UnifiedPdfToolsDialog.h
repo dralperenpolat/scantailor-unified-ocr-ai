@@ -99,6 +99,7 @@ public:
     }
     ~UnifiedPdfToolsDialog(){if(running()){m_process.kill();m_process.waitForFinished(2000);}}
     bool running()const{return m_process.state()!=QProcess::NotRunning;}
+    QString statusText()const{return m_status->text();}
     void stop(){m_stop->click();}
     void useOutputFolder(QString const& path){if(!running())m_destination->setText(path);}
     void setMode(QString const& mode){if(!running()){int i=m_mode->findData(mode);if(i>=0)m_mode->setCurrentIndex(i);}}

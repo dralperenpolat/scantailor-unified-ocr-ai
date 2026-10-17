@@ -311,6 +311,7 @@ QJsonObject UnifiedPanel::pdfLayoutOptions()const{return {{"paper",m_paper->curr
 void UnifiedPanel::setPdfLayoutOptions(QJsonObject const& v){m_paper->setCurrentIndex(qMax(0,m_paper->findData(v.value("paper").toString())));m_margin->setValue(v.value("margin_mm").toDouble(10));m_targetText->setValue(v.value("target_x_mm").toDouble());m_fitContent->setChecked(v.value("content_fit").toBool(true));}
 bool UnifiedPanel::busy()const{return m_externalRunning || m_worker.state()!=QProcess::NotRunning || (m_ocr&&m_ocr->busy()) || (m_pdfTools&&m_pdfTools->running());}
 bool UnifiedPanel::pdfImportRunning()const{return m_pdfTools&&m_pdfTools->running();}
+QString UnifiedPanel::pdfImportStatus()const{return m_pdfTools?m_pdfTools->statusText():QString();}
 void UnifiedPanel::saveQueue(){writeJson(m_queuePath,{{"schema",QFileInfo::exists(m_queuePath+".sqlite3")?2:1},{"output_root",m_output},{"jobs",m_jobs}});}
 void UnifiedPanel::enqueueJob(QJsonObject const& job){
     auto token=uid();writeJson(m_queuePath+".commands/"+token+".request.json",{{"id",token},{"action","enqueue"},{"job",job}});

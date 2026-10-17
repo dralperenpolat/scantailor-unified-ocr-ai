@@ -1249,6 +1249,17 @@ MainWindow::currentPageChanged(
     PageInfo const& page_info, QRectF const& thumb_rect,
     ThumbnailSequence::SelectionFlags const flags)
 {
+    if ((flags & ThumbnailSequence::SELECTED_BY_USER) && isBatchProcessingInProgress())
+    {
+        // Navigation must not act as an implicit Stop button. Keep the active
+        // batch and its page selection until the user explicitly stops it.
+        PageInfo const active = m_ptrBatchQueue->selectedPage();
+        if (!active.isNull()) m_ptrThumbSequence->setSelection(active.id());
+        QMainWindow::statusBar()->showMessage(unified_workflow::text(
+            "İşlem devam ediyor. Sayfa değiştirmek için tamamlanmasını bekleyin veya Durdur'u kullanın.",
+            "Processing continues. Wait for completion or use Stop before changing pages."), 8000);
+        return;
+    }
     m_selectedPage.set(page_info.id(), getCurrentView());
 
     if ((flags & ThumbnailSequence::SELECTED_BY_USER) || focusButton->isChecked())
@@ -1261,11 +1272,7 @@ MainWindow::currentPageChanged(
 
     if (flags & ThumbnailSequence::SELECTED_BY_USER)
     {
-        if (isBatchProcessingInProgress())
-        {
-            stopBatchProcessing();
-        }
-        else if (!(flags & ThumbnailSequence::REDUNDANT_SELECTION))
+        if (!(flags & ThumbnailSequence::REDUNDANT_SELECTION))
         {
             // Start loading / processing the newly selected page.
             updateMainArea();

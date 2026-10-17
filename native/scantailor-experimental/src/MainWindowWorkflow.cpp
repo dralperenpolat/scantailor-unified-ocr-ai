@@ -36,6 +36,7 @@
 #include <QUuid>
 #include <QTabWidget>
 #include <QTextStream>
+#include <QSignalBlocker>
 
 using unified_workflow::text;
 
@@ -135,6 +136,15 @@ void MainWindow::showWorkflowTools(){
 }
 bool MainWindow::selectWorkflowRow(int row){
     auto id=filterList->stepId(row);if(id.isEmpty())return false;
+    if(isBatchProcessingInProgress()){
+        // Menu shortcuts can select a row even when the stage list is disabled.
+        // Do not let that clear the active batch or replace its editor context.
+        QSignalBlocker selection(filterList->selectionModel());filterList->selectStep(m_workflowStep);
+        QMainWindow::statusBar()->showMessage(text(
+            "İşlem devam ediyor. Aşama değiştirmek için tamamlanmasını bekleyin veya Durdur'u kullanın.",
+            "Processing continues. Wait for completion or use Stop before changing stages."),8000);
+        return false;
+    }
     if(m_unifiedViewStack->currentWidget()==m_queuePreview&&filterList->filterForRow(row)>=0){m_unified->editPreview(filterList->filterForRow(row));return false;}
     m_workflowStep=id;m_unified->setWorkflowContext(id);
     dockWidgetFilters->setWindowTitle(text("Aşamalar · resimden PDF’ye","Stages · images to PDF"));
@@ -236,7 +246,9 @@ void MainWindow::refreshWorkflowState(){
     findChild<QPushButton*>("workflowOpenPdf")->setEnabled(QFileInfo::exists(m_workflowPdf));
     findChild<QPushButton*>("workflow_cleanup_apply")->setEnabled(available&&!m_workflowReview.isEmpty());
     findChild<QPushButton*>("workflow_cleanup_undo")->setEnabled(available&&!m_workflowReview.isEmpty()&&m_workflowReceipt.value("applied").toBool());
-    m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
+    if(m_unified->pdfImportRunning())m_workflowDirty->setText(text("PDF içe aktarımı devam ediyor: ","PDF import continues: ")+m_unified->pdfImportStatus()+"\n"+text("İlerlemeye dönmek için PDF içe aktar düğmesini kullanın.","Use Import PDF to return to its progress."));
+    else if(running)m_workflowDirty->setText(text("İşlem arka planda devam ediyor: ","Processing continues in the background: ")+m_workflowStatus->text());
+    else m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
 }
 void MainWindow::runWorkflowStep(QString const& id){
     if(!isProjectLoaded()||m_unified->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;

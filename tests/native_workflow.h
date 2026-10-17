@@ -89,6 +89,13 @@ public:
         auto queue=panel->findChild<QTreeWidget*>("unifiedBooks");int before=queue->topLevelItemCount();
         panel->importPdf(source,true);
         auto pdf=static_cast<UnifiedPdfToolsDialog*>(panel->findChild<QWidget*>("unifiedPdfTools"));check(pdf&&pdf->running(),"editor PDF import starts");
+        auto selectedPdf=pdf->findChild<QLineEdit*>("pdfToolsSource")->text();
+        for(auto step:{"help","input","settings","content"}){
+            window.filterList->selectStep(step);
+            check(pdf->running()&&pdf->findChild<QLineEdit*>("pdfToolsSource")->text()==selectedPdf,"screen navigation preserves active PDF import and its source");
+        }
+        panel->openPdfTools();check(pdf->running(),"returning to PDF progress does not restart or cancel import");
+        window.refreshWorkflowState();check(window.m_workflowDirty->text().contains("PDF import continues"),"PDF import progress remains visible outside its tab");
         window.refreshWorkflowState();check(!window.findChild<QPushButton*>("workflowRun")->isEnabled()&&!window.findChild<QToolButton*>("stagePlay_content")->isEnabled(),"import disables conflicting stage actions");
         window.runWorkflowStep("content");check(!window.isBatchProcessingInProgress(),"direct stage action also refuses overlapping import");
         window.openProject(existing.path()+"/blocked.ScanTailor");check(window.isProjectLoaded(),"File/Open also refuses project replacement during import");
@@ -158,7 +165,19 @@ public:
         std::cerr<<"workflow input"<<std::endl;
         window.importWorkflowImages(files);check(window.isProjectLoaded(),"input images open an editable project");
         std::cerr<<"workflow content"<<std::endl;
-        window.runWorkflowStep("content");wait([&]{return !window.isBatchProcessingInProgress();});
+        window.runWorkflowStep("content");
+        check(window.isBatchProcessingInProgress(),"content batch starts before navigation regression");
+        auto activeQueue=window.m_ptrBatchQueue.get();auto activeFilter=window.m_curFilter;auto activeStep=window.m_workflowStep;
+        auto otherPage=window.m_ptrPages->toPageSequence(PAGE_VIEW).pageAt(1);
+        window.currentPageChanged(otherPage,QRectF(),ThumbnailSequence::SELECTED_BY_USER);
+        check(window.isBatchProcessingInProgress()&&window.m_ptrBatchQueue.get()==activeQueue,"thumbnail navigation must not cancel a running batch");
+        for(auto step:{"help","settings","orientation"}){
+            window.filterList->selectStep(step);
+            check(window.isBatchProcessingInProgress()&&window.m_ptrBatchQueue.get()==activeQueue&&window.m_curFilter==activeFilter,"stage navigation preserves the running batch and filter");
+            check(window.filterList->currentStep()==activeStep,"unsafe stage navigation restores the active stage");
+        }
+        wait([&]{return !window.isBatchProcessingInProgress();});
+        check(window.m_batchDone==2,"both pages finish after attempted navigation");
         auto settings=window.m_ptrStages->selectContentFilter()->getSettings();
         auto samples=unified_content::collect(*window.m_ptrPages,*window.m_ptrStages);check(samples.size()==2,"normal content stage prepared both pages");
         auto sample=samples.front();auto params=settings->getPageParams(sample.page.id());check(bool(params),"content params available");
@@ -187,6 +206,12 @@ public:
         check(QFileInfo::exists(firstPdf),"refresh preserves previous PDF version");
         std::cerr<<"workflow OCR"<<std::endl;
         window.runWorkflowStep("ocr");
+        auto ocrProcess=window.m_workflowProcess;
+        for(auto step:{"help","settings","input","content"}){
+            window.filterList->selectStep(step);
+            check(window.m_workflowProcess==ocrProcess&&ocrProcess->state()!=QProcess::NotRunning,"screen navigation preserves background OCR");
+            window.refreshWorkflowState();check(window.m_workflowDirty->text().contains("background"),"background operation remains visible on other screens");
+        }
         wait([&]{return window.m_workflowProcess->state()==QProcess::NotRunning;});
         if(!window.m_workflowPdf.contains("-OCR.pdf"))std::cerr<<window.m_workflowStatus->text().toUtf8().constData()<<std::endl;
         check(window.m_workflowPdf.contains("-OCR.pdf"),"real Tesseract OCR runs as the final stage");

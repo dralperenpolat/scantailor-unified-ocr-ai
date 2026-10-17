@@ -38,6 +38,7 @@ public:
     void addProject(QString const& title, QString const& path, QJsonArray const& outputs);
     bool busy() const;
     bool pdfImportRunning() const;
+    QString pdfImportStatus() const;
     bool monitoringExternalWorker() const { return m_externalRunning; }
     void stop();
     QSize minimumSizeHint() const override { return QSize(300,140); }
