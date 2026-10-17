@@ -221,6 +221,11 @@ TARGET_LINK_LIBRARIES(
     dewarping zones interaction imageproc math foundation
     ${EXTRA_LIBS}
 )
+IF(QT_DEFAULT_MAJOR_VERSION EQUAL 5)
+    TARGET_LINK_LIBRARIES(scantailor-experimental Qt5::Network)
+ELSE()
+    TARGET_LINK_LIBRARIES(scantailor-experimental Qt6::Network)
+ENDIF()
 SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.5.0" CACHE STRING "GUI executable name")
 SET_TARGET_PROPERTIES(
     scantailor-experimental PROPERTIES

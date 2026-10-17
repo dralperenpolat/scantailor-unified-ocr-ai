@@ -105,7 +105,8 @@ CommandLine::parseCli(QStringList const& argv)
             m_options[key] = "true";
         }
         else if ((rx_project_match = rx_project.match(argv[i])).hasMatch()
-                 || (m_gui && QFileInfo(argv[i]).suffix().compare("pdf", Qt::CaseInsensitive)==0))
+                 || (m_gui && (QFileInfo(argv[i]).suffix().compare("pdf", Qt::CaseInsensitive)==0
+                            || QFileInfo(argv[i]).suffix().compare("json", Qt::CaseInsensitive)==0)))
         {
             // project file
             CommandLine::m_projectFile = argv[i];

@@ -1249,6 +1249,17 @@ MainWindow::currentPageChanged(
     PageInfo const& page_info, QRectF const& thumb_rect,
     ThumbnailSequence::SelectionFlags const flags)
 {
+    if ((flags & ThumbnailSequence::SELECTED_BY_USER) && isBatchProcessingInProgress())
+    {
+        // Navigation must not act as an implicit Stop button. Keep the active
+        // batch and its page selection until the user explicitly stops it.
+        PageInfo const active = m_ptrBatchQueue->selectedPage();
+        if (!active.isNull()) m_ptrThumbSequence->setSelection(active.id());
+        QMainWindow::statusBar()->showMessage(unified_workflow::text(
+            "İşlem devam ediyor. Sayfa değiştirmek için tamamlanmasını bekleyin veya Durdur'u kullanın.",
+            "Processing continues. Wait for completion or use Stop before changing pages."), 8000);
+        return;
+    }
     m_selectedPage.set(page_info.id(), getCurrentView());
 
     if ((flags & ThumbnailSequence::SELECTED_BY_USER) || focusButton->isChecked())
@@ -1261,11 +1272,7 @@ MainWindow::currentPageChanged(
 
     if (flags & ThumbnailSequence::SELECTED_BY_USER)
     {
-        if (isBatchProcessingInProgress())
-        {
-            stopBatchProcessing();
-        }
-        else if (!(flags & ThumbnailSequence::REDUNDANT_SELECTION))
+        if (!(flags & ThumbnailSequence::REDUNDANT_SELECTION))
         {
             // Start loading / processing the newly selected page.
             updateMainArea();
@@ -1786,7 +1793,7 @@ MainWindow::openProject()
     QString const project_file(
         QFileDialog::getOpenFileName(
             this, tr("Open Project"), project_dir,
-            tr("Scan Tailor Projects")+" / PDF (*.ScanTailor *.pdf *.PDF);;"+tr("Scan Tailor Projects")+" (*.ScanTailor);;PDF (*.pdf *.PDF)"
+            tr("Scan Tailor Projects")+" / PDF / JSON (*.ScanTailor *.pdf *.PDF *.json);;"+tr("Scan Tailor Projects")+" (*.ScanTailor);;PDF (*.pdf *.PDF);;JSON (*.json)"
         )
     );
     if (project_file.isEmpty())
@@ -1795,8 +1802,7 @@ MainWindow::openProject()
         return;
     }
 
-    // Importing a PDF adds a book; it must not close an unsaved editor project.
-    if(QFileInfo(project_file).suffix().compare("pdf",Qt::CaseInsensitive)!=0&&!closeProjectInteractive())return;
+    // The selected file is validated before replacing the editor project.
     openProject(project_file);
 }
 
@@ -1819,7 +1825,16 @@ void MainWindow::dropEvent(QDropEvent* event)
 void
 MainWindow::openProject(QString const& project_file)
 {
+    if(QFileInfo(project_file).suffix().compare("json",Qt::CaseInsensitive)==0){
+        if(m_unified->openSavedQueue(project_file)&&!isProjectLoaded()){
+            updateWindowTitle();setWindowTitle(QFileInfo(m_unified->queuePath()).completeBaseName()+" · "+windowTitle());
+        }
+        return;
+    }
     if(QFileInfo(project_file).suffix().compare("pdf",Qt::CaseInsensitive)==0){m_unified->importPdf(project_file);return;}
+    if(m_unified->pdfImportRunning()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning)){
+        QMainWindow::statusBar()->showMessage(unified_workflow::text("Proje açmadan önce mevcut işlemin bitmesini bekleyin.","Wait for the current operation before opening a project."),15000);return;
+    }
     QFile file(project_file);
     if (!file.open(QIODevice::ReadOnly))
     {
@@ -1842,6 +1857,7 @@ MainWindow::openProject(QString const& project_file)
 
     file.close();
 
+    if(!closeProjectInteractive())return;
     ProjectOpeningContext* context = new ProjectOpeningContext(this, project_file, doc);
     connect(context, SIGNAL(done(ProjectOpeningContext*)), SLOT(projectOpened(ProjectOpeningContext*)));
     context->proceed();

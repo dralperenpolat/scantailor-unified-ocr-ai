@@ -24,6 +24,41 @@ class UnifiedWorkflowTest {
         QApplication::processEvents();
     }
 public:
+    static void profileProject(){
+        auto path=qEnvironmentVariable("STOU_TEST_PROJECT");if(path.isEmpty())return;
+        MainWindow window;window.show();QElapsedTimer clock;clock.start();window.openProject(path);
+        wait([&]{return window.isProjectLoaded();});auto openMs=clock.elapsed();
+        clock.restart();auto stamp=window.workflowFingerprint();auto firstMs=clock.elapsed();clock.restart();
+        for(int i=0;i<5;++i)check(window.workflowFingerprint()==stamp,"large project fingerprint stays stable");
+        std::cerr<<"large project: pages="<<window.workflowPages().size()<<" open_ms="<<openMs<<" fingerprint_ms="<<firstMs<<" repeat_average_ms="<<clock.elapsed()/5<<std::endl;
+        window.m_closing=true;
+    }
+    static void queueRecovery(MainWindow& window,QString const& folder){
+        auto panel=window.m_unified;auto original=panel->queuePath();auto title=window.windowTitle();
+        auto put=[](QString const& path,QByteArray const& bytes){QFile file(path);check(file.open(QIODevice::WriteOnly),"queue recovery fixture");check(file.write(bytes)==bytes.size(),"queue recovery bytes");};
+        QJsonArray pages;for(int i=1;i<=12000;++i)pages.append(QJsonObject{{"page",i},{"preview",folder+QString("/offline/page-%1.png").arg(i)}});
+        auto path=folder+"/saved-run.json";auto bytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",folder+"/recovered-output"},{"jobs",QJsonArray{QJsonObject{{"id","recovery"},{"title","Recovered book"},{"status","Durduruldu"},{"pages",pages}}}}}).toJson();put(path,bytes);
+        window.openProject(path);check(panel->queuePath()==path,"File/Open routes JSON to run recovery");
+        check(window.windowTitle().contains(title),"opening saved run keeps application identity");
+        auto recoveredTitle=window.windowTitle();window.openProject(path);check(window.windowTitle()==recoveredTitle,"repeated saved-run launch keeps a stable window title");
+        check(!panel->busy(),"opening saved run never starts processing");
+        auto recent=panel->findChild<QTreeWidget*>("unifiedCompletedPages");check(recent->topLevelItemCount()==500,"legacy queue only materializes 500 recent records");
+        check(recent->topLevelItem(0)->text(0).endsWith("11501")&&recent->topLevelItem(499)->text(0).endsWith("12000"),"recent records retain correct order even with offline previews");
+        QFile before(path);check(before.open(QIODevice::ReadOnly)&&before.readAll()==bytes,"opening legacy queue is read-only");before.close();
+        CommandLine cli(QStringList{"test",path},true);check(cli.projectFile()==path,"saved run opens from desktop command line");
+        put(folder+"/broken.json","{\"schema\":");check(!panel->openSavedQueue(folder+"/broken.json")&&panel->queuePath()==path,"damaged run leaves active queue intact");
+        auto request=folder+"/request.json";put(request,QJsonDocument(QJsonObject{{"queue","saved-run.json"},{"control",folder+"/control.json"}}).toJson());
+        check(panel->openSavedQueue(request)&&panel->queuePath()==path,"request resolves relative queue path");
+        check(panel->openSavedQueue(request+".session.json")&&panel->queuePath()==path,"session file resolves its request");
+        auto env=qgetenv("STOU_QUEUE_PATH");qunsetenv("STOU_QUEUE_PATH");{UnifiedPanel restored;check(restored.queuePath()==path,"last opened run is restored on restart");}qputenv("STOU_QUEUE_PATH",env);
+        auto real=qEnvironmentVariable("STOU_TEST_RECOVERY_QUEUE");
+        if(!real.isEmpty()){QElapsedTimer elapsed;elapsed.start();check(panel->openSavedQueue(real),"real legacy queue opens");std::cerr<<"legacy queue opened in "<<elapsed.elapsed()<<" ms; books="<<panel->findChild<QTreeWidget*>("unifiedBooks")->topLevelItemCount()<<std::endl;}
+        check(panel->openSavedQueue(original),"restore test queue");
+        window.refreshWorkflowState();
+        check(!window.findChild<QPushButton*>("workflowOpenPdf")->isEnabled(),"no PDF means Open latest PDF is disabled");
+        check(!window.findChild<QPushButton*>("workflowRefreshPdf")->isEnabled(),"no project means refresh is disabled");
+        check(!window.findChild<QPushButton*>("workflow_cleanup_apply")->isEnabled(),"cleanup apply waits for a proposal");
+    }
     static void layout(MainWindow& window,QString const& captures,QString const& lang){
         auto list=window.filterList;
         check(list->model()->rowCount()==15,"all ordered stages, settings and help are visible");
@@ -49,11 +84,34 @@ public:
     static void editorImport(QString const& source){
         if(source.isEmpty())return;
         MainWindow window;window.show();auto panel=window.m_unified;
+        QTemporaryDir existing;auto previous=existing.path()+"/existing.png";QImage oldImage(600,800,QImage::Format_RGB32);oldImage.fill(Qt::white);check(oldImage.save(previous),"existing editor fixture");
+        check(window.importWorkflowImages({previous}),"open previous unsaved book");
         auto queue=panel->findChild<QTreeWidget*>("unifiedBooks");int before=queue->topLevelItemCount();
         panel->importPdf(source,true);
+        auto pdf=static_cast<UnifiedPdfToolsDialog*>(panel->findChild<QWidget*>("unifiedPdfTools"));check(pdf&&pdf->running(),"editor PDF import starts");
+        auto selectedPdf=pdf->findChild<QLineEdit*>("pdfToolsSource")->text();
+        for(auto step:{"help","input","settings","content"}){
+            window.filterList->selectStep(step);
+            check(pdf->running()&&pdf->findChild<QLineEdit*>("pdfToolsSource")->text()==selectedPdf,"screen navigation preserves active PDF import and its source");
+        }
+        panel->openPdfTools();check(pdf->running(),"returning to PDF progress does not restart or cancel import");
+        window.refreshWorkflowState();check(window.m_workflowDirty->text().contains("PDF import continues"),"PDF import progress remains visible outside its tab");
+        window.refreshWorkflowState();check(!window.findChild<QPushButton*>("workflowRun")->isEnabled()&&!window.findChild<QToolButton*>("stagePlay_content")->isEnabled(),"import disables conflicting stage actions");
+        window.runWorkflowStep("content");check(!window.isBatchProcessingInProgress(),"direct stage action also refuses overlapping import");
+        window.openProject(existing.path()+"/blocked.ScanTailor");check(window.isProjectLoaded(),"File/Open also refuses project replacement during import");
+        check(!panel->openSavedQueue(panel->queuePath()),"cannot replace queue during import");
+        bool cancelled=false;QTimer dismissImport;QObject::connect(&dismissImport,&QTimer::timeout,[&]{if(auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget())){if(auto cancel=box->button(QMessageBox::Cancel)){cancelled=true;cancel->click();}}});dismissImport.start(20);
+        wait([&]{return !pdf->running()&&cancelled;});dismissImport.stop();
+        check(window.m_ptrPages->toPageSequence(IMAGE_VIEW).pageAt(0).id().imageId().filePath()==previous,"cancel project replacement keeps current book");
+        auto retry=pdf->findChild<QPushButton*>("pdfImportAddReady");check(!retry->isHidden(),"cancel retains prepared import for retry");
+        QTimer::singleShot(0,[]{auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());check(box,"retry asks about unsaved project");box->button(QMessageBox::Discard)->click();});retry->click();
         wait([&]{return window.isProjectLoaded()&&!panel->busy();});
         auto inputs=window.m_ptrPages->toPageSequence(IMAGE_VIEW);auto input=inputs.pageAt(0).id().imageId().filePath();
         check(QFileInfo::exists(input),"stage zero imports editable PDF image");
+        check(input!=previous&&retry->isHidden(),"retry opens prepared images without importing again");
+        QTimer::singleShot(0,[]{auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());check(box,"invalid input shows error");box->accept();});
+        check(!window.importWorkflowImages({existing.path()+"/missing.png"}),"missing input is rejected");
+        check(window.isProjectLoaded()&&QFileInfo::exists(input),"invalid input preserves current editor and extracted pages");
         check(queue->topLevelItemCount()==before,"editor PDF import does not create a second queue owner");
         auto dismiss=[](QMessageBox::StandardButton choice){QTimer::singleShot(0,[choice]{auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());check(box,"close project prompt");box->button(choice)->click();});};
         dismiss(QMessageBox::Cancel);check(!window.closeProjectInteractive(),"cancel close keeps project");
@@ -107,7 +165,19 @@ public:
         std::cerr<<"workflow input"<<std::endl;
         window.importWorkflowImages(files);check(window.isProjectLoaded(),"input images open an editable project");
         std::cerr<<"workflow content"<<std::endl;
-        window.runWorkflowStep("content");wait([&]{return !window.isBatchProcessingInProgress();});
+        window.runWorkflowStep("content");
+        check(window.isBatchProcessingInProgress(),"content batch starts before navigation regression");
+        auto activeQueue=window.m_ptrBatchQueue.get();auto activeFilter=window.m_curFilter;auto activeStep=window.m_workflowStep;
+        auto otherPage=window.m_ptrPages->toPageSequence(PAGE_VIEW).pageAt(1);
+        window.currentPageChanged(otherPage,QRectF(),ThumbnailSequence::SELECTED_BY_USER);
+        check(window.isBatchProcessingInProgress()&&window.m_ptrBatchQueue.get()==activeQueue,"thumbnail navigation must not cancel a running batch");
+        for(auto step:{"help","settings","orientation"}){
+            window.filterList->selectStep(step);
+            check(window.isBatchProcessingInProgress()&&window.m_ptrBatchQueue.get()==activeQueue&&window.m_curFilter==activeFilter,"stage navigation preserves the running batch and filter");
+            check(window.filterList->currentStep()==activeStep,"unsafe stage navigation restores the active stage");
+        }
+        wait([&]{return !window.isBatchProcessingInProgress();});
+        check(window.m_batchDone==2,"both pages finish after attempted navigation");
         auto settings=window.m_ptrStages->selectContentFilter()->getSettings();
         auto samples=unified_content::collect(*window.m_ptrPages,*window.m_ptrStages);check(samples.size()==2,"normal content stage prepared both pages");
         auto sample=samples.front();auto params=settings->getPageParams(sample.page.id());check(bool(params),"content params available");
@@ -136,7 +206,14 @@ public:
         check(QFileInfo::exists(firstPdf),"refresh preserves previous PDF version");
         std::cerr<<"workflow OCR"<<std::endl;
         window.runWorkflowStep("ocr");
+        auto ocrProcess=window.m_workflowProcess;
+        for(auto step:{"help","settings","input","content"}){
+            window.filterList->selectStep(step);
+            check(window.m_workflowProcess==ocrProcess&&ocrProcess->state()!=QProcess::NotRunning,"screen navigation preserves background OCR");
+            window.refreshWorkflowState();check(window.m_workflowDirty->text().contains("background"),"background operation remains visible on other screens");
+        }
         wait([&]{return window.m_workflowProcess->state()==QProcess::NotRunning;});
+        if(!window.m_workflowPdf.contains("-OCR.pdf"))std::cerr<<window.m_workflowStatus->text().toUtf8().constData()<<std::endl;
         check(window.m_workflowPdf.contains("-OCR.pdf"),"real Tesseract OCR runs as the final stage");
         auto pdfBeforeEdit=window.m_workflowPdf;
         auto updated=unified_content::collect(*window.m_ptrPages,*window.m_ptrStages).front();
