@@ -16,13 +16,15 @@ Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygula
 
 **Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-Sürüm sayfasında tek kurulum dosyası bulunur. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+**Linux x64: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-Kurulum Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux için [derleme talimatlarına](packaging/BUILD.md) bakın; Linux derleme ve test ortamı Ubuntu 22.04 x64, glibc 2.35 veya yenisidir.
+Sürüm sayfasında her sistem için bir paket bulunur: Windows kurulumu ve Linux arşivi. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+
+Windows kurulumu Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux paketi Ubuntu 22.04 / glibc 2.35 veya yenisini gerektirir. Diğer ortamlar için [derleme talimatlarına](packaging/BUILD.md) bakın.
 
 4 GB RAM ile Ubuntu 22.04 üzerinde iki sayfalık PDF, Tesseract, Paddle CPU, UVDoc ve yerleşim analizi kabul testi geçti. Büyük kitaplar için 8 GB ve üstü daha uygundur. Az boş bellekte Paddle daha hafif metin bulma modelini kullanır; PDF'nin görünür görüntüsü bu seçimden etkilenmez. Kitabın büyüklüğüne bağlı geçici disk alanı gerekir.
 
-Kurulum Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Latin Paddle OCR, UVDoc ve AI inceleme modelleri de dahildir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
+Her iki paket Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Latin Paddle OCR, UVDoc ve AI inceleme modelleri de dahildir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
 
 ## İlk kitap
 

@@ -14,11 +14,13 @@ The repository is named **scantailor-unified-ocr-ai**; the application is called
 
 **Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-The release provides one installer. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
+**Linux x64: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-The installer targets Windows 10 version 2004 or later and Windows 11 x64. For Linux, see the [build instructions](packaging/BUILD.en.md); the Linux build/test baseline is Ubuntu 22.04 x64 with glibc 2.35 or later.
+The release provides one package per platform: the Windows installer and the Linux archive. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 
-The installer includes Tesseract Fast data for Turkish, German and English and Tesseract Best data for Turkish, German, English and French. It also includes a Latin Paddle OCR model, UVDoc and layout-analysis models. Additional OCR languages and an optional GPU runtime can be downloaded in the app. GPU setup depends on a supported NVIDIA/CUDA environment. A small acceptance test can run with 4 GB of RAM; 8 GB or more is preferable for large books. Temporary disk-space requirements depend on the book.
+The Windows installer targets Windows 10 version 2004 or later and Windows 11 x64. The Linux package requires Ubuntu 22.04 / glibc 2.35 or later; see the [build instructions](packaging/BUILD.en.md) for other environments.
+
+Both packages include Tesseract Fast data for Turkish, German and English and Tesseract Best data for Turkish, German, English and French. They also include a Latin Paddle OCR model, UVDoc and layout-analysis models. Additional OCR languages and an optional GPU runtime can be downloaded in the app. GPU setup depends on a supported NVIDIA/CUDA environment. A small acceptance test can run with 4 GB of RAM; 8 GB or more is preferable for large books. Temporary disk-space requirements depend on the book.
 
 ## Choose the interface language
 
