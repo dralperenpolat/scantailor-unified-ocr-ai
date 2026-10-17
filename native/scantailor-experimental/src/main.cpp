@@ -39,6 +39,11 @@
 #include <QStringList>
 #include <QTranslator>
 #include <QLockFile>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <iostream>
 #include <QStandardPaths>
 #include <QMessageBox>
 #include <Qt>
@@ -163,12 +168,22 @@ int main(int argc, char** argv)
     }
     QSettings settings;
     auto lockId=QString::fromLatin1(QCryptographicHash::hash(app.applicationName().toUtf8(),QCryptographicHash::Sha256).toHex().left(16));
+    auto serverName="scantailor-ocr-unified-"+lockId;
     QLockFile instanceLock(QStandardPaths::writableLocation(QStandardPaths::TempLocation)+(app.applicationName()=="scantailor-ocr-unified"?"/scantailor-ocr-unified-editor.lock":"/scantailor-ocr-unified-editor-"+lockId+".lock"));
     instanceLock.setStaleLockTime(0);
     if(!instanceLock.tryLock(0)){
+        QLocalSocket socket;socket.connectToServer(serverName);
+        if(socket.waitForConnected(1500)){
+            auto path=cli.projectFile().isEmpty()?QString():QFileInfo(cli.projectFile()).absoluteFilePath();
+            socket.write(QJsonDocument(QJsonObject{{"file",path}}).toJson(QJsonDocument::Compact)+'\n');socket.flush();
+            if(socket.bytesToWrite()>0)socket.waitForBytesWritten(1500);
+            if((socket.bytesAvailable()>0||socket.waitForReadyRead(2000))&&socket.readAll().startsWith("OK"))return 0;
+        }
         QMessageBox::information(nullptr,unified_i18n::text("ScanTailor OCR Unified"),unified_i18n::text("Program zaten açık. İkinci bir kopya başlatılmadı; açık pencereyi kullanın."));
         return 0;
     }
+    QLocalServer instanceServer;instanceServer.setSocketOptions(QLocalServer::UserAccessOption);
+    QLocalServer::removeServer(serverName);instanceServer.listen(serverName);
 
     //PngMetadataLoader::registerMyself();
     TiffMetadataLoader::registerMyself();
@@ -177,6 +192,23 @@ int main(int argc, char** argv)
 
     MainWindow* main_wnd = new MainWindow();
     main_wnd->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(&instanceServer,&QLocalServer::newConnection,main_wnd,[&instanceServer,main_wnd]{
+        while(auto socket=instanceServer.nextPendingConnection()){
+            QObject::connect(socket,&QLocalSocket::disconnected,socket,&QObject::deleteLater);
+            auto receive=[socket,main_wnd]{
+                auto bytes=socket->property("request").toByteArray()+socket->readAll();
+                if(bytes.size()>65536){socket->disconnectFromServer();return;}
+                if(!bytes.contains('\n')){socket->setProperty("request",bytes);return;}
+                QJsonParseError error;auto request=QJsonDocument::fromJson(bytes.left(bytes.indexOf('\n')),&error);
+                if(error.error!=QJsonParseError::NoError||!request.isObject()){socket->disconnectFromServer();return;}
+                socket->write("OK\n");socket->flush();socket->disconnectFromServer();
+                main_wnd->setWindowState(main_wnd->windowState()&~Qt::WindowMinimized);main_wnd->show();main_wnd->raise();main_wnd->activateWindow();
+                auto path=request.object().value("file").toString();if(!path.isEmpty())main_wnd->openProject(path);
+                if(!qEnvironmentVariable("STOU_SMOKE_SCREENSHOT").isEmpty()&&qEnvironmentVariable("QT_QPA_PLATFORM")=="offscreen")std::cout<<"STOUINSTANCE_FILE "<<path.toUtf8().constData()<<std::endl;
+            };
+            QObject::connect(socket,&QLocalSocket::readyRead,main_wnd,receive);receive();
+        }
+    });
     if (settings.value("mainWindow/maximized") == false)
     {
         main_wnd->show();
@@ -196,6 +228,7 @@ int main(int argc, char** argv)
     auto smoke=qEnvironmentVariable("STOU_SMOKE_SCREENSHOT");
     if(!smoke.isEmpty() && qEnvironmentVariable("QT_QPA_PLATFORM")=="offscreen") {
         main_wnd->showNormal();main_wnd->resize(1280,900);
+        std::cout<<"STOUINSTANCE_READY"<<std::endl;
         QTimer::singleShot(2500,main_wnd,[main_wnd,smoke]{
             bool saved=main_wnd->grab().save(smoke);main_wnd->close();QCoreApplication::exit(saved?0:3);
         });
