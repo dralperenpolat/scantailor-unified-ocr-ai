@@ -1,0 +1,36 @@
+name: Prepare verified 0.5.0 release
+on:
+  push:
+    branches: [release/publish-050-20261017]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-050
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: publisher
+      - uses: actions/checkout@v4
+        with:
+          ref: fc147ccc0284493b54841453edca74afcdec4901
+          path: verified-source
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests==2.32.5
+      - name: Verify CI artifacts and prepare the draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python publisher/packaging/publish_050.py --source verified-source --work "$RUNNER_TEMP/release050"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publication-verification-0.5.0
+          path: ${{ runner.temp }}/release050/publication-verification.json
+          retention-days: 30
