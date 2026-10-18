@@ -49,7 +49,7 @@ def analyze(request):
     if len(data) > 25_000_000: raise ValueError('Analiz görüntüsü boyut sınırını aşıyor.')
     device = request.get('device', 'cpu')
     if device not in ('cpu', 'cuda'): raise ValueError('Desteklenmeyen geometri cihazı.')
-    weights = ROOT/'resources/UVDoc/model/best_model.pkl'
+    weights = resource_path('UVDoc/model/best_model.pkl', ROOT)
     if _model_hash is None: _model_hash = hashlib.sha256(weights.read_bytes()).hexdigest()
     key = hashlib.sha256(data+json.dumps([VERSION, _model_hash, device]).encode()).hexdigest()
     cache = resource_path('cache/native-geometry-v1',ROOT,writable=True)/f'{key}.json'
@@ -71,7 +71,7 @@ def analyze(request):
         if free < 512*1024**2: raise RuntimeError('GPU belleği yetersiz. CPU seçin veya GPU işinin bitmesini bekleyin.')
         torch.backends.cudnn.benchmark = False
     if device not in _models:
-        location = ROOT/'resources/UVDoc'
+        location = weights.parent.parent
         sys.path.insert(0, str(location))
         from model import UVDocnet
         net = UVDocnet(num_filter=32, kernel_size=5)

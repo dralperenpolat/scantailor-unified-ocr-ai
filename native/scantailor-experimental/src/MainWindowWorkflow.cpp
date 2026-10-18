@@ -36,6 +36,7 @@
 #include <QUuid>
 #include <QTabWidget>
 #include <QTextStream>
+#include <QSignalBlocker>
 
 using unified_workflow::text;
 
@@ -66,7 +67,7 @@ void MainWindow::initWorkflow(){
     connect(m_workflowRun,&QPushButton::clicked,this,[this]{runWorkflowStep(m_workflowStep);});
     m_workflowStop=new QPushButton(text("Durdur","Stop"));m_workflowStop->setObjectName("workflowStop");actions->addWidget(m_workflowStop);m_workflowStop->setEnabled(false);
     connect(m_workflowStop,&QPushButton::clicked,this,&MainWindow::cancelWorkflowProcess);
-    auto openResult=new QPushButton(text("Son PDF'yi aç","Open latest PDF"));actions->addWidget(openResult);connect(openResult,&QPushButton::clicked,this,[this]{if(!m_workflowPdf.isEmpty())QDesktopServices::openUrl(QUrl::fromLocalFile(m_workflowPdf));});
+    auto openResult=new QPushButton(text("Son PDF'yi aç","Open latest PDF"));openResult->setObjectName("workflowOpenPdf");actions->addWidget(openResult);connect(openResult,&QPushButton::clicked,this,[this]{if(QFileInfo::exists(m_workflowPdf))QDesktopServices::openUrl(QUrl::fromLocalFile(m_workflowPdf));});
     auto folderRow=new QHBoxLayout;toolsLayout->addLayout(folderRow);folderRow->addWidget(new QLabel(text("PDF çıktı klasörü","PDF output folder")));
     auto pdfFolder=new QLineEdit;pdfFolder->setReadOnly(true);pdfFolder->setObjectName("workflowPdfOutputFolder");folderRow->addWidget(pdfFolder,1);
     auto output=new QPushButton(text("Gözat…","Browse…"));output->setObjectName("workflowPdfBrowse");folderRow->addWidget(output);connect(output,&QPushButton::clicked,this,[this]{m_unified->chooseWorkflowOutput();refreshWorkflowState();});
@@ -90,7 +91,8 @@ void MainWindow::initWorkflow(){
         showWorkflowTools();m_unified->showToolsTab(0);m_workflowStatus->setText(text("Eklenen kitap klasörü: ","Book folders added: ")+QString::number(count));
     });
     inputButton(text("PDF seç ve düzenle","Select and edit PDF"),"workflowInputPdf",[this]{auto path=QFileDialog::getOpenFileName(this,text("İşlenecek PDF","PDF to edit"),{},"PDF (*.pdf)");if(!path.isEmpty()){m_unified->importPdf(path,true);}});
-    inputButton(text("Kayıtlı projeyi aç","Open saved project"),"workflowInputProject",[this]{openProject();});
+    inputButton(text("Kayıtlı proje / çalışma aç","Open saved project / run"),"workflowInputProject",[this]{openProject();});
+    inputButton(text("Kitap kuyruğunu göster","Show book queue"),"workflowInputQueue",[this]{showWorkflowTools();m_unified->showToolsTab(0);});
     inputButton(text("Çıktı klasörünü seç","Choose output folder"),"workflowInputOutput",[this]{m_unified->chooseWorkflowOutput();refreshWorkflowState();});
     inputButton(text("Başlangıç ayarları","Startup settings"),"workflowInputSetup",[this]{m_unified->openStartupSettings();refreshWorkflowState();});
     auto paths=note({},input);paths->setObjectName("workflowPaths");
@@ -121,7 +123,8 @@ void MainWindow::initWorkflow(){
         auto report=page.value("report").toObject();m_cleanupStatus->setText(text("Silme adayı / belirsiz bölge: ","Removal candidates / uncertain regions: ")+QString::number(report.value("removed").toArray().size())+" / "+QString::number(report.value("uncertain").toArray().size()));
     });
     m_unifiedViewStack->addWidget(m_workflowCleanup);
-    connect(m_unified,&UnifiedPanel::importedImagesReady,this,[this](QString const& folder){importWorkflowImages(imagesIn(folder));});
+    m_unified->importImagesForEditing=[this](QString const& folder){return importWorkflowImages(imagesIn(folder));};
+    m_unified->editorProcessing=[this]{return isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning);};
     auto timer=new QTimer(this);connect(timer,&QTimer::timeout,this,&MainWindow::refreshWorkflowState);timer->start(1000);
     filterList->selectStep("input");selectWorkflowRow(0);resize(qMax(width(),1280),qMax(height(),780));
     resizeDocks({dockWidgetFilters,optionsDock,dockWidgetThumbnails},{filterList->minimumWidth()+12,310,140},Qt::Horizontal);
@@ -133,6 +136,15 @@ void MainWindow::showWorkflowTools(){
 }
 bool MainWindow::selectWorkflowRow(int row){
     auto id=filterList->stepId(row);if(id.isEmpty())return false;
+    if(isBatchProcessingInProgress()){
+        // Menu shortcuts can select a row even when the stage list is disabled.
+        // Do not let that clear the active batch or replace its editor context.
+        QSignalBlocker selection(filterList->selectionModel());filterList->selectStep(m_workflowStep);
+        QMainWindow::statusBar()->showMessage(text(
+            "İşlem devam ediyor. Aşama değiştirmek için tamamlanmasını bekleyin veya Durdur'u kullanın.",
+            "Processing continues. Wait for completion or use Stop before changing stages."),8000);
+        return false;
+    }
     if(m_unifiedViewStack->currentWidget()==m_queuePreview&&filterList->filterForRow(row)>=0){m_unified->editPreview(filterList->filterForRow(row));return false;}
     m_workflowStep=id;m_unified->setWorkflowContext(id);
     dockWidgetFilters->setWindowTitle(text("Aşamalar · resimden PDF’ye","Stages · images to PDF"));
@@ -153,21 +165,22 @@ bool MainWindow::selectWorkflowRow(int row){
     }
     filterList->setBatchProcessingPossible(isProjectLoaded());refreshWorkflowState();return false;
 }
-void MainWindow::importWorkflowImages(QStringList files){
-    if(files.isEmpty()){QMessageBox::information(this,text("Girdi","Input"),text("Bu klasörde desteklenen resim bulunamadı.","No supported images found in this folder."));return;}
-    if(isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
-    if(!closeProjectInteractive())return;
+bool MainWindow::importWorkflowImages(QStringList files){
+    if(files.isEmpty()){QMessageBox::information(this,text("Girdi","Input"),text("Bu klasörde desteklenen resim bulunamadı.","No supported images found in this folder."));return false;}
+    if(isBatchProcessingInProgress()||m_unified->busy()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return false;
     std::sort(files.begin(),files.end(),SmartFilenameOrdering());files.removeDuplicates();std::vector<ImageFileInfo> loaded;QStringList failed;
     for(auto const& path:files){ImageFileInfo file(QFileInfo(path),{});auto result=ImageMetadataLoader::load(path,[&](ImageMetadata const& m){file.imageInfo().push_back(m);});if(result==ImageMetadataLoader::LOADED)loaded.push_back(file);else failed<<path;}
-    if(!failed.isEmpty()){QMessageBox::warning(this,text("Okunamayan resimler","Unreadable images"),failed.join("\n"));return;}if(loaded.empty())return;
+    if(!failed.isEmpty()){QMessageBox::warning(this,text("Okunamayan resimler","Unreadable images"),failed.join("\n"));return false;}if(loaded.empty())return false;
+    if(!closeProjectInteractive())return false;
     QString base=m_unified->workflowOutput();if(base.isEmpty())base=QFileInfo(files.front()).absolutePath()+"/output";
-    QString out=base+"/"+QFileInfo(files.front()).dir().dirName()+"-"+QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss")+"-"+QUuid::createUuid().toString(QUuid::WithoutBraces).left(8)+"/images";if(!QDir().mkpath(out))return;
+    QString out=base+"/"+QFileInfo(files.front()).dir().dirName()+"-"+QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss")+"-"+QUuid::createUuid().toString(QUuid::WithoutBraces).left(8)+"/images";if(!QDir().mkpath(out))return false;
     switchToNewProject(IntrusivePtr<ProjectPages>(new ProjectPages(loaded,ProjectPages::AUTO_PAGES,Qt::LeftToRight)),out);
     m_workflowReview.clear();m_workflowPdf.clear();m_workflowPdfStamp.clear();m_workflowReceipt={};
     syncWorkflowCache();m_workflowCache->own(out,"native");
     auto imported=QFileInfo(files.front()).absoluteDir();imported.cdUp();imported.cdUp();
     if(QFileInfo::exists(imported.absoluteFilePath(".stou-import-session.json")))m_workflowCache->own(imported.absolutePath(),"sources");
     filterList->selectFilter(0);selectWorkflowRow(unified_workflow::row("orientation"));
+    return true;
 }
 namespace {
 QByteArray canonicalSettings(QDomElement const& e){
@@ -216,20 +229,29 @@ void MainWindow::saveWorkflowState(){
 }
 void MainWindow::refreshWorkflowState(){
     if(!m_workflowReady)return;
-    if(auto paths=m_workflowInput->findChild<QLabel*>("workflowPaths"))paths->setText(text("PDF klasörü: ","PDF folder: ")+m_unified->workflowOutput()+"\n"+text("Açık projenin resim çıktısı: ","Open project's output images: ")+m_outFileNameGen.outDir());
+    if(auto paths=m_workflowInput->findChild<QLabel*>("workflowPaths"))paths->setText(text("PDF klasörü: ","PDF folder: ")+m_unified->workflowOutput()+"\n"+text("Çalışma kaydı: ","Saved run: ")+m_unified->queuePath()+"\n"+text("Açık projenin resim çıktısı: ","Open project's output images: ")+m_outFileNameGen.outDir());
     if(auto folder=m_workflowTools->findChild<QLineEdit*>("workflowPdfOutputFolder"))folder->setText(m_unified->workflowOutput());
     bool running=m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning;
-    m_workflowStop->setEnabled(running);m_workflowRun->setEnabled(isProjectLoaded()&&!running&&!isBatchProcessingInProgress());
+    bool available=isProjectLoaded()&&!running&&!isBatchProcessingInProgress()&&!m_unified->busy();
+    m_workflowStop->setEnabled(running);m_workflowRun->setEnabled(available);
+    filterList->setBatchProcessingPossible(available);
+    for(auto name:{"workflowRefreshPdf","workflow_cleanup","workflowCleanupManual"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(available);
+    for(auto name:{"workflowInputImages","workflowInputFolder","workflowInputPdf","workflowInputProject","workflowInputSetup","workflowInputOutput","workflowPdfBrowse"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(!running&&!isBatchProcessingInProgress()&&!m_unified->busy());
     if(running){filterList->setStepStatus(m_workflowProcess->property("stage").toString(),QString::number(m_workflowElapsed.elapsed()/1000)+" s");}
     QString key=m_outFileNameGen.outDir();
     if(key!=m_workflowProjectKey){
         m_workflowProjectKey=key;m_workflowPdf.clear();m_workflowVisualPdf.clear();m_workflowVisualHash.clear();m_workflowPdfStamp.clear();m_workflowReview.clear();m_workflowReceipt={};m_workflowLastPages={};
         QFile saved(key+"/.workflow-state.json");if(!key.isEmpty()&&saved.open(QIODevice::ReadOnly)){auto state=QJsonDocument::fromJson(saved.readAll()).object();m_workflowPdf=state.value("pdf").toString();m_workflowVisualPdf=state.value("visual_pdf").toString();m_workflowVisualHash=state.value("visual_sha256").toString();m_workflowPdfStamp=state.value("stamp").toString().toLatin1();m_workflowReview=state.value("cleanup").toString();m_workflowLastPages=state.value("pages").toArray();QFile review(m_workflowReview);if(review.open(QIODevice::ReadOnly))m_workflowReceipt=QJsonDocument::fromJson(review.readAll()).object();}
     }
-    m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
+    findChild<QPushButton*>("workflowOpenPdf")->setEnabled(QFileInfo::exists(m_workflowPdf));
+    findChild<QPushButton*>("workflow_cleanup_apply")->setEnabled(available&&!m_workflowReview.isEmpty());
+    findChild<QPushButton*>("workflow_cleanup_undo")->setEnabled(available&&!m_workflowReview.isEmpty()&&m_workflowReceipt.value("applied").toBool());
+    if(m_unified->pdfImportRunning())m_workflowDirty->setText(text("PDF içe aktarımı devam ediyor: ","PDF import continues: ")+m_unified->pdfImportStatus()+"\n"+text("İlerlemeye dönmek için PDF içe aktar düğmesini kullanın.","Use Import PDF to return to its progress."));
+    else if(running)m_workflowDirty->setText(text("İşlem arka planda devam ediyor: ","Processing continues in the background: ")+m_workflowStatus->text());
+    else m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
 }
 void MainWindow::runWorkflowStep(QString const& id){
-    if(!isProjectLoaded()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+    if(!isProjectLoaded()||m_unified->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
     filterList->selectStep(id);
     if(id=="pdf"||id=="cleanup"||id=="ai_geometry"||id=="ai_content"){
         auto current=workflowPages();auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);QHash<QString,QJsonObject> previous;
@@ -256,7 +278,7 @@ void MainWindow::runWorkflowStep(QString const& id){
 }
 void MainWindow::startWorkflowProcess(QString const& mode){
     if(mode=="ai_geometry"||mode=="ai_content"){stageReviewAction(mode=="ai_geometry",UnifiedStageReviewBar::Analyze);return;}
-    if(!isProjectLoaded()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+    if(!isProjectLoaded()||m_unified->busy()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
     auto fail=[this](QString const& message){m_workflowStatus->setText(message);m_cleanupStatus->setText(message);QMainWindow::statusBar()->showMessage(message,15000);};
     if(mode=="ocr"){
         if(m_workflowPdf.isEmpty()||workflowFingerprint()!=m_workflowPdfStamp){fail(text("Önce güncel ayarlarla 10 · PDF oluştur aşamasını çalıştırın.","First run 10 · Create PDF with current settings."));return;}

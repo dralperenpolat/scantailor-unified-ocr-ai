@@ -159,7 +159,7 @@ private:
     bool selectWorkflowRow(int row);
     void runWorkflowStep(QString const& id);
     void showWorkflowTools();
-    void importWorkflowImages(QStringList files);
+    bool importWorkflowImages(QStringList files);
     void startWorkflowProcess(QString const& mode);
     void refreshWorkflowState();
     void saveWorkflowState();

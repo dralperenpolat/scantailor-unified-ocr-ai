@@ -2,6 +2,7 @@
 #pragma once
 #include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
+#include "UnifiedWorkflow.h"
 #include <QWidget>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -86,6 +87,7 @@ public:
         connect(&m_process,&QProcess::readyReadStandardError,[this]{m_errors+=m_process.readAllStandardError();if(m_errors.size()>4000)m_errors=m_errors.right(4000);});
         connect(&m_process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),[this](int code,QProcess::ExitStatus){
             receive();updateControls();
+            if(!code&&m_completed&&!m_cancelled&&!m_pending.isEmpty())addReady();
             if(code&&!m_cancelled)m_status->setText(unified_i18n::text("İşlem tamamlanamadı: ")+m_lastError+QString::fromUtf8(m_errors.right(1000)));
             if(!m_completed)m_progress->setRange(0,1);
             if(!code&&m_completed&&!m_cancelled&&!m_sources.isEmpty())QTimer::singleShot(0,this,[this]{selectSource(m_sources.takeFirst(),true);});
@@ -97,6 +99,7 @@ public:
     }
     ~UnifiedPdfToolsDialog(){if(running()){m_process.kill();m_process.waitForFinished(2000);}}
     bool running()const{return m_process.state()!=QProcess::NotRunning;}
+    QString statusText()const{return m_status->text();}
     void stop(){m_stop->click();}
     void useOutputFolder(QString const& path){if(!running())m_destination->setText(path);}
     void setMode(QString const& mode){if(!running()){int i=m_mode->findData(mode);if(i>=0)m_mode->setCurrentIndex(i);}}
@@ -127,10 +130,16 @@ private:
             .arg(m_pending.value("pages").toInt()).arg(m_pending.value("extracted").toInt()).arg(m_pending.value("rendered").toInt());
         if(importReady&&importReady(m_pending)){
             m_pending={};m_add->hide();
-            m_status->setText(summary+"\n"+unified_i18n::text("Kitap kuyruğa eklendi. İşler sekmesinden Projeleri hazırla ile devam edin."));
+            m_status->setText(summary+"\n"+(property("editorImport").toBool()?unified_workflow::text("PDF resimleri düzenleyicide açıldı. Aşamalardan devam edebilirsiniz.","PDF images opened in the editor. Continue with the stages."):unified_i18n::text("Kitap kuyruğa eklendi. İşler sekmesinden Projeleri hazırla ile devam edin.")));
         }else{
             m_add->show();
-            m_status->setText(summary+"\n"+unified_i18n::text("Kuyruğa henüz eklenemedi. Kuyruk boşta olduğunda Hazır kitabı kuyruğa ekle düğmesini kullanın.")+"\n"+m_pending.value("folder").toString());
+            if(property("editorImport").toBool()){
+                m_add->setText(unified_workflow::text("Hazır resimleri düzenleyicide aç","Open prepared images in editor"));
+                m_status->setText(summary+"\n"+unified_workflow::text("Açık proje korundu. Hazır resimleri düzenleyicide aç düğmesiyle tekrar deneyebilirsiniz.","The current project was preserved. Use Open prepared images in editor to retry.")+"\n"+m_pending.value("folder").toString());
+            }else{
+                m_add->setText(unified_i18n::text("Hazır kitabı kuyruğa ekle"));
+                m_status->setText(summary+"\n"+unified_i18n::text("Kuyruğa henüz eklenemedi. Kuyruk boşta olduğunda Hazır kitabı kuyruğa ekle düğmesini kullanın.")+"\n"+m_pending.value("folder").toString());
+            }
         }
     }
     void start(){
@@ -162,7 +171,7 @@ private:
             if(value.value("ok").toBool()&&!m_cancelled){
                 m_completed=true;
                 if(value.value("mode")=="import"){
-                    value.insert("split",m_runSplit);m_pending=value;addReady();
+                    value.insert("split",m_runSplit);m_pending=value;
                 }else if(value.value("mode")=="smart")m_status->setText(unified_i18n::text("PDF hazır: ")+value.value("pdf").toString());
                 else m_status->setText(unified_i18n::text("Doğrulandı: %1 → %2 MB. Metin ve 150 DPI kontrol görüntüleri aynı.\n%3")
                     .arg(value.value("before_bytes").toDouble()/1048576.,0,'f',2).arg(value.value("after_bytes").toDouble()/1048576.,0,'f',2).arg(value.value("pdf").toString()));

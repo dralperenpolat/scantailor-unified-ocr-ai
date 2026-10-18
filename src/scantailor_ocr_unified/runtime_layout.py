@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import uuid
 
 
 def native_model_directory(path):
@@ -141,11 +142,18 @@ def initialize(root=None):
                 target = data / 'resources' / source.relative_to(root / 'resources')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if not target.exists():
+                    temporary=target.with_name('.'+target.name+'.'+uuid.uuid4().hex+'.tmp')
                     try:
-                        with target.open('xb') as dest, source.open('rb') as src:
+                        with temporary.open('xb') as dest, source.open('rb') as src:
                             shutil.copyfileobj(src, dest)
+                            dest.flush();os.fsync(dest.fileno())
+                        # Publish only complete bytes, without replacing a user
+                        # model that another launcher may have installed meanwhile.
+                        os.link(temporary,target)
                     except FileExistsError:
                         pass
+                    finally:
+                        temporary.unlink(missing_ok=True)
         # Models are assets, caches are user data; Paddle must not download into
         # a read-only application directory. Individual bundled model paths
         # are supplied explicitly by both Paddle workers.
