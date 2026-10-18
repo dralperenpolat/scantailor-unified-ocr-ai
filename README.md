@@ -20,11 +20,11 @@ Open latest PDF opens the reading copy. The lossless master remains available fo
 
 ## Install
 
-**Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Windows x64 · 0.6.0: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.0/scantailor-ocr-unified-0.6.0-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-**Linux x64: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Linux x64 · 0.5.0: [Download the last verified Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included. A Linux 0.6.0 binary has not been published; the 0.6.0 features described above are not included in the 0.5.0 package.
 
-The release provides one package per platform: the Windows installer and the Linux archive. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
+The download links above provide one full package per platform and show each published version. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 
 The Windows installer targets Windows 10 version 2004 or later and Windows 11 x64. The Linux package requires Ubuntu 22.04 / glibc 2.35 or later; see the [build instructions](packaging/BUILD.en.md) for other environments.
 

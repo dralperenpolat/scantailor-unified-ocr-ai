@@ -22,11 +22,11 @@ Son PDF'yi aç düğmesi okuma kopyasını açar. Kaynak ana dosya sonraki sayfa
 
 ## Kurulum
 
-**Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Windows x64 · 0.6.0: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.0/scantailor-ocr-unified-0.6.0-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-**Linux x64: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Linux x64 · 0.5.0: [Son doğrulanmış Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir. Linux 0.6.0 ikili paketi henüz yayımlanmadı; yukarıda anlatılan 0.6.0 yenilikleri 0.5.0 paketinde bulunmaz.
 
-Sürüm sayfasında yayımlanmış platform ve paket çeşitleri listelenir. Tam (full) paket CPU AI modellerini içerir; minimal paket Tesseract ile başlar ve AI araçlarını isteğe bağlı kurar. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+Yukarıdaki bağlantılar her platform için yayımlanmış sürümü ve tek tam paketi gösterir. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
 
 Windows kurulumu Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux paketi Ubuntu 22.04 / glibc 2.35 veya yenisini gerektirir. Diğer ortamlar için [derleme talimatlarına](packaging/BUILD.md) bakın.
 
