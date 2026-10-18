@@ -61,6 +61,16 @@ public:
     }
     static void layout(MainWindow& window,QString const& captures,QString const& lang){
         auto list=window.filterList;
+        auto all=window.findChild<QCheckBox*>("workflowShowAllStages");check(all,"simple/advanced navigation control");
+        all->setChecked(false);list->selectStep("pdf");QApplication::processEvents();
+        if(!captures.isEmpty())check(window.grab().save(captures+"/workflow-simple-"+lang+".png"),"simple navigation screenshot");
+        check(!list->isRowHidden(unified_workflow::row("pdf"))&&!list->isRowHidden(unified_workflow::row("ocr")),"simple PDF group exposes both operations");
+        check(list->isRowHidden(unified_workflow::row("geometry")),"simple PDF group hides unrelated geometry controls");
+        list->selectFilter(2);check(!list->isRowHidden(unified_workflow::row("geometry")),"engine navigation reveals its selected group");
+        all->setChecked(true);
+        list->selectRow(unified_workflow::row("content"));all->setChecked(false);
+        check(!list->isRowHidden(unified_workflow::row("content")),"collapsing after a direct row selection retains the current stage");
+        all->setChecked(true);
         check(list->model()->rowCount()==15,"all ordered stages, settings and help are visible");
         for(int row=0;row<15;++row){
             auto step=unified_workflow::steps().at(row);

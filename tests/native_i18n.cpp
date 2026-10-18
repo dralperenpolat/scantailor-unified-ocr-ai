@@ -90,7 +90,7 @@ int main(int argc,char** argv){
         const auto queueBytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",outputRoot},{"jobs",QJsonArray{queuedJob}}}).toJson();
         QFile queue(temp.path()+"/queue.json");check(queue.open(QIODevice::WriteOnly),"write synthetic queue");queue.write(queueBytes);queue.close();
         MainWindow window;window.resize(1280,900);window.show();
-        check(window.windowTitle().contains("0.5.0"),"window reports the current application version");
+        check(window.windowTitle().contains("0.6.0"),"window reports the current application version");
         auto languageEn=window.findChild<QAction*>("unifiedLanguage_en"),languageTr=window.findChild<QAction*>("unifiedLanguage_tr");
         check(languageEn&&languageTr&&languageEn->isChecked(),"English menu choice checked");
         check(languageTr->text()==QString::fromUtf8("Türkçe"),"Turkish endonym stays recognizable");
@@ -168,6 +168,14 @@ int main(int argc,char** argv){
         auto preset=workspace->findChild<QComboBox*>("workspaceProfile");QElapsedTimer service;service.start();
         while(preset->count()==0&&service.elapsed()<30000){app.processEvents();QThread::msleep(20);}
         check(preset->findData("cpu_fast")>=0,"workspace service loads CPU Fast profile");
+        auto paddleVersion=workspace->findChild<QComboBox*>("workspacePaddleVersion");
+        auto saveSettings=workspace->findChild<QPushButton*>("workspaceSaveSettings");
+        check(paddleVersion&&saveSettings,"workspace exposes the OCR model setting");
+        for(auto version:{"PP-OCRv6","PP-OCRv5"}){
+            paddleVersion->setCurrentIndex(paddleVersion->findData(version));saveSettings->click();service.restart();
+            while(panel->workflowOptions().value("paddle_version")!=version&&service.elapsed()<30000){app.processEvents();QThread::msleep(20);}
+            check(panel->workflowOptions().value("paddle_version")==version,"saved workspace OCR model reaches the editor workflow");
+        }
         if(argc>1)check(workspace->grab().save(QString::fromLocal8Bit(argv[1])+"/workspace-en.png"),"English workspace screenshot");workspace->close();
         if(qEnvironmentVariable("STOU_TEST_WORKFLOW")=="1"){UnifiedWorkflowTest::queueRecovery(window,temp.path());UnifiedWorkflowTest::run(window,temp.path(),argc>1?QString::fromLocal8Bit(argv[1]):QString());UnifiedWorkflowTest::editorImport(argc>3?QString::fromLocal8Bit(argv[3]):QString());}
         window.close();app.removeTranslator(&english);app.setProperty("unifiedUiLanguage","tr");

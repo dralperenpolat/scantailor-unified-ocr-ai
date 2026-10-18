@@ -2,6 +2,7 @@
 #pragma once
 #include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
+#include "UnifiedCompressionOptions.h"
 #include <QDialog>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -31,44 +32,56 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QTimer>
+#include <QProgressBar>
+#include <QTemporaryDir>
+#include <QGroupBox>
+#include <memory>
 #include <functional>
 
 class UnifiedWorkspaceDialog:public QDialog {
 public:
     std::function<void(QJsonObject const&)> applyProfile;
+    std::function<void(QJsonObject const&)> preferencesSaved;
     std::function<QJsonArray()> currentJobs;
     std::function<QJsonObject()> currentOptions;
     UnifiedWorkspaceDialog(QString root,QString queue,QString output,QWidget* parent):QDialog(parent),m_root(root),m_queue(queue),m_output(output) {
         setObjectName("unifiedWorkspace");setAttribute(Qt::WA_DeleteOnClose);resize(1080,800);setWindowTitle(tr("Çalışma merkezi"));
         auto outer=new QVBoxLayout(this);auto tabs=new QTabWidget;outer->addWidget(tabs,1);
         settingsTab(tabs);reviewTab(tabs);pdfTab(tabs);corpusTab(tabs);
-        m_status=new QLabel(tr("Hazır"));m_status->setWordWrap(true);m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);outer->addWidget(m_status);
-        connect(&m_process,&QProcess::started,[this]{m_process.write(QJsonDocument(m_request).toJson(QJsonDocument::Compact)+"\n");m_process.closeWriteChannel();});
-        connect(&m_process,&QProcess::readyReadStandardOutput,[this]{m_buffer+=m_process.readAllStandardOutput();});
-        connect(&m_process,&QProcess::readyReadStandardError,[this]{m_errors+=m_process.readAllStandardError();m_errors=m_errors.right(4000);});
-        connect(&m_process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),[this](int code,QProcess::ExitStatus){
-            m_buffer+=m_process.readAllStandardOutput();QJsonObject value;
-            for(auto line:m_buffer.split('\n'))if(line.startsWith("STOUWORK "))value=QJsonDocument::fromJson(line.mid(9)).object();
+        m_status=new QLabel(tr("Hazır"));m_status->setObjectName("workspaceStatus");m_status->setWordWrap(true);m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);outer->addWidget(m_status);
+        auto progressRow=new QHBoxLayout;outer->addLayout(progressRow);m_progress=new QProgressBar;m_progress->setObjectName("workspaceProgress");m_progress->setVisible(false);progressRow->addWidget(m_progress,1);
+        m_cancel=new QPushButton(tr("İptal et"));m_cancel->setObjectName("workspaceCancel");m_cancel->setEnabled(false);progressRow->addWidget(m_cancel);connect(m_cancel,&QPushButton::clicked,this,[this]{cancelWork();});
+        connect(&m_process,&QProcess::started,this,[this]{m_process.write(QJsonDocument(m_request).toJson(QJsonDocument::Compact)+"\n");m_process.closeWriteChannel();});
+        connect(&m_process,&QProcess::readyReadStandardOutput,this,[this]{readOutput();});
+        connect(&m_process,&QProcess::readyReadStandardError,this,[this]{m_errors+=m_process.readAllStandardError();m_errors=m_errors.right(4000);});
+        connect(&m_process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this](int code,QProcess::ExitStatus status){
+            readOutput();auto value=m_response;m_cancel->setEnabled(false);m_progress->setVisible(false);
             auto callback=std::move(m_callback);m_callback={};
-            if(!value.value("ok").toBool()){m_status->setText(unified_i18n::display(value.value("error").toString())+QString::fromUtf8(m_errors.right(1000)));return;}
+            if(code!=0||status!=QProcess::NormalExit||!value.value("ok").toBool()){m_status->setText(unified_i18n::display(value.value("error").toString(tr("İşlem tamamlanamadı.")))+QString::fromUtf8(m_errors.right(1000)));return;}
             m_status->setText(tr("İşlem tamamlandı."));if(callback)callback(value.value("result").toObject());
-            Q_UNUSED(code);
         });
-        connect(&m_process,&QProcess::errorOccurred,[this](QProcess::ProcessError error){if(error==QProcess::FailedToStart)m_status->setText(m_process.errorString());});
+        connect(&m_process,&QProcess::errorOccurred,this,[this](QProcess::ProcessError error){if(error==QProcess::FailedToStart){m_status->setText(m_process.errorString());m_cancel->setEnabled(false);m_progress->hide();}});
         QTimer::singleShot(0,this,[this]{refreshJobs();request({{"action","settings"}},[this](QJsonObject const& result){
             m_settings=result.value("settings").toObject();m_profiles=result.value("profiles").toObject();
             for(auto it=m_profiles.begin();it!=m_profiles.end();++it)m_profile->addItem(profileName(it.key()),it.key());loadSettings();
         });});
     }
-    ~UnifiedWorkspaceDialog(){if(m_process.state()!=QProcess::NotRunning){m_process.kill();m_process.waitForFinished(2000);}}
+    ~UnifiedWorkspaceDialog(){
+        // QProcess is destroyed after our buffers and callback members. No
+        // process signal may re-enter those members while the dialog closes.
+        disconnect(&m_process,nullptr,this,nullptr);m_callback={};
+        if(m_process.state()!=QProcess::NotRunning){cancelWork();if(!m_process.waitForFinished(2000)){m_process.kill();m_process.waitForFinished(2000);}}
+    }
 private:
     QString m_root,m_queue,m_output,m_manifest;QProcess m_process;QByteArray m_buffer,m_errors;
-    QJsonObject m_request,m_settings,m_profiles,m_cleanup;QJsonArray m_rows,m_corpus;
+    QJsonObject m_request,m_settings,m_profiles,m_cleanup,m_response;QJsonArray m_rows,m_corpus;
+    std::unique_ptr<QTemporaryDir> m_requestDirectory;
+    QProgressBar* m_progress;QPushButton* m_cancel;UnifiedCompressionOptions* m_compressionOptions;
     std::function<void(QJsonObject const&)> m_callback;
-    QLabel *m_status,*m_storageSummary,*m_before,*m_after,*m_corpusImage,*m_quality;
-    QComboBox *m_resource,*m_compression,*m_profile,*m_version,*m_format,*m_jobs;
+    QLabel *m_status,*m_storageSummary,*m_before,*m_after,*m_corpusImage,*m_quality,*m_sizeBefore,*m_sizeAfter;
+    QComboBox *m_resource,*m_profile,*m_version,*m_format,*m_jobs;
     QDoubleSpinBox *m_quota,*m_reserve,*m_confidence;
-    QLineEdit *m_temp,*m_ocrmypdf,*m_verapdf,*m_kraken,*m_krakenModel,*m_structure,*m_note,*m_pdf,*m_range,*m_tags;
+    QLineEdit *m_temp,*m_ocrmypdf,*m_verapdf,*m_kraken,*m_krakenModel,*m_structure,*m_note,*m_pdf,*m_range,*m_tags,*m_pdfPassword;
     QCheckBox *m_compare,*m_text,*m_problems,*m_clipped,*m_footnote,*m_splitError,*m_orderError;QSpinBox *m_pilot;
     QTreeWidget *m_storage,*m_pages,*m_samples,*m_sizes;
     QPlainTextEdit *m_reasons,*m_reference,*m_hypothesis;
@@ -87,10 +100,30 @@ private:
     }
     void request(QJsonObject value,std::function<void(QJsonObject const&)> callback={}){
         if(m_process.state()!=QProcess::NotRunning){m_status->setText(tr("Önce devam eden işlemin bitmesini bekleyin."));return;}
+        m_requestDirectory.reset(new QTemporaryDir);if(!m_requestDirectory->isValid()){m_status->setText(tr("Geçici çalışma klasörü oluşturulamadı."));return;}
+        bool cancellable=value.value("action")=="compress"||value.value("action")=="compression-preview";
+        if(cancellable)value.insert("cancel_file",m_requestDirectory->filePath("cancel"));
         value.insert("root",m_root);value.insert("queue",m_queue);value.insert("output",m_output);m_request=value;m_callback=std::move(callback);m_buffer.clear();m_errors.clear();
+        m_response={};m_cancel->setEnabled(cancellable);m_progress->setRange(0,0);m_progress->setVisible(cancellable);
         auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONPATH",m_root+"/src");env.insert("PYTHONUTF8","1");
         m_process.setProcessEnvironment(env);m_process.setWorkingDirectory(m_root);m_status->setText(tr("İşleniyor…"));
         m_process.start(unified_runtime::python(m_root),{"-u","-m","scantailor_ocr_unified.workspace_service"});
+    }
+    void readOutput(){
+        m_buffer+=m_process.readAllStandardOutput();int end;
+        while((end=m_buffer.indexOf('\n'))>=0){
+            auto line=m_buffer.left(end).trimmed();m_buffer.remove(0,end+1);
+            if(line.startsWith("STOUWORK "))m_response=QJsonDocument::fromJson(line.mid(9)).object();
+            else if(line.startsWith("STOUWORKPROGRESS ")){
+                auto event=QJsonDocument::fromJson(line.mid(17)).object();int total=event.value("total").toInt(),page=event.value("page").toInt();
+                m_progress->setRange(0,total>0?total:0);m_progress->setValue(page);
+                m_status->setText(unified_i18n::display(event.value("stage").toString())+QString(" · %1 / %2").arg(page).arg(total));
+            }
+        }
+    }
+    void cancelWork(){
+        if(!m_request.contains("cancel_file"))return;
+        QFile file(m_request.value("cancel_file").toString());if(file.open(QIODevice::WriteOnly)){file.write("cancel\n");file.close();m_cancel->setEnabled(false);m_status->setText(tr("İptal ediliyor; önceki dosyalar korunuyor…"));}
     }
     void image(QLabel* label,QString const& path){
         QImageReader reader(path);auto size=reader.size();if(size.isValid())reader.setScaledSize(size.scaled(480,420,Qt::KeepAspectRatio));
@@ -110,15 +143,15 @@ private:
         m_quota=new QDoubleSpinBox;m_quota->setRange(0,100000);m_quota->setSuffix(" GiB");form->addRow(tr("Yeniden üretilebilir önizleme kotası"),m_quota);
         m_reserve=new QDoubleSpinBox;m_reserve->setRange(.25,10000);m_reserve->setSuffix(" GiB");form->addRow(tr("Diskte korunacak boş alan"),m_reserve);
         m_resource=new QComboBox;for(auto item:QList<QPair<QString,QString>>{{tr("Hızlı"),"fast"},{tr("Dengeli"),"balanced"},{tr("Sessiz"),"quiet"}})m_resource->addItem(item.first,item.second);form->addRow(tr("Kaynak kullanımı"),m_resource);
-        m_compression=new QComboBox;for(auto item:QList<QPair<QString,QString>>{{tr("Kayıpsız"),"lossless"},{tr("Dengeli · JPEG 92 / 300 DPI"),"balanced"},{tr("Küçük · JPEG 80 / 200 DPI"),"small"}})m_compression->addItem(item.first,item.second);form->addRow(tr("PDF boyut profili"),m_compression);
+        auto compressionNote=new QLabel(tr("Sıkıştırma seçenekleri PDF ve dışa aktarma sekmesindedir."));compressionNote->setWordWrap(true);form->addRow(compressionNote);
         m_format=new QComboBox;m_format->addItem("PDF","pdf");m_format->addItem(tr("PDF/A-2 · veraPDF doğrulamalı"),"pdfa");form->addRow(tr("Arşiv çıktısı"),m_format);
         m_compare=new QCheckBox(tr("Şüpheli Paddle sayfalarını Tesseract ile karşılaştır"));form->addRow(m_compare);
         m_confidence=new QDoubleSpinBox;m_confidence->setRange(0,1);m_confidence->setSingleStep(.05);form->addRow(tr("Motor güven eşiği · doğruluk oranı değildir"),m_confidence);
-        m_version=new QComboBox;m_version->addItem("PP-OCRv5","PP-OCRv5");m_version->addItem(tr("PP-OCRv6 · karşılaştırma adayı"),"PP-OCRv6");form->addRow(tr("Paddle modeli"),m_version);
+        m_version=new QComboBox;m_version->setObjectName("workspacePaddleVersion");m_version->addItem("PP-OCRv5","PP-OCRv5");m_version->addItem(tr("PP-OCRv6 · karşılaştırma adayı"),"PP-OCRv6");form->addRow(tr("Paddle modeli"),m_version);
         m_text=new QCheckBox(tr("TXT, Markdown, ALTO ve okuma sırası kutularını kaydet"));form->addRow(m_text);
         m_ocrmypdf=new QLineEdit;m_verapdf=new QLineEdit;m_kraken=new QLineEdit;m_krakenModel=new QLineEdit;m_structure=new QLineEdit;
         form->addRow("OCRmyPDF",m_ocrmypdf);form->addRow("veraPDF",m_verapdf);form->addRow("Kraken",m_kraken);form->addRow(tr("Kraken model dosyası"),m_krakenModel);form->addRow(tr("PP-StructureV3 Python ortamı"),m_structure);
-        button(layout,"Tercihleri kaydet",[this]{saveSettings();});
+        button(layout,"Tercihleri kaydet",[this]{saveSettings();})->setObjectName("workspaceSaveSettings");
         button(layout,"İsteğe bağlı araçları denetle",[this]{request({{"action","optional-probe"}},[this](QJsonObject const& value){QStringList rows;for(auto it=value.begin();it!=value.end();++it)rows<<it.key()+": "+(it.value().toObject().value("available").toBool()?tr("Hazır"):tr("Kurulu değil"));m_status->setText(rows.join(" · "));});});
         auto preset=new QHBoxLayout;layout->addLayout(preset);m_profile=new QComboBox;m_profile->setObjectName("workspaceProfile");preset->addWidget(m_profile);
         button(preset,"Kitap profilini uygula",[this]{auto value=m_profiles.value(m_profile->currentData().toString()).toObject();if(applyProfile)applyProfile(value);for(auto it=value.begin();it!=value.end();++it)m_settings.insert(it.key(),it.value());loadSettings();saveSettings();});
@@ -136,16 +169,18 @@ private:
     void loadSettings(){
         m_temp->setText(m_settings.value("temp_root").toString());m_quota->setValue(m_settings.value("cache_quota_gib").toDouble(10));m_reserve->setValue(m_settings.value("reserve_gib").toDouble(2));
         auto set=[this](QComboBox* box,char const* key){int i=box->findData(m_settings.value(key).toString());if(i>=0)box->setCurrentIndex(i);};
-        set(m_resource,"resource_profile");set(m_compression,"compression_profile");set(m_version,"paddle_version");set(m_format,"output_format");
+        set(m_resource,"resource_profile");set(m_version,"paddle_version");set(m_format,"output_format");
+        m_compressionOptions->setOptions(m_settings.value("compression_profile").toString("lossless"),m_settings.value("compression_options").toObject());
         m_compare->setChecked(m_settings.value("ocr_compare").toBool());m_confidence->setValue(m_settings.value("ocr_confidence_threshold").toDouble(.85));m_text->setChecked(m_settings.value("structured_text").toBool(true));
         m_ocrmypdf->setText(m_settings.value("ocrmypdf").toString());m_verapdf->setText(m_settings.value("verapdf").toString());m_kraken->setText(m_settings.value("kraken").toString());m_krakenModel->setText(m_settings.value("kraken_model").toString());m_structure->setText(m_settings.value("structure_python").toString());
     }
     void saveSettings(){
         m_settings.insert("temp_root",m_temp->text());m_settings.insert("cache_quota_gib",m_quota->value());m_settings.insert("reserve_gib",m_reserve->value());
-        m_settings.insert("resource_profile",m_resource->currentData().toString());m_settings.insert("compression_profile",m_compression->currentData().toString());m_settings.insert("output_format",m_format->currentData().toString());
+        m_settings.insert("resource_profile",m_resource->currentData().toString());m_settings.insert("compression_profile",m_compressionOptions->profile());m_settings.insert("compression_options",m_compressionOptions->options());m_settings.insert("output_format",m_format->currentData().toString());
         m_settings.insert("paddle_version",m_version->currentData().toString());m_settings.insert("ocr_compare",m_compare->isChecked());m_settings.insert("ocr_confidence_threshold",m_confidence->value());m_settings.insert("structured_text",m_text->isChecked());
         m_settings.insert("ocrmypdf",m_ocrmypdf->text());m_settings.insert("verapdf",m_verapdf->text());m_settings.insert("kraken",m_kraken->text());m_settings.insert("kraken_model",m_krakenModel->text());m_settings.insert("structure_python",m_structure->text());
-        request({{"action","settings-save"},{"settings",m_settings}});
+        const auto saved=m_settings;
+        request({{"action","settings-save"},{"settings",saved}},[this,saved](QJsonObject const&){if(preferencesSaved)preferencesSaved(saved);});
     }
     void reviewTab(QTabWidget* tabs){
         auto layout=tab(tabs,"Sayfa kontrolü ve kuyruk");auto row=new QHBoxLayout;layout->addLayout(row);m_jobs=new QComboBox;row->addWidget(m_jobs,1);
@@ -175,13 +210,45 @@ private:
     });}
     void pdfTab(QTabWidget* tabs){
         auto layout=tab(tabs,"PDF ve dışa aktarma");auto form=new QFormLayout;layout->addLayout(form);m_pdf=new QLineEdit;form->addRow(tr("Kaynak PDF"),m_pdf);m_range=new QLineEdit;m_range->setPlaceholderText("1-5,8,12-20");form->addRow(tr("Sayfa aralığı · boşsa tümü"),m_range);
+        m_pdf->setObjectName("workspaceSourcePdf");m_range->setObjectName("workspacePageRange");
+        m_pdfPassword=new QLineEdit;m_pdfPassword->setEchoMode(QLineEdit::Password);m_pdfPassword->setPlaceholderText(tr("Yalnız şifreli PDF için"));form->addRow(tr("PDF şifresi"),m_pdfPassword);
         button(layout,"PDF seç",[this]{auto path=QFileDialog::getOpenFileName(this,tr("Kaynak PDF"),{},"PDF (*.pdf)");if(!path.isEmpty())m_pdf->setText(path);});
-        button(layout,"PDF sayfalarını analiz et",[this]{request({{"action","pdf-probe"},{"source",m_pdf->text()},{"pages",m_range->text()}},[this](QJsonObject const& r){int preserved=0;for(auto p:r.value("pages").toArray())if(p.toObject().value("recommended_route")=="preserve")++preserved;m_status->setText(tr("%1 sayfa seçildi · %2 sayfanın mevcut metni korunacak · %3 sayfaya OCR eklenecek.").arg(r.value("selected").toInt()).arg(preserved).arg(r.value("selected").toInt()-preserved));open(r.value("preview").toString());});});
-        button(layout,"Metni ve çizimleri koruyarak OCR ekle",[this]{auto value=currentOptions?currentOptions():QJsonObject();value.insert("action","pdf-smart");value.insert("source",m_pdf->text());value.insert("pages",m_range->text());auto target=outputFolder("SmartPDF")+".pdf";value.insert("destination",target);request(value,[this,target](QJsonObject const&){m_resultPdf=target;m_status->setText(tr("PDF hazır: ")+target);});});
+        button(layout,"Seçili kitabın PDF’sini kullan",[this]{auto path=job().value("pdf").toString();if(QFileInfo::exists(path))m_pdf->setText(path);else m_status->setText(tr("Önce PDF çıktısı olan bir kitap seçin."));});
+        button(layout,"PDF sayfalarını analiz et",[this]{request({{"action","pdf-probe"},{"source",m_pdf->text()},{"pages",m_range->text()},{"password",m_pdfPassword->text()}},[this](QJsonObject const& r){int preserved=0;for(auto p:r.value("pages").toArray())if(p.toObject().value("recommended_route")=="preserve")++preserved;m_status->setText(tr("%1 sayfa seçildi · %2 sayfanın mevcut metni korunacak · %3 sayfaya OCR eklenecek.").arg(r.value("selected").toInt()).arg(preserved).arg(r.value("selected").toInt()-preserved));open(r.value("preview").toString());});});
+        button(layout,"Metni ve çizimleri koruyarak OCR ekle",[this]{auto value=currentOptions?currentOptions():QJsonObject();value.insert("action","pdf-smart");value.insert("source",m_pdf->text());value.insert("pages",m_range->text());value.insert("password",m_pdfPassword->text());auto target=outputFolder("SmartPDF")+".pdf";value.insert("destination",target);request(value,[this,target](QJsonObject const&){m_resultPdf=target;m_status->setText(tr("PDF hazır: ")+target);});});
         auto note=new QLabel(tr("Bu yol geometriyi değiştirmez. Metni bulunan sayfalar korunur; metinsiz sayfalara görünmez OCR katmanı eklenir. Düzeltme için PDF’den kitap ekle sekmesini kullanın."));note->setWordWrap(true);layout->addWidget(note);
-        button(layout,"Üç boyut profilini örnek sayfalarda karşılaştır",[this]{request({{"action","compression-preview"},{"source",m_pdf->text()},{"destination",outputFolder("SizePreview")},{"pages",m_range->text().isEmpty()?"1-3":m_range->text()}},[this](QJsonObject const& result){m_sizes->clear();for(auto value:result.value("profiles").toArray()){auto row=value.toObject();auto item=new QTreeWidgetItem(m_sizes,{row.value("profile").toString(),QString::number(row.value("after_bytes").toDouble()/1048576.,'f',2),row.value("lossless").toBool(row.value("renders_identical").toBool())?tr("Kayıpsız"):tr("Görüntü değişir"),row.value("pdf").toString()});item->setData(0,Qt::UserRole,row.value("pdf").toString());}});});
-        m_sizes=new QTreeWidget;m_sizes->setRootIsDecorated(false);m_sizes->setHeaderLabels({tr("Profil"),"MiB",tr("Görüntü"),tr("PDF · çift tıkla aç")});layout->addWidget(m_sizes);connect(m_sizes,&QTreeWidget::itemDoubleClicked,this,[this](QTreeWidgetItem* item,int){open(item->data(0,Qt::UserRole).toString());});
-        button(layout,"Seçili boyut profiliyle yeni PDF oluştur",[this]{auto target=outputFolder("Compressed")+".pdf";request({{"action","compress"},{"source",m_pdf->text()},{"destination",target},{"profile",m_compression->currentData().toString()}},[this,target](QJsonObject const&){m_resultPdf=target;m_status->setText(tr("PDF hazır: ")+target);});});
+        auto compressionGroup=new QGroupBox(tr("PDF sıkıştırma"));auto compressionLayout=new QVBoxLayout(compressionGroup);layout->addWidget(compressionGroup);
+        m_compressionOptions=new UnifiedCompressionOptions;compressionLayout->addWidget(m_compressionOptions);
+        auto comparison=button(compressionLayout,"Üç boyut profilini örnek sayfalarda karşılaştır",[this]{
+            auto options=m_compressionOptions->options();options.insert("password",m_pdfPassword->text());
+            request({{"action","compression-preview"},{"source",m_pdf->text()},{"destination",outputFolder("SizePreview")},
+                     {"pages",m_range->text().isEmpty()?"1-3":m_range->text()},{"compression_options",options}},[this](QJsonObject const& result){
+                m_sizes->clear();image(m_sizeBefore,result.value("preview").toString());
+                for(auto value:result.value("profiles").toArray()){
+                    auto row=value.toObject();auto id=row.value("profile").toString();
+                    auto title=id=="lossless"?tr("Kayıpsız"):id=="balanced"?tr("Dengeli"):tr("Küçük dosya");
+                    auto item=new QTreeWidgetItem(m_sizes,{title,QString::number(row.value("after_bytes").toDouble()/1048576.,'f',2),
+                        QString::number(row.value("saved_percent").toDouble(),'f',1)+"%",row.value("lossless").toBool()?tr("Kayıpsız"):tr("Görüntü değişir"),row.value("pdf").toString()});
+                    item->setData(0,Qt::UserRole,row);
+                }
+                if(m_sizes->topLevelItemCount())m_sizes->setCurrentItem(m_sizes->topLevelItem(0));
+                m_compressionOptions->collapseAdvanced();
+            });
+        });comparison->setObjectName("workspaceCompareCompression");
+        m_sizes=new QTreeWidget;m_sizes->setObjectName("compressionComparisons");m_sizes->setRootIsDecorated(false);m_sizes->setMaximumHeight(145);
+        m_sizes->setHeaderLabels({tr("Profil"),"MiB",tr("Küçülme"),tr("Görüntü"),tr("PDF · çift tıkla aç")});compressionLayout->addWidget(m_sizes);
+        connect(m_sizes,&QTreeWidget::itemDoubleClicked,this,[this](QTreeWidgetItem* item,int){open(item->data(0,Qt::UserRole).toJsonObject().value("pdf").toString());});
+        auto previews=new QHBoxLayout;compressionLayout->addLayout(previews);m_sizeBefore=new QLabel(tr("Kaynak örnek"));m_sizeAfter=new QLabel(tr("Seçilen profil"));
+        for(auto label:{m_sizeBefore,m_sizeAfter}){label->setAlignment(Qt::AlignCenter);label->setMinimumSize(200,160);previews->addWidget(label,1);}
+        connect(m_sizes,&QTreeWidget::currentItemChanged,this,[this](QTreeWidgetItem* item,QTreeWidgetItem*){if(item)image(m_sizeAfter,item->data(0,Qt::UserRole).toJsonObject().value("preview").toString());});
+        auto create=button(compressionLayout,"Seçili boyut profiliyle yeni PDF oluştur",[this]{
+            auto target=outputFolder("Compressed")+".pdf";auto options=m_compressionOptions->options();options.insert("password",m_pdfPassword->text());
+            request({{"action","compress"},{"source",m_pdf->text()},{"destination",target},{"profile",m_compressionOptions->profile()},
+                     {"pages",m_range->text()},{"compression_options",options}},[this,target](QJsonObject const& result){
+                m_resultPdf=target;m_status->setText(tr("PDF hazır: ")+target+QString("\n%1 → %2 MiB · %3% ").arg(result.value("before_bytes").toDouble()/1048576.,0,'f',2).arg(result.value("after_bytes").toDouble()/1048576.,0,'f',2).arg(result.value("saved_percent").toDouble(),0,'f',1)+tr("Küçülme")+"\n"+unified_i18n::display(result.value("note").toString()));
+            });
+        });create->setObjectName("workspaceCreateCompressedPdf");
+        button(compressionLayout,"Bu sıkıştırma ayarlarını varsayılan olarak sakla",[this]{saveSettings();});
         button(layout,"TXT / Markdown / ALTO dışa aktar",[this]{auto target=outputFolder("Text");request({{"action","text-export"},{"source",m_pdf->text()},{"destination",target}},[this,target](QJsonObject const&){open(target);});});
         button(layout,"PDF/A oluştur ve veraPDF ile doğrula",[this]{auto target=outputFolder("PDFA")+".pdf";request({{"action","pdfa"},{"source",m_pdf->text()},{"destination",target}},[this,target](QJsonObject const&){m_resultPdf=target;m_status->setText(tr("Doğrulanmış PDF/A: ")+target);});});
         button(layout,"PP-StructureV3 ile tablo / düzen analizi",[this]{auto target=outputFolder("Structure");request({{"action","structure"},{"source",m_pdf->text()},{"destination",target}},[this,target](QJsonObject const&){open(target);});});

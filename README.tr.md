@@ -1,12 +1,20 @@
-# ScanTailor OCR Unified · 0.5.0
+# ScanTailor OCR Unified · 0.6.0
 
 [English](README.md) | **Türkçe**
 
-0.5.0 sürümü; 0–12 sıralı işlem ekranı, sayfa bazlı PDF/OCR güncellemesi, başlangıç klasörü ayarları, Tesseract Fast ile hızlı CPU profili, OCR’ı sona bırakma, SQLite kitap kuyruğu ve proje önbelleği yönetimini ekler. [0.5.0 sürümünü indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/tag/v0.5.0) · [Kullanım ve derleme notları](packaging/BUILD-0.5.0.md).
+0.6.0; beş bölümlü sade gezinme, ayrıntılı aşama görünümü, beş PDF sıkıştırma profili, hedef dosya boyutu, örnek sayfa karşılaştırması ve iptal desteği ekler. PDF/OCR güncellemeleri kayıpsız ana dosyadan yapılır; sıkıştırılmış okuma kopyası ayrıca saklanır. Mevcut projeler ve önceki PDF sürümleri korunur.
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 
 [ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental) altı görüntü işleme filtresini temel alır. Kitap kuyruğu, OCR, PDF çıktısı, UVDoc eğrilik önerileri ve Paddle ile içerik incelemesi ekler. Belgeler bilgisayarda işlenir. GPU zorunlu değildir.
+
+## Sıkıştırma
+
+PDF / OCR ayarlarından **Kayıpsız, Dengeli, Küçük dosya, Hedef boyut veya Özel** seçin. Hedef boyut kalite sınırları içinde aranır; her PDF için sağlanamaz. Çıktı büyüyecekse kaynakla aynı içerikte bir kopya saklanır. Gelişmiş ayarlardaki yoğun kayıpsız işlem, mevcut Flate akışlarını yeniden sıkıştırır; önceden optimize edilmiş kitaplarda süre maliyeti kazançtan büyük olabilir.
+
+Çalışma merkezi → PDF ve dışa aktarma bölümünde mevcut PDF'leri, sayfa aralığını ve şifreyi seçebilir; üç profili örnek sayfalarda karşılaştırabilirsiniz. Küçük yazı koruması varsayılan olarak açıktır. JPEG ve griye dönüşüm görünümü değiştirebilir; tam PDF'yi inceleyin. Sayfa sayısı, metin konumları, yer imleri, açıklamalar ve görünüm doğrulanmadan yeni sıkıştırılmış dosya yayımlanmaz.
+
+Son PDF'yi aç düğmesi okuma kopyasını açar. Kaynak ana dosya sonraki sayfa düzeltmeleri ve OCR için korunur. Kuyruktaki kitap satırına çift tıklamak da son okuma kopyasını açar.
 
 ## Arayüz dili
 
@@ -14,17 +22,17 @@ Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygula
 
 ## Kurulum
 
-**Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-**Linux x64: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Linux x64: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-Sürüm sayfasında her sistem için bir paket bulunur: Windows kurulumu ve Linux arşivi. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+Sürüm sayfasında yayımlanmış platform ve paket çeşitleri listelenir. Tam (full) paket CPU AI modellerini içerir; minimal paket Tesseract ile başlar ve AI araçlarını isteğe bağlı kurar. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
 
 Windows kurulumu Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux paketi Ubuntu 22.04 / glibc 2.35 veya yenisini gerektirir. Diğer ortamlar için [derleme talimatlarına](packaging/BUILD.md) bakın.
 
-4 GB RAM ile Ubuntu 22.04 üzerinde iki sayfalık PDF, Tesseract, Paddle CPU, UVDoc ve yerleşim analizi kabul testi geçti. Büyük kitaplar için 8 GB ve üstü daha uygundur. Az boş bellekte Paddle daha hafif metin bulma modelini kullanır; PDF'nin görünür görüntüsü bu seçimden etkilenmez. Kitabın büyüklüğüne bağlı geçici disk alanı gerekir.
+Önceki CPU paketinde Ubuntu 22.04 üzerinde 4 GB RAM ile iki sayfalık kabul testi yapılmıştır. Bu sürümün Windows kontrolleri, Linux için yeni bir kabul testi yerine geçmez. Büyük kitaplar için 8 GB ve üstü daha uygundur. Az boş bellekte Paddle daha hafif metin bulma modelini kullanır; PDF'nin görünür görüntüsü bu seçimden etkilenmez. Kitabın büyüklüğüne bağlı geçici disk alanı gerekir.
 
-Her iki paket Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Latin Paddle OCR, UVDoc ve AI inceleme modelleri de dahildir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
+Tam paketler Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanca, İngilizce ve Fransızca Tesseract Best dillerini içerir. Latin Paddle OCR, UVDoc ve AI inceleme modelleri de dahildir. Ek dil veya isteğe bağlı GPU paketi program içinden indirilir. GPU kurulumu desteklenen NVIDIA/CUDA ortamına bağlıdır; temel kullanım CPU ile hazırdır.
 
 ## İlk kitap
 
@@ -59,7 +67,7 @@ Her PDF sayfası, sırası korunmuş bir giriş resmine dönüşür. Varsayılan
 - **İçerik:** kitabın yaygın sayfa düzenine göre şüpheli uzantılar incelenir. Paddle metin kutuları ve sayfa düzeni önerileri aşama içinde, tek sayfada veya seçilen sayfalarda kullanılabilir. Öneriler hata yapabilir.
 - **Parmak/leke:** Output doldurma alanları ve temkinli kenar temizliği vardır. Parmağın örttüğü yazıyı yeniden üreten bir özellik değildir.
 - **Canlı ilerleme:** kitap, aşama ve sayfa görünür; tamamlanan sayfadan düzenleme ekranına geçilebilir. Kaynak / çıktı / PDF etiketine dikkat edin.
-- **Paneller:** Görünüm menüsünden kapatılan paneli açın veya yerleşimi sıfırlayın. Aşama ayarları ayrı paneldedir; işlem sırasının tamamı solda görünür. `Ctrl+S` kaydeder; `Ctrl+0` yalnız görüntüyü ekrana sığdırır, PDF ölçeğini değiştirmez.
+- **Paneller:** Görünüm menüsünden kapatılan paneli açın veya yerleşimi sıfırlayın. Aşama ayarları ayrı paneldedir; işlemler solda beş bölümde görünür; tüm aşamalar görünümü ayrıca açılabilir. `Ctrl+S` kaydeder; `Ctrl+0` yalnız görüntüyü ekrana sığdırır, PDF ölçeğini değiştirmez.
 - **Kaynak sınırları:** CPU iş parçacığı ve eşzamanlı sayfa sayısı bellekle sınırlanır. OpenCL isteğe bağlıdır. GPU yüzdesine sert üst sınır garanti edilmez.
 - **Mevcut PDF:** görüntü sayfalarını içe aktarma, OCR ekleme ve kayıpsız yeniden paketleme araçları vardır. Yeni çıktı oluşturulur; imzalı/etkileşimli PDF özelliklerinin aynen korunacağı varsayılmamalıdır.
 

@@ -1,4 +1,4 @@
-# Third-party components · 0.4.4
+# Third-party components · 0.6.0
 
 Original copyright belongs to the respective authors. This application is not an official release of ScanTailor, PaddleOCR, UVDoc or Qt. Upstream notices remain in the source and installed distribution.
 
@@ -17,6 +17,7 @@ Original copyright belongs to the respective authors. This application is not an
 | OpenCV | Apache-2.0 and bundled third-party notices; https://github.com/opencv/opencv and https://github.com/opencv/opencv_contrib |
 | NumPy / SciPy | BSD and bundled third-party licenses; https://numpy.org/ and https://scipy.org/ |
 | Pillow / pypdf / img2pdf | HPND / BSD-3-Clause / LGPL-3.0; notices in the installed distribution metadata. |
+| pikepdf / qpdf | MPL-2.0 / Apache-2.0; bundled wheel notices are retained. https://github.com/pikepdf/pikepdf and https://github.com/qpdf/qpdf |
 | Native supporting libraries | `licenses/native-dependencies`. Windows uses MSYS2 UCRT64 packages; Linux uses Ubuntu 22.04 packages. Build manifests record installed versions. |
 
 Keep the matching application source archive and build instructions available alongside installers. Python wheel `.dist-info` notices, runtime licenses and native library notices are retained. Large model files are downloaded with a pinned manifest instead of being committed into Git. Optional GPU runtimes have their own upstream notices.

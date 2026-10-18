@@ -37,6 +37,7 @@
 #include <QTabWidget>
 #include <QTextStream>
 #include <QSignalBlocker>
+#include <QCheckBox>
 
 using unified_workflow::text;
 
@@ -45,9 +46,25 @@ QStringList imagesIn(QString const& folder) {
     QStringList paths;QDir dir(folder);for(auto const& name:dir.entryList({"*.jpg","*.jpeg","*.png","*.tif","*.tiff","*.bmp"},QDir::Files))paths<<dir.absoluteFilePath(name);return paths;
 }
 QLabel* note(QString const& value,QVBoxLayout* layout){auto label=new QLabel(value);label->setWordWrap(true);label->setTextInteractionFlags(Qt::TextSelectableByMouse);layout->addWidget(label);return label;}
+QString readingPdf(QString const& master){
+    QFile receipt(QFileInfo(master).absolutePath()+"/"+QFileInfo(master).completeBaseName()+".workflow.json");
+    if(receipt.open(QIODevice::ReadOnly)){
+        auto path=QJsonDocument::fromJson(receipt.readAll()).object().value("reading_pdf").toString();
+        if(QFileInfo::exists(path))return path;
+    }
+    return master;
+}
 }
 void MainWindow::initWorkflow(){
     m_workflowReady=true;
+    menuFile->setTitle(text("Dosya","File"));menuDebug->setTitle(text("Araçlar","Tools"));menuHelp->setTitle(text("Yardım","Help"));
+    actionNewProject->setText(text("Yeni proje…","New Project…"));actionOpenProject->setText(text("Proje / çalışma aç…","Open Project / Run…"));
+    actionSaveProject->setText(text("Projeyi kaydet","Save Project"));actionSaveProjectAs->setText(text("Projeyi farklı kaydet…","Save Project As…"));
+    actionCloseProject->setText(text("Projeyi kapat","Close Project"));actionQuit->setText(text("Çıkış","Quit"));
+    actionSettings->setText(text("Uygulama ayarları…","Application Settings…"));actionAbout->setText(text("Hakkında","About"));
+    actionFixDpi->setText(text("DPI düzelt…","Fix DPI…"));actionRelinking->setText(text("Eksik dosyaları yeniden bağla…","Relink Missing Files…"));
+    actionDebug->setText(text("Hata ayıklama modu","Debug Mode"));
+    dockWidgetThumbnails->setWindowTitle(text("Sayfalar","Pages"));
     dockWidgetFilters->setWindowTitle(text("Aşamalar · resimden PDF’ye","Stages · images to PDF"));
     dockWidgetFilters->setMinimumWidth(filterList->minimumWidth()+12);
     // Give the stage list its own full-height column. Native controls get a
@@ -57,6 +74,17 @@ void MainWindow::initWorkflow(){
     addDockWidget(Qt::RightDockWidgetArea,optionsDock);
     m_workflowDirty=new QLabel; m_workflowDirty->setWordWrap(true);m_workflowDirty->setObjectName("workflowDependencyStatus");
     auto stagesLayout=qobject_cast<QVBoxLayout*>(filterList->parentWidget()->layout());
+    if(stagesLayout){
+        auto group=new QComboBox;group->setObjectName("workflowNavigationGroup");
+        group->addItems({text("1 · Ekle","1 · Add"),text("2 · Düzelt","2 · Adjust"),text("3 · Kontrol et","3 · Review"),text("4 · PDF ve OCR","4 · PDF and OCR"),text("5 · Kaydet ve yönet","5 · Save and manage")});
+        stagesLayout->insertWidget(0,group);
+        auto all=new QCheckBox(text("Tüm aşamaları göster","Show all stages"));all->setObjectName("workflowShowAllStages");stagesLayout->insertWidget(1,all);
+        all->setChecked(QSettings().value("unified/all_workflow_stages",false).toBool());filterList->showAllStages(all->isChecked());
+        connect(all,&QCheckBox::toggled,this,[this](bool show){filterList->showAllStages(show);QSettings().setValue("unified/all_workflow_stages",show);});
+        connect(group,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int index){const QStringList first={"input","orientation","cleanup","pdf","storage"};filterList->selectStep(first.value(index,"input"));});
+        connect(filterList,&StageListView::navigationGroupChanged,this,[group](int index){QSignalBlocker block(group);group->setCurrentIndex(index);});
+        connect(filterList->selectionModel(),&QItemSelectionModel::currentChanged,this,[this,group](QModelIndex const& current,QModelIndex const&){QSignalBlocker block(group);group->setCurrentIndex(StageListView::groupForStep(filterList->stepId(current.row())));});
+    }
     if(stagesLayout){stagesLayout->addWidget(m_workflowDirty);auto refresh=new QPushButton(text("Çıktıyı ve PDF'yi yenile","Refresh Output and PDF"));refresh->setObjectName("workflowRefreshPdf");stagesLayout->addWidget(refresh);connect(refresh,&QPushButton::clicked,this,[this]{runWorkflowStep("pdf");});stagesLayout->addStretch();}
     connect(filterList,&StageListView::launchStep,this,&MainWindow::runWorkflowStep);
     // Reuse the existing settings widgets, not a second copy of their values.
@@ -67,7 +95,7 @@ void MainWindow::initWorkflow(){
     connect(m_workflowRun,&QPushButton::clicked,this,[this]{runWorkflowStep(m_workflowStep);});
     m_workflowStop=new QPushButton(text("Durdur","Stop"));m_workflowStop->setObjectName("workflowStop");actions->addWidget(m_workflowStop);m_workflowStop->setEnabled(false);
     connect(m_workflowStop,&QPushButton::clicked,this,&MainWindow::cancelWorkflowProcess);
-    auto openResult=new QPushButton(text("Son PDF'yi aç","Open latest PDF"));openResult->setObjectName("workflowOpenPdf");actions->addWidget(openResult);connect(openResult,&QPushButton::clicked,this,[this]{if(QFileInfo::exists(m_workflowPdf))QDesktopServices::openUrl(QUrl::fromLocalFile(m_workflowPdf));});
+    auto openResult=new QPushButton(text("Son PDF'yi aç","Open latest PDF"));openResult->setObjectName("workflowOpenPdf");actions->addWidget(openResult);connect(openResult,&QPushButton::clicked,this,[this]{auto path=readingPdf(m_workflowPdf);if(QFileInfo::exists(path))QDesktopServices::openUrl(QUrl::fromLocalFile(path));});
     auto folderRow=new QHBoxLayout;toolsLayout->addLayout(folderRow);folderRow->addWidget(new QLabel(text("PDF çıktı klasörü","PDF output folder")));
     auto pdfFolder=new QLineEdit;pdfFolder->setReadOnly(true);pdfFolder->setObjectName("workflowPdfOutputFolder");folderRow->addWidget(pdfFolder,1);
     auto output=new QPushButton(text("Gözat…","Browse…"));output->setObjectName("workflowPdfBrowse");folderRow->addWidget(output);connect(output,&QPushButton::clicked,this,[this]{m_unified->chooseWorkflowOutput();refreshWorkflowState();});
@@ -217,7 +245,7 @@ QJsonArray MainWindow::workflowPages()const{
     return rows;
 }
 QByteArray MainWindow::workflowFingerprint()const{
-    auto options=m_unified->workflowOptions();for(auto key:{"ocr_engine","ocr_device","tess_quality","paddle_language","language","threads","root"})options.remove(key);
+    auto options=m_unified->workflowOptions();for(auto key:{"ocr_engine","ocr_device","tess_quality","paddle_language","paddle_version","language","threads","root"})options.remove(key);
     QJsonArray stamps;for(auto value:workflowPages()){auto row=value.toObject();stamps.append(QJsonObject{{"key",row.value("key")},{"input_stamp",row.value("input_stamp")}});}
     return QCryptographicHash::hash(QJsonDocument(stamps).toJson(QJsonDocument::Compact)+QJsonDocument(options).toJson(QJsonDocument::Compact),QCryptographicHash::Sha256).toHex();
 }
@@ -328,6 +356,11 @@ void MainWindow::startWorkflowProcess(QString const& mode){
         bool success=code==0&&status==QProcess::NormalExit&&data.value("ok").toBool()&&process->property("project").toString()==m_outFileNameGen.outDir();
         if(success&&(mode=="pdf"||mode=="ocr")){
             m_workflowCache->producedPdf(m_workflowPdf);
+            auto reading=readingPdf(m_workflowPdf);m_workflowCache->producedPdf(reading);
+            if(reading!=m_workflowPdf){
+                auto compressed=data.value("compressed").toObject();
+                m_workflowStatus->setText(m_workflowStatus->text()+"\n"+text("Okuma kopyası: ","Reading copy: ")+reading+"\n"+unified_i18n::display(compressed.value("note").toString()));
+            }
             QStringList stale;for(auto page:data.value("cleanup_needs_review").toArray())stale<<QString::number(page.toInt());
             if(!stale.isEmpty())m_workflowStatus->setText(m_workflowStatus->text()+"\n"+text("Yeni düzeltme nedeniyle bu sayfaların leke temizliği tekrar incelenmeli: ","Review stain cleanup again on these edited pages: ")+stale.join(", "));
             m_workflowCache->clean(mode);

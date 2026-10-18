@@ -11,6 +11,7 @@
 #include "UnifiedPdfToolsDialog.h"
 #include "UnifiedWorkspaceDialog.h"
 #include "UnifiedStartupDialog.h"
+#include "UnifiedCompressionOptions.h"
 #include <QCryptographicHash>
 #include "BasicImageView.h"
 #include "acceleration/NonAcceleratedOperations.h"
@@ -78,9 +79,10 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto setup=new QPushButton(trU("Başlangıç ayarları"));setup->setObjectName("unifiedStartupButton");sizing->addWidget(setup);connect(setup,&QPushButton::clicked,this,&UnifiedPanel::startupSettings);
     connect(workspace,&QPushButton::clicked,this,[this]{
         auto dialog=new UnifiedWorkspaceDialog(m_root,m_queuePath,m_output,this);
+        dialog->preferencesSaved=[this](QJsonObject const& saved){m_compression->setOptions(saved.value("compression_profile").toString("lossless"),saved.value("compression_options").toObject());m_paddleVersion=saved.value("paddle_version").toString("PP-OCRv5");};
         dialog->currentJobs=[this]{loadQueue();refreshBooks();return m_jobs;};
-        dialog->currentOptions=[this]{auto value=m_ocr->options();auto layout=pdfLayoutOptions();for(auto i=layout.begin();i!=layout.end();++i)value.insert(i.key(),i.value());value.insert("appearance",m_appearance->currentData().toString());value.insert("page_cleanup",m_cleanup->isChecked());return value;};
-        dialog->applyProfile=[this](QJsonObject const& value){m_ocr->setOptions(value);if(value.contains("paper"))setPdfLayoutOptions(value);int i=m_appearance->findData(value.value("appearance").toString());if(i>=0)m_appearance->setCurrentIndex(i);if(value.contains("page_cleanup"))m_cleanup->setChecked(value.value("page_cleanup").toBool());if(value.contains("auto_warp"))m_autoWarp->setChecked(value.value("auto_warp").toBool());if(value.contains("ocr_timing"))m_ocrTiming->setCurrentIndex(qMax(0,m_ocrTiming->findData(value.value("ocr_timing").toString())));};
+        dialog->currentOptions=[this]{auto value=workflowOptions();value.insert("page_cleanup",m_cleanup->isChecked());return value;};
+        dialog->applyProfile=[this](QJsonObject const& value){m_ocr->setOptions(value);if(value.contains("paddle_version"))m_paddleVersion=value.value("paddle_version").toString();if(value.contains("compression_profile"))m_compression->setOptions(value.value("compression_profile").toString(),value.value("compression_options").toObject());if(value.contains("paper"))setPdfLayoutOptions(value);int i=m_appearance->findData(value.value("appearance").toString());if(i>=0)m_appearance->setCurrentIndex(i);if(value.contains("page_cleanup"))m_cleanup->setChecked(value.value("page_cleanup").toBool());if(value.contains("auto_warp"))m_autoWarp->setChecked(value.value("auto_warp").toBool());if(value.contains("ocr_timing"))m_ocrTiming->setCurrentIndex(qMax(0,m_ocrTiming->findData(value.value("ocr_timing").toString())));};
         dialog->show();
     });
     auto heightLabel=new QLabel(trU("Panel yüksekliği ↕"));heightLabel->setObjectName("legacyPanelHeightLabel");sizing->addWidget(heightLabel);
@@ -112,6 +114,11 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     })->setObjectName("unifiedExistingPdfTools");
     m_books=new QTreeWidget;m_books->setHeaderLabels({trU("Kitap"),trU("Durum"),trU("Son işlem / hata")});m_books->setRootIsDecorated(false);m_books->setMaximumHeight(145);
     m_books->setObjectName("unifiedBooks");
+    connect(m_books,&QTreeWidget::itemDoubleClicked,this,[this](QTreeWidgetItem* item,int){
+        auto job=m_jobs.at(item->data(0,Qt::UserRole).toInt()).toObject();
+        auto path=job.value("reading_pdf").toString();if(!QFileInfo::exists(path))path=job.value("pdf").toString();
+        if(QFileInfo::exists(path))QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    });
     m_books->setToolTip(trU("Satırı seç: kitabın görüntülerini üstte incele. İşlem ve açık projedeki ayarlar korunur."));
     connect(m_books,&QTreeWidget::currentItemChanged,this,[this](QTreeWidgetItem* item,QTreeWidgetItem*){showBookSelection(item);});
     connect(m_books,&QTreeWidget::itemClicked,this,[this](QTreeWidgetItem* item,int){showBookSelection(item);});
@@ -166,6 +173,7 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     auto scope=new QLabel(trU("Kapsam: bu PDF ayarları kuyruktaki bütün kitapların bütün sayfalarına uygulanır.\nDeğişiklik yalnız sonraki oluşturmayı etkiler; önceki PDF dosyaları değişmez.\nMevcut projelerin elle ayarlanmış geometri ve alanları korunur."));scope->setObjectName("workflowPdfScope");scope->setWordWrap(true);form->addRow(scope);
     auto note=new QLabel(trU("Mevcut .ScanTailor projesinin bölme, geometri, içerik, kenar ve çıktı ayarları kullanılır.\nOCR, eşiklemeden önce kaydedilen gri kopyadan yapılır. Görünür sayfa ayrı tutulur.\nRenk modu sayfa geometrisini değiştirmez. Yumuşak çıktı, 1 bit çıktıya göre daha büyük olabilir.\nParmak: Output → Fill Zones / Parmak temizle. Metin üstünü beyazla silmeyin."));note->setObjectName("workflowPdfNote");note->setWordWrap(true);form->addRow(note);
 
+    m_compression=new UnifiedCompressionOptions;form->addRow(m_compression);
     m_pdfTools=new UnifiedPdfToolsDialog(m_root,this);
     m_pdfTools->importReady=[this](QJsonObject const& result){return addImportedPdf(result);};
     m_pdfToolsTab=tabs->addTab(m_pdfTools,trU("PDF’den içe aktar"));
@@ -211,6 +219,8 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     QFile startupPreferences(unified_runtime::data(m_root)+"/preferences.json");
     if(startupPreferences.open(QIODevice::ReadOnly)){
         auto saved=QJsonDocument::fromJson(startupPreferences.readAll()).object();
+        m_paddleVersion=saved.value("paddle_version").toString("PP-OCRv5");
+        m_compression->setOptions(saved.value("compression_profile").toString("lossless"),saved.value("compression_options").toObject());
         if(saved.contains("preferred_output"))m_output=saved.value("preferred_output").toString(m_output);
         if(saved.contains("auto_warp"))m_autoWarp->setChecked(saved.value("auto_warp").toBool());
     }
@@ -232,6 +242,8 @@ void UnifiedPanel::attachMonitor(QString const& path){
         if(request.open(QIODevice::ReadOnly)){
             auto r=QJsonDocument::fromJson(request.readAll()).object();m_controlPath=r.value("control").toString(m_controlPath);m_monitorLog=r.value("event_log").toString();
             m_ocr->setOptions(r);
+            m_paddleVersion=r.value("paddle_version").toString(m_paddleVersion);
+            m_compression->setOptions(r.value("compression_profile").toString("lossless"),r.value("compression_options").toObject());
             if(r.contains("ocr_timing"))setOcrTiming(r.value("ocr_timing").toString());
             if(r.contains("output_finish"))setOutputFinish(r.value("output_finish").toObject());
             m_appearance->setCurrentIndex(qMax(0,m_appearance->findData(r.value("appearance").toString())));
@@ -297,6 +309,8 @@ void UnifiedPanel::setWorkflowContext(QString const& stage){
 }
 QJsonObject UnifiedPanel::workflowOptions()const {
     auto value=m_ocr->options();auto layout=pdfLayoutOptions();for(auto it=layout.begin();it!=layout.end();++it)value.insert(it.key(),it.value());
+    value.insert("compression_profile",m_compression->profile());value.insert("compression_options",m_compression->options());
+    value.insert("paddle_version",m_paddleVersion);
     value.insert("root",m_root);value.insert("output_finish",outputFinish());value.insert("appearance",appearance());value.insert("threads",m_threads->value());return value;
 }
 QString UnifiedPanel::workflowOcrValidation()const{return m_ocr->validation();}
@@ -325,6 +339,7 @@ void UnifiedPanel::startupSettings(){
         auto value=dialog->values();for(auto it=value.begin();it!=value.end();++it)saved.insert(it.key(),it.value());
         if(!writeJson(path,saved)){m_status->setText(trU("Başlangıç ayarları kaydedilemedi; disk alanını ve yazma iznini kontrol edin."));return;}
         m_ocr->setOptions(value);setOcrTiming(value.value("ocr_timing").toString());setPdfLayoutOptions(value);setOutputFinish({});
+        m_compression->setOptions(value.value("compression_profile").toString("lossless"),value.value("compression_options").toObject());
         m_appearance->setCurrentIndex(qMax(0,m_appearance->findData(value.value("appearance").toString())));m_cleanup->setChecked(value.value("page_cleanup").toBool());m_autoWarp->setChecked(value.value("auto_warp").toBool());
         m_output=value.value("preferred_output").toString(m_output);m_pdfTools->useOutputFolder(QDir(m_output).filePath("PDFImports"));saveQueue();
         QSettings().setValue("unified/ui_language",value.value("ui_language").toString());m_status->setText(trU("Başlangıç ayarları kaydedildi. OCR motoru / dil paketleri sekmesinden model durumunu görebilirsiniz."));
@@ -485,6 +500,8 @@ void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     auto ocr=m_ocr->options();for(auto i=ocr.begin();i!=ocr.end();++i)request.insert(i.key(),i.value());
     request.insert("ocr_timing",ocrTiming());
     request.insert("output_finish",outputFinish());
+    request.insert("compression_profile",m_compression->profile());request.insert("compression_options",m_compression->options());
+    request.insert("paddle_version",m_paddleVersion);
     request.insert("margin_mm",m_margin->value());request.insert("target_x_mm",m_targetText->value());
     request.insert("content_fit",m_fitContent->isChecked());QSettings().setValue("unified/pdf_content_fit",m_fitContent->isChecked());
     request.insert("revision_only",revisionsOnly);request.insert("replay_cached_pages",false);

@@ -17,6 +17,7 @@
 #include <QHash>
 #include <functional>
 class UnifiedOcrOptions;
+class UnifiedCompressionOptions;
 class UnifiedPdfToolsDialog;
 class QTimer;
 class UnifiedPanel : public QWidget {
@@ -85,6 +86,7 @@ private:
     void adoptJobRevision(QJsonObject const& before, QJsonObject const& after);
     friend class UnifiedQueueSelectionTest;
     QString m_root, m_queuePath, m_requestPath, m_controlPath, m_output;
+    QString m_paddleVersion="PP-OCRv5";
     QJsonArray m_jobs;
     QHash<QString, QJsonArray> m_livePreviews;
     quint64 m_selectionRequest = 0;
@@ -113,6 +115,7 @@ private:
     QCheckBox *m_singleGpu, *m_numbers;
     QCheckBox *m_autoWarp, *m_cleanup, *m_fitContent;
     UnifiedOcrOptions* m_ocr = nullptr;
+    UnifiedCompressionOptions* m_compression = nullptr;
     QDoubleSpinBox *m_margin, *m_targetText;
     QLabel *m_status, *m_usage, *m_gpuUsage, *m_limits;
     QProgressBar* m_progress;

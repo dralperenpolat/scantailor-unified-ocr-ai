@@ -71,6 +71,21 @@ def thumbnail(image, path):
     small.save(path)
 
 
+def embed_image(page, rectangle, visible):
+    """Retain true binary scans as lossless CCITT; never threshold gray pixels."""
+    import img2pdf
+    if visible.mode == "L" and sum(visible.histogram()[1:255]) == 0:
+        visible = visible.convert("1", dither=Image.Dither.NONE)
+    stream = io.BytesIO()
+    if visible.mode == "1":
+        visible.save(stream, format="TIFF", compression="group4", dpi=(72, 72))
+        with fitz.open(stream=img2pdf.convert(stream.getvalue()), filetype="pdf") as binary:
+            page.show_pdf_page(rectangle, binary, 0)
+    else:
+        visible.save(stream, format="PNG", optimize=False)
+        page.insert_image(rectangle, stream=stream.getvalue())
+
+
 def cleanup(req, notify):
     from .page_cleanup import analyze, apply
     work = Path(req["work"])
@@ -210,10 +225,28 @@ def valid_cleanup_rows(req, previous=None):
     return masks, stale
 
 
+def reading_copy(req, result, notify):
+    """Compress a derivative while keeping the page-update/OCR master lossless."""
+    from .pdf_profiles import compress, configuration
+    profile = req.get("compression_profile", "lossless")
+    options = req.get("compression_options") or {}
+    configuration(profile, options)
+    result["reading_pdf"] = result["pdf"]
+    if profile != "lossless" or options.get("recompress_flate", False):
+        target = output_path(req, "-" + profile)
+        flag = req.get("cancel_file")
+        result["compressed"] = compress(result["pdf"], target, profile, notify,
+                                       options=options, cancelled=lambda: bool(flag and Path(flag).exists()))
+        result["reading_pdf"] = str(target)
+    atomic_json(Path(result["pdf"]).with_suffix(".workflow.json"), result)
+    return result
+
+
 def create_pdf(req, notify):
     from .book_layout import plan
     from .page_cleanup import apply
-    from .pdf_profiles import publish
+    from .pdf_profiles import publish, configuration
+    configuration(req.get("compression_profile", "lossless"), req.get("compression_options"))
     rows = req.get("pages", [])
     if not rows:
         raise ValueError("No output pages / Çıktı sayfası yok.")
@@ -293,12 +326,10 @@ def create_pdf(req, notify):
                     if approved:
                         with Image.open(approved["mask"]) as image:
                             visible = Image.fromarray(apply(visible, np.asarray(image.convert("L"))))
-                    stream = io.BytesIO()
-                    visible.save(stream, format="PNG", optimize=False)
                     pw, ph = [v*72/25.4 for v in placement["page_mm"]]
                     iw, ih = [v*72/25.4 for v in placement["image_mm"]]
                     page = doc.new_page(width=pw, height=ph)
-                    page.insert_image(fitz.Rect((pw-iw)/2, (ph-ih)/2, (pw+iw)/2, (ph+ih)/2), stream=stream.getvalue())
+                    embed_image(page, fitz.Rect((pw-iw)/2, (ph-ih)/2, (pw+iw)/2, (ph+ih)/2), visible)
                     notify({"page": local+1, "total": len(changed), "phase": "render"})
                     fitz.TOOLS.store_shrink(100)
                 doc.save(partial, garbage=4, deflate=True, use_objstms=1)
@@ -352,8 +383,9 @@ def create_pdf(req, notify):
                   "cleanup_needs_review": stale_cleanup, "verification": verification,
                   "cleanup_applied": bool(masks), "project_fingerprint": req.get("project_fingerprint"),
                   "sha256": file_hash(destination)}
+        # The master remains recoverable even if a derivative is cancelled.
         atomic_json(destination.with_suffix(".workflow.json"), result)
-        return result
+        return reading_copy(req, result, notify)
     finally:
         for path in (partial, fitted, staged):
             path.unlink(missing_ok=True)
@@ -361,7 +393,8 @@ def create_pdf(req, notify):
 
 def add_ocr(req, notify):
     from .smart_pdf import process, copy_navigation
-    from .pdf_profiles import publish
+    from .pdf_profiles import publish, configuration
+    configuration(req.get("compression_profile", "lossless"), req.get("compression_options"))
     source = Path(req["source_pdf"])
     stamp = file_hash(source)
     if req.get("source_pdf_sha256") and stamp != req["source_pdf_sha256"]:
@@ -369,7 +402,7 @@ def add_ocr(req, notify):
     receipt_path = source.with_suffix(".workflow.json")
     previous = json.loads(receipt_path.read_text(encoding="utf8")) if receipt_path.exists() else {}
     records = previous.get("records", [])
-    options = {k: req.get(k) for k in ("ocr_engine", "ocr_device", "language", "paddle_language", "tess_quality")}
+    options = {k: req.get(k) for k in ("ocr_engine", "ocr_device", "language", "paddle_language", "paddle_version", "tess_quality")}
     if req.get("ocr_cache"):
         from .pdf_export import recognition_signature
         from .runtime_layout import resource_path
@@ -425,7 +458,7 @@ def add_ocr(req, notify):
                       changed_pages=[i+1 for i in changed], reused_pages=[i+1 for i in range(len(records)) if i not in changed],
                       source_pdf_sha256=stamp, project_fingerprint=req.get("project_fingerprint"), sha256=file_hash(dest))
         atomic_json(dest.with_suffix(".workflow.json"), result)
-        return result
+        return reading_copy(req, result, notify)
     finally:
         for path in (partial, partial.with_suffix(".verification.json"), merged, Path(req["work"])/"ocr-source.part.pdf"):
             path.unlink(missing_ok=True)

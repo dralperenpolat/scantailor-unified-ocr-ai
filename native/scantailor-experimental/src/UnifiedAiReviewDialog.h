@@ -41,7 +41,7 @@ public:
         :QDialog(parent),m_samples(std::move(samples)),m_root(std::move(root)) {
         setObjectName("unifiedAiReview");m_directory=unified_review::directory(m_root,project,"content-v1");if(m_directory.isEmpty())m_directory=m_temp.path();
         for(auto const& s:m_samples)m_stamps.push_back(unified_review::sourceStamp(s.page));
-        setWindowTitle(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni · 0.5.0"));resize(1180,800);
+        setWindowTitle(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni · 0.6.0"));resize(1180,800);
         auto outer=new QVBoxLayout(this);
         auto controls=new QGridLayout;outer->addLayout(controls);
         m_pages=new QComboBox;m_pages->setObjectName("aiPageChoice");m_pages->setMinimumWidth(150);m_pages->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);

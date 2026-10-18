@@ -948,6 +948,9 @@ class Worker:
         """Optional derivatives never replace the verified reading PDF."""
         job=self.job
         if not job.get('pdf') or not job.get('verification'):return
+        from .pdf_integrity import file_digest
+        if file_digest(job['pdf'])!=job.get('pdf_hash'):
+            raise ValueError('Doğrulanmış PDF uygulama dışında değişti; PDF çıktısını yeniden oluşturun.')
         if self.request.get('structured_text',True) and not job.get('text_exports',{}).get('pdf_hash')==job.get('pdf_hash'):
             from .quality import export_text
             target=Path(folder)/('text-'+job['pdf_hash'][:12])
@@ -955,10 +958,26 @@ class Worker:
             self.emit('Metin dışa aktarılıyor','TXT, Markdown, ALTO ve okuma sırası kutuları.')
             job['text_exports']={'pdf_hash':job['pdf_hash'],**export_text(job['pdf'],target)}
         profile=self.request.get('compression_profile','lossless')
-        if profile!='lossless' and (job.get('compressed',{}).get('source_hash')!=job['pdf_hash'] or job.get('compressed',{}).get('profile')!=profile):
-            from .pdf_profiles import compress
+        from .pdf_profiles import compress,options_signature
+        compression_options=self.request.get('compression_options') or {}
+        needs_copy=profile!='lossless' or compression_options.get('recompress_flate',False)
+        signature=options_signature(profile,compression_options)
+        previous=job.get('compressed',{})
+        reusable=(previous.get('source_hash')==job['pdf_hash'] and previous.get('options_signature')==signature
+                  and Path(previous.get('pdf','')).is_file())
+        if reusable:
+            reusable=file_digest(previous['pdf'])==previous.get('output_sha256')
+        if needs_copy and not reusable:
             target=next_path(folder,safe_name(job['title'])+' - '+profile,'.pdf')
-            job['compressed']={**compress(job['pdf'],target,profile),'source_hash':job['pdf_hash']}
+            def compression_checkpoint():
+                self.checkpoint()
+                return False
+            def compression_progress(event):
+                self.emit(event.get('stage','Sıkıştırılıyor'),f"{event.get('page',0)}/{event.get('total',0)}")
+            job['compressed']={**compress(job['pdf'],target,profile,compression_progress,
+                                          options=compression_options,cancelled=compression_checkpoint),
+                               'source_hash':job['pdf_hash']}
+        job['reading_pdf']=job['compressed']['pdf'] if needs_copy else job['pdf']
         if self.request.get('output_format')=='pdfa' and job.get('pdfa',{}).get('source_hash')!=job['pdf_hash']:
             from .archive_pdf import convert_pdfa
             target=next_path(folder,safe_name(job['title'])+' - PDFA','.pdf')
@@ -971,7 +990,7 @@ class Worker:
             if cleanup['files']:job['cache_cleanup']=apply_cleanup(cleanup,getattr(self,'root',None))
         except (OSError,ValueError) as exc:job['cache_cleanup_note']=str(exc)
         self.emit('Kontrol gerekli' if job.get('warnings') else 'Tamamlandı',
-            f'{len(job.get("pages",[]))} sayfa · PDF ve seçilen ek çıktılar hazır.',preview=job['pdf'])
+            f'{len(job.get("pages",[]))} sayfa · PDF ve seçilen ek çıktılar hazır.',preview=job['reading_pdf'])
 
 def main():
     request=json.loads(Path(sys.argv[1]).read_text(encoding='utf8'))

@@ -28,6 +28,9 @@ class NativeWatchdog(unittest.TestCase):
             self.worker.native(['-u', '-c', code])
 
     def test_normal_exit_is_not_terminated_at_stdout_eof(self):
+        # This case tests the EOF/exit race, not interpreter cold-start speed.
+        # The dedicated stall case below retains its short watchdog deadline.
+        self.worker.request['native_page_timeout'] = 5
         self.run_child('print(123)')
 
     def test_stalled_page_times_out(self):

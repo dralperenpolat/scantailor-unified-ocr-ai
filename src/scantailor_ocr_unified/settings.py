@@ -8,7 +8,7 @@ from .runtime_layout import data_root
 
 DEFAULTS = {
     'schema': 1, 'cache_quota_gib': 10, 'reserve_gib': 2, 'temp_root': '',
-    'resource_profile': 'balanced', 'compression_profile': 'lossless',
+    'resource_profile': 'balanced', 'compression_profile': 'lossless', 'compression_options': {},
     'ocr_compare': False, 'ocr_confidence_threshold': .85,
     'paddle_version': 'PP-OCRv5', 'structured_text': True,
     'output_format': 'pdf', 'verapdf': '', 'ocrmypdf': '',
@@ -50,7 +50,8 @@ def save(value, root=None):
         current[key] = float(current[key])
         if not 0 <= current[key] <= 100000: raise ValueError('Invalid storage limit')
     if current['resource_profile'] not in ('fast','balanced','quiet'): raise ValueError('Invalid resource profile')
-    if current['compression_profile'] not in ('lossless','balanced','small'): raise ValueError('Invalid compression profile')
+    from .pdf_profiles import configuration
+    configuration(current['compression_profile'],current.get('compression_options'))
     if current['output_format'] not in ('pdf','pdfa'): raise ValueError('Invalid output format')
     if not 0 <= float(current['ocr_confidence_threshold']) <= 1: raise ValueError('Invalid OCR threshold')
     atomic_json(data_root(root)/'preferences.json', current)
@@ -65,6 +66,7 @@ def save_profile(name, value, root=None):
     allowed = {'language','paddle_language','appearance','margin_mm','paper','ocr_compare','native_scale','ocr_max_edge','page_cleanup','compression_profile','ocr_engine','ocr_device','tess_quality','resource_profile','ocr_timing','auto_warp','content_fit'}
     path = data_root(root)/'book-profiles.json'
     custom = json.loads(path.read_text('utf8')) if path.exists() else {}
+    allowed.add('compression_options')
     custom[name] = {k:v for k,v in value.items() if k in allowed}
     atomic_json(path, custom)
     return custom[name]

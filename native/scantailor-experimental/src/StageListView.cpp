@@ -35,18 +35,36 @@ void StageListView::setStages(IntrusivePtr<StageSequence> const& stages) {
     }
     horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     horizontalHeader()->setSectionResizeMode(1,QHeaderView::Fixed);horizontalHeader()->setSectionResizeMode(2,QHeaderView::Fixed);
-    verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);updateMetrics();updateButtons();
+    verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);updateVisibility();updateButtons();
 }
 void StageListView::updateMetrics(){
     int width=0;const QFontMetrics fm(font());for(auto const& step:unified_workflow::steps())width=qMax(width,fm.horizontalAdvance(step.title));
     int row=qMax(28,fm.height()+12);verticalHeader()->setDefaultSectionSize(row);
     horizontalHeader()->resizeSection(1,fm.horizontalAdvance("9999 s")+12);horizontalHeader()->resizeSection(2,row+4);
-    m_sizeHint=QSize(width+horizontalHeader()->sectionSize(1)+row+30,unified_workflow::steps().size()*row+4);
+    int visible=0;for(int i=0;i<m_model->rowCount();++i)if(!isRowHidden(i))++visible;
+    m_sizeHint=QSize(width+horizontalHeader()->sectionSize(1)+row+30,visible*row+4);
     setMinimumWidth(m_sizeHint.width());setFixedHeight(m_sizeHint.height());setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);updateGeometry();
 }
 void StageListView::changeEvent(QEvent* event){QTableView::changeEvent(event);if(event->type()==QEvent::FontChange&&m_model)updateMetrics();}
-void StageListView::selectFilter(int filter){auto list=unified_workflow::steps();for(int i=0;i<list.size();++i)if(list[i].filter==filter){selectRow(i);return;}}
-void StageListView::selectStep(QString const& id){int row=unified_workflow::row(id);if(row>=0)selectRow(row);}
+void StageListView::selectFilter(int filter){auto list=unified_workflow::steps();for(int i=0;i<list.size();++i)if(list[i].filter==filter){selectStep(list[i].id);return;}}
+void StageListView::selectStep(QString const& id){int row=unified_workflow::row(id);if(row>=0){setNavigationGroup(groupForStep(id));selectRow(row);}}
+int StageListView::groupForStep(QString const& id){
+    if(id=="input")return 0;
+    if(id=="cleanup")return 2;
+    if(id=="pdf"||id=="ocr")return 3;
+    if(id=="storage"||id=="settings"||id=="help")return 4;
+    return 1;
+}
+void StageListView::updateVisibility(){
+    if(!m_model)return;
+    for(int i=0;i<m_model->rowCount();++i)setRowHidden(i,!m_showAll&&groupForStep(stepId(i))!=m_group);
+    updateMetrics();
+}
+void StageListView::setNavigationGroup(int group){m_group=group;updateVisibility();emit navigationGroupChanged(group);}
+void StageListView::showAllStages(bool show){
+    m_showAll=show;if(!show&&!currentStep().isEmpty())m_group=groupForStep(currentStep());
+    updateVisibility();emit navigationGroupChanged(m_group);
+}
 QString StageListView::currentStep()const{return stepId(currentIndex().row());}
 QString StageListView::stepId(int row)const{auto list=unified_workflow::steps();return row>=0&&row<list.size()?list[row].id:QString();}
 int StageListView::filterForRow(int row)const{auto list=unified_workflow::steps();return row>=0&&row<list.size()?list[row].filter:-1;}

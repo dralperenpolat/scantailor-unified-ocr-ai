@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "UnifiedI18n.h"
+#include "UnifiedCompressionOptions.h"
 #include <QWizard>
 #include <QWizardPage>
 #include <QFormLayout>
@@ -20,6 +21,7 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QTemporaryFile>
+#include <QScrollArea>
 
 class UnifiedStartupDialog:public QWizard {
 public:
@@ -35,7 +37,9 @@ public:
         m_timing=new QComboBox;m_timing->setObjectName("setupOcrTiming");m_timing->addItem(tr("En son · önce görüntülü PDF hazır olsun"),"after");m_timing->addItem(tr("Her sayfayla birlikte"),"during");m_timing->addItem(tr("OCR yapma"),"none");form->addRow(tr("OCR zamanı"),m_timing);
         auto timing=new QLabel(tr("OCR’ı sona almak toplam tanıma işini azaltmaz; görüntülü PDF’yi daha erken incelemenizi sağlar. Fast ve Best doğruluğu kitap türüne göre değişir."));timing->setWordWrap(true);form->addRow(timing);
         m_ui=new QComboBox;m_ui->addItem("Türkçe","tr");m_ui->addItem("English","en");m_ui->setCurrentIndex(qMax(0,m_ui->findData(unified_i18n::selectedLanguage())));form->addRow(tr("Arayüz dili · sonraki açılışta"),m_ui);addPage(first);
-        auto processing=new QWizardPage;processing->setTitle(tr("Görüntü, hız ve kalite"));auto process=new QFormLayout(processing);
+        auto processing=new QWizardPage;processing->setTitle(tr("Görüntü, hız ve kalite"));
+        auto processOuter=new QVBoxLayout(processing);auto scroll=new QScrollArea;scroll->setWidgetResizable(true);processOuter->addWidget(scroll);
+        auto processBody=new QWidget;scroll->setWidget(processBody);auto process=new QFormLayout(processBody);
         m_warp=new QCheckBox(tr("Otomatik eğrilik düzeltme · daha yavaş"));process->addRow(m_warp);
         m_cleanup=new QCheckBox(tr("OCR ile korumalı kenar temizleme · daha yavaş"));process->addRow(m_cleanup);
         m_fit=new QCheckBox(tr("Kitap boyunca yazı yüksekliğini eşitle · ek ölçüm"));process->addRow(m_fit);
@@ -43,7 +47,8 @@ public:
         m_appearance=new QComboBox;m_appearance->addItem(tr("Experimental çıktısını koru · hızlı"),"native");m_appearance->addItem(tr("Gri ton · eşikleme yok"),"gray");m_appearance->addItem(tr("Yerel yumuşak siyah-beyaz · ek işlem"),"soft_local");process->addRow(tr("PDF görünümü"),m_appearance);
         m_paper=new QComboBox;m_paper->addItem("A4","a4");m_paper->addItem(tr("A4 · yazı yüksekliği eşitle"),"a4_text");m_paper->addItem(tr("Özgün boyut"),"native");process->addRow(tr("Sayfa boyutu"),m_paper);
         m_margin=new QDoubleSpinBox;m_margin->setRange(0,70);m_margin->setValue(10);m_margin->setSuffix(" mm");process->addRow(tr("Kenar payı"),m_margin);
-        m_compression=new QComboBox;m_compression->addItem(tr("Kayıpsız"),"lossless");m_compression->addItem(tr("Dengeli · JPEG 92 / 300 DPI"),"balanced");m_compression->addItem(tr("Küçük · JPEG 80 / 200 DPI"),"small");process->addRow(tr("PDF boyut profili"),m_compression);
+        m_compression=new UnifiedCompressionOptions;process->addRow(m_compression);
+        m_compression->setOptions(saved.value("compression_profile").toString("lossless"),saved.value("compression_options").toObject());
         m_text=new QCheckBox(tr("TXT / Markdown / ALTO da oluştur"));m_text->setChecked(true);process->addRow(m_text);
         auto manual=new QLabel(tr("Mevcut projelerin elle ayarlanmış geometri ve alanları korunur. Boyut küçültme seçenekleri ayrı PDF üretir; görüntü kalitesini pilot sayfalarda karşılaştırın."));manual->setWordWrap(true);process->addRow(manual);addPage(processing);
         auto disks=new QWizardPage;disks->setTitle(tr("Çalışma diski ve sınırlar"));auto paths=new QFormLayout(disks);
@@ -56,12 +61,18 @@ public:
         connect(m_profile,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{profile();});profile();
         if(saved.value("setup_complete").toBool()){
             auto set=[&](QComboBox* box,char const* key){int i=box->findData(saved.value(key).toString());if(i>=0)box->setCurrentIndex(i);};
-            set(m_engine,"ocr_engine");set(m_quality,"tess_quality");set(m_language,"language");set(m_timing,"ocr_timing");set(m_appearance,"appearance");set(m_paper,"paper");set(m_compression,"compression_profile");set(m_resource,"resource_profile");
+            set(m_engine,"ocr_engine");set(m_quality,"tess_quality");set(m_language,"language");set(m_timing,"ocr_timing");set(m_appearance,"appearance");set(m_paper,"paper");set(m_resource,"resource_profile");
             m_warp->setChecked(saved.value("auto_warp").toBool());m_cleanup->setChecked(saved.value("page_cleanup").toBool());m_fit->setChecked(saved.value("content_fit").toBool());m_scale->setValue(saved.value("native_scale").toInt(1));m_margin->setValue(saved.value("margin_mm").toDouble(10));m_text->setChecked(saved.value("structured_text").toBool(true));
             m_profile->blockSignals(true);m_profile->addItem(tr("Kaydedilmiş özel ayarlar"),"custom");m_profile->setCurrentIndex(m_profile->count()-1);m_profile->blockSignals(false);
         }
     }
     bool validateCurrentPage() override {
+        if(currentId()==1&&m_compression->profile()=="target"){
+            auto options=m_compression->options();
+            if(options.value("min_dpi").toInt()>options.value("dpi").toInt()||options.value("min_quality").toInt()>options.value("jpeg_quality").toInt()){
+                QMessageBox::warning(this,tr("Sıkıştırma"),tr("Alt kalite sınırı başlangıç ayarından büyük olamaz."));return false;
+            }
+        }
         if(currentId()!=2)return true;
         for(auto edit:{m_output,m_temp}){
             auto path=edit->text().trimmed();if(edit==m_temp&&path.isEmpty())continue;
@@ -85,13 +96,15 @@ public:
             {"tess_quality",m_quality->currentData().toString()},{"language",lang},{"paddle_language",lang=="deu"?"de":lang=="tur"?"tr":"en"},
             {"ocr_timing",m_timing->currentData().toString()},{"auto_warp",m_warp->isChecked()},{"page_cleanup",m_cleanup->isChecked()},{"content_fit",m_fit->isChecked()},
             {"native_scale",m_scale->value()},{"ocr_max_edge",m_scale->value()==1?3000:4200},{"appearance",m_appearance->currentData().toString()},
-            {"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"compression_profile",m_compression->currentData().toString()},
+            {"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"compression_profile",m_compression->profile()},
+            {"compression_options",m_compression->options()},
             {"resource_profile",m_resource->currentData().toString()},{"structured_text",m_text->isChecked()},{"ocr_compare",false},
             {"temp_root",m_temp->text().trimmed()},{"cache_quota_gib",m_quota->value()},{"reserve_gib",m_reserve->value()},
             {"preferred_output",m_output->text().trimmed()},{"ui_language",m_ui->currentData().toString()}};
     }
 private:
-    QComboBox *m_profile,*m_engine,*m_quality,*m_language,*m_timing,*m_ui,*m_appearance,*m_paper,*m_compression,*m_resource;
+    QComboBox *m_profile,*m_engine,*m_quality,*m_language,*m_timing,*m_ui,*m_appearance,*m_paper,*m_resource;
+    UnifiedCompressionOptions* m_compression;
     QCheckBox *m_warp,*m_cleanup,*m_fit,*m_text;QSpinBox* m_scale;QDoubleSpinBox *m_margin,*m_quota,*m_reserve;QLineEdit *m_output,*m_temp;
     static QString tr(char const* text){return unified_i18n::text(text);}
     void pathRow(QFormLayout* form,QString const& title,QLineEdit* edit){auto row=new QHBoxLayout;row->addWidget(edit);auto button=new QPushButton(tr("Klasör seç"));row->addWidget(button);form->addRow(title,row);connect(button,&QPushButton::clicked,this,[this,edit,title]{auto value=QFileDialog::getExistingDirectory(this,title,edit->text());if(!value.isEmpty())edit->setText(value);});}

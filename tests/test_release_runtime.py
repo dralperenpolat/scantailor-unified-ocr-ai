@@ -8,6 +8,25 @@ from scantailor_ocr_unified.native_worker import NativeCrash, Worker
 
 
 class ReleaseRuntime(unittest.TestCase):
+    def test_v6_uses_complete_small_model_pair_and_cache_tracks_weights(self):
+        from scantailor_ocr_unified.paddle_runtime import model_profile
+        from scantailor_ocr_unified.pdf_export import recognition_signature
+        self.assertEqual(model_profile('PP-OCRv6', 'tr', 'cpu', 4*1024**3),
+                         ('PP-OCRv6_small_det', 'PP-OCRv6_small_rec', 1536))
+        self.assertEqual(model_profile('PP-OCRv5', 'tr', 'cpu', 4*1024**3)[0], 'PP-OCRv5_mobile_det')
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            model=root/'resources/paddle-models/official_models/PP-OCRv6_small_rec'
+            model.mkdir(parents=True)
+            for name in ('inference.json','inference.pdiparams','inference.yml'):
+                (model/name).write_bytes(b'first revision')
+            with patch.dict(os.environ, {'STOU_DATA':str(root/'user'),'STOU_ASSET_ROOT':str(root)}):
+                conf={'root':str(root),'paddle_version':'PP-OCRv6','paddle_language':'tr'}
+                first=recognition_signature(conf,'paddle',root,'tur')
+                (model/'inference.pdiparams').write_bytes(b'updated model weights')
+                second=recognition_signature(conf,'paddle',root,'tur')
+                self.assertNotEqual(first,second)
+
     def test_interrupted_language_copy_never_publishes_partial_model(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);app=root/'app';data=root/'user'

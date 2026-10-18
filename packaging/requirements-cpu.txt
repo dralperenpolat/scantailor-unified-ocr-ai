@@ -1,8 +1,11 @@
 Pillow==12.2.0
 PyMuPDF==1.28.0
 pypdf==6.13.3
+pikepdf==10.17.0
 img2pdf==0.6.3
 numpy==2.2.6
+opencv-contrib-python==4.10.0.84
+psutil==7.2.2
 scipy==1.18.0
 paddleocr==3.7.0
 

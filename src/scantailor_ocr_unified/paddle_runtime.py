@@ -12,6 +12,15 @@ def detector_profile(device, available):
     if not device.startswith('gpu') and available is not None and available < 6*1024**3:
         return 'PP-OCRv5_mobile_det',1536
     return 'PP-OCRv5_server_det',2048
+
+def model_profile(version, language, device, available):
+    detector, limit = detector_profile(device, available)
+    if version == 'PP-OCRv6':
+        return 'PP-OCRv6_small_det', 'PP-OCRv6_small_rec', limit
+    if version != 'PP-OCRv5':
+        raise ValueError('Unsupported Paddle OCR version')
+    recognizer = 'latin_PP-OCRv5_mobile_rec' if language in ('de','tr','fr','it','es','pt','nl','pl','en') else None
+    return detector, recognizer, limit
 def check(device):
     sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
     from scantailor_ocr_unified.runtime_layout import prepare_math_libraries
@@ -44,19 +53,16 @@ def main():
                 engines.clear()
                 gc.collect()
                 from scantailor_ocr_unified.memory_budget import available_bytes
-                detector_name,detector_limit=detector_profile(device,available_bytes())
+                detector_name,recognizer_name,detector_limit=model_profile(version,lang,device,available_bytes())
                 check(device)
                 from paddleocr import PaddleOCR
                 local={}
-                if version not in ('PP-OCRv5','PP-OCRv6'):raise ValueError('Unsupported Paddle OCR version')
-                if version=='PP-OCRv6':
-                    detector_name='PP-OCRv6_small_det'
                 detector=paddle_model(detector_name,root)
                 local['text_detection_model_name']=detector_name
                 if detector:local['text_detection_model_dir']=native_model_directory(detector)
-                if version=='PP-OCRv5' and lang in ('de','tr','fr','it','es','pt','nl','pl','en'):
-                    recognizer=paddle_model('latin_PP-OCRv5_mobile_rec',root)
-                    local['text_recognition_model_name']='latin_PP-OCRv5_mobile_rec'
+                if recognizer_name:
+                    recognizer=paddle_model(recognizer_name,root)
+                    local['text_recognition_model_name']=recognizer_name
                     if recognizer:local['text_recognition_model_dir']=native_model_directory(recognizer)
                 engines[key]=PaddleOCR(lang=lang,ocr_version=version,device=device_name(device),
                     use_doc_orientation_classify=False,use_doc_unwarping=False,use_textline_orientation=False,
@@ -76,7 +82,7 @@ def main():
                     else:
                         points=polys[i];box=[float(points[:,0].min()),float(points[:,1].min()),float(points[:,0].max()),float(points[:,1].max())]
                     lines.append({'text':text,'score':float(scores[i]),'box':box})
-            emit({'ok':True,'lines':lines,'device':device_name(device),'language':lang,'version':version,'detector':detector_name,'detector_limit':detector_limit,'seconds':round(time.monotonic()-start,3)})
+            emit({'ok':True,'lines':lines,'device':device_name(device),'language':lang,'version':version,'detector':detector_name,'recognizer':recognizer_name or 'library_default','detector_limit':detector_limit,'seconds':round(time.monotonic()-start,3)})
         except Exception as exc:
             traceback.print_exc(file=sys.stderr);emit({'ok':False,'error':str(exc)})
     return 0

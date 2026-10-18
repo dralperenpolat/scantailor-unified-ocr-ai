@@ -188,39 +188,9 @@ def import_pdf(source, destination, dpi=300, notify=lambda value: None, *, strat
 
 
 def compact_pdf(source, destination, notify=lambda value: None):
-    source, destination = Path(source).resolve(), Path(destination).resolve()
-    if source == destination or destination.exists(): raise FileExistsError('Çıktı için yeni bir dosya adı gerekli.')
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.parent/f'.pdf-pack-{uuid.uuid4().hex}.pdf'
-    try:
-        with fitz.open(source) as before:
-            if before.needs_pass: raise ValueError('PDF şifreli.')
-            before.save(temporary, garbage=4, deflate=True, deflate_images=True, deflate_fonts=True, use_objstms=1)
-            with fitz.open(temporary) as after:
-                if len(before) != len(after): raise ValueError('Sayfa sayısı değişti.')
-                for number, (a, b) in enumerate(zip(before, after), 1):
-                    if a.rect != b.rect or a.get_text() != b.get_text(): raise ValueError(f'Metin / boyut değişti: {number}')
-                    # Includes vectors, text, multiple images, masks, annotations.
-                    # Pixel comparison is of the final display at 150 dpi.
-                    pa = a.get_pixmap(dpi=150, alpha=False)
-                    pb = b.get_pixmap(dpi=150, alpha=False)
-                    if (pa.width, pa.height, pa.n) != (pb.width, pb.height, pb.n) or hashlib.sha256(pa.samples).digest() != hashlib.sha256(pb.samples).digest():
-                        raise ValueError(f'Görünüm değişti: {number}')
-                    notify({'stage': 'Kayıpsız çıktı doğrulanıyor', 'page': number, 'total': len(before)})
-                    fitz.TOOLS.store_shrink(100)
-                pages = len(before)
-        # Never deliver a larger "compressed" file. Stream the original if needed.
-        if temporary.stat().st_size >= source.stat().st_size:
-            import shutil
-            shutil.copyfile(source, temporary)
-        # Atomic, exclusive publication: cancellation cannot expose a partial PDF.
-        import os
-        os.link(temporary, destination)
-        return {'ok': True, 'mode': 'compact', 'pdf': str(destination), 'pages': pages,
-                'before_bytes': source.stat().st_size, 'after_bytes': destination.stat().st_size,
-                'text_identical': True, 'render_dpi': 150, 'renders_identical': True}
-    finally:
-        temporary.unlink(missing_ok=True)
+    from .pdf_profiles import compress
+    return {'ok': True, 'mode': 'compact', 'render_dpi': 150,
+            **compress(source, destination, 'lossless', notify)}
 
 
 def main():

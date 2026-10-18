@@ -226,7 +226,7 @@ IF(QT_DEFAULT_MAJOR_VERSION EQUAL 5)
 ELSE()
     TARGET_LINK_LIBRARIES(scantailor-experimental Qt6::Network)
 ENDIF()
-SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.5.0" CACHE STRING "GUI executable name")
+SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.6.0" CACHE STRING "GUI executable name")
 SET_TARGET_PROPERTIES(
     scantailor-experimental PROPERTIES
     OUTPUT_NAME "${STOU_GUI_OUTPUT_NAME}"
@@ -240,6 +240,12 @@ IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_i18n.cpp")
     TARGET_INCLUDE_DIRECTORIES(unified-i18n-test PRIVATE "${CMAKE_BINARY_DIR}/src/stages/output" "${CMAKE_BINARY_DIR}/src/stages/page_layout" "${CMAKE_BINARY_DIR}/src/stages/deskew" "${CMAKE_BINARY_DIR}/src/stages/select_content")
     TARGET_LINK_LIBRARIES(unified-i18n-test $<$<PLATFORM_ID:Windows>:psapi> acceleration page_layout output fix_orientation page_split deskew select_content stcore dewarping zones interaction imageproc math foundation ${EXTRA_LIBS})
     SET_TARGET_PROPERTIES(unified-i18n-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+ENDIF()
+IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_compression.cpp")
+    ADD_EXECUTABLE(unified-compression-test EXCLUDE_FROM_ALL
+        "${CMAKE_SOURCE_DIR}/../../tests/native_compression.cpp" ${resource_sources})
+    TARGET_LINK_LIBRARIES(unified-compression-test Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets)
+    SET_TARGET_PROPERTIES(unified-compression-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 ENDIF()
 IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_window043.cpp")
     SET(window_test_sources ${gui_only_sources})

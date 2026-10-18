@@ -44,8 +44,16 @@ def recognition_signature(conf,engine,tessdata,language):
     root=Path(conf['root']);device=conf.get('ocr_device','cpu');ready=resource_path('paddle-'+device+'-ready.json',root)
     version=json.loads(ready.read_text(encoding='utf8')) if ready.exists() else {}
     from .ocr_backend import OCR_PIPELINE_ID
+    from .runtime_layout import paddle_model
+    names = ('PP-OCRv6_small_det', 'PP-OCRv6_small_rec') if conf.get('paddle_version') == 'PP-OCRv6' else (
+        'PP-OCRv5_mobile_det', 'PP-OCRv5_server_det', 'latin_PP-OCRv5_mobile_rec')
+    models = []
+    for name in names:
+        directory = paddle_model(name, root)
+        models.append((name, [(filename, model_digest(directory / filename)) for filename in (
+            'inference.json', 'inference.pdiparams', 'inference.yml')] if directory else 'not-installed'))
     return [engine,conf.get('paddle_language','de'),device,conf.get('paddle_version','PP-OCRv5'),version.get('paddle'),version.get('paddleocr'),
-            digest(Path(__file__).with_name('paddle_runtime.py').read_bytes()),OCR_PIPELINE_ID]
+            digest(Path(__file__).with_name('paddle_runtime.py').read_bytes()),OCR_PIPELINE_ID,models]
 
 def text_layer_cache(candidate,rotation,signature,directory,recognize,notify,metadata=None):
     if not directory:return recognize()

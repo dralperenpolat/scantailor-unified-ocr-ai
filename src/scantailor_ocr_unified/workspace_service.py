@@ -8,7 +8,7 @@ import uuid
 from .runtime_layout import data_root
 
 
-def dispatch(request):
+def dispatch(request, notify=lambda event: None):
     action=request['action'];root=request.get('root');queue=request.get('queue')
     from . import settings,storage
     if action=='settings':return {'settings':settings.load(root),'profiles':settings.book_profiles(root)}
@@ -73,10 +73,14 @@ def dispatch(request):
         return process(request['source'],request['destination'],{**settings.load(root),**request,'root':root})
     if action=='compression-preview':
         from .pdf_profiles import preview
-        return preview(request['source'],request['destination'],request.get('pages','1-3'))
+        return preview(request['source'],request['destination'],request.get('pages','1-3'),notify,
+                       options=request.get('compression_options'),
+                       cancelled=lambda: bool(request.get('cancel_file')) and Path(request['cancel_file']).exists())
     if action=='compress':
         from .pdf_profiles import compress
-        return compress(request['source'],request['destination'],request.get('profile','balanced'))
+        return compress(request['source'],request['destination'],request.get('profile','balanced'),notify,
+                        options=request.get('compression_options'),pages=request.get('pages',''),
+                        cancelled=lambda: bool(request.get('cancel_file')) and Path(request['cancel_file']).exists())
     if action=='pdfa':
         from .archive_pdf import convert_pdfa
         return convert_pdfa(request['source'],request['destination'],{**settings.load(root),'root':root})
@@ -110,7 +114,7 @@ def dispatch(request):
 def main():
     try:
         request=json.loads(sys.stdin.readline())
-        result=dispatch(request)
+        result=dispatch(request,lambda event: print('STOUWORKPROGRESS '+json.dumps(event,ensure_ascii=False),flush=True))
         print('STOUWORK '+json.dumps({'ok':True,'result':result},ensure_ascii=False),flush=True)
     except Exception as exc:
         print('STOUWORK '+json.dumps({'ok':False,'error':str(exc)},ensure_ascii=False),flush=True)

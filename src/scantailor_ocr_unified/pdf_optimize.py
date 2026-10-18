@@ -5,9 +5,9 @@ must retain every image pixel, extracted text, page size and rendered page.
 """
 from __future__ import annotations
 
-import hashlib
-import io
 from pathlib import Path
+import shutil
+import tempfile
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
@@ -18,9 +18,13 @@ from pypdf.generic import NameObject
 
 
 def compact(source, destination, notify=lambda message: None, workers=4):
-    source, destination = Path(source), Path(destination)
+    from .pdf_integrity import file_digest, verify
+    from .pdf_profiles import publish
+    from .memory_budget import bounded_workers
+    source, destination = Path(source).resolve(), Path(destination).resolve()
     if destination.exists():
         raise FileExistsError(destination)
+    source_hash = file_digest(source)
     writer = PdfWriter()
     writer.clone_document_from_reader(PdfReader(source))
     repacked = 0
@@ -38,7 +42,7 @@ def compact(source, destination, notify=lambda message: None, workers=4):
             image.pop('/DecodeParms', None)
             repacked += 1
         notify(f'Kayıpsız sıkıştırma: {index + 1}/{len(writer.pages)}')
-    workers=max(1,min(4,int(workers)))
+    workers=bounded_workers(max(1,min(4,int(workers))),bytes_per_worker=512*1024**2,reserve=512*1024**2)
     with ThreadPoolExecutor(max_workers=workers) as pool, fitz.open(source) as original:
         for index, page in enumerate(writer.pages):
             images = original[index].get_images(full=True)
@@ -62,36 +66,26 @@ def compact(source, destination, notify=lambda message: None, workers=4):
                 fitz.TOOLS.store_shrink(100)
         while pending:finish_one()
 
-    stream = io.BytesIO()
-    writer.write(stream)
-    with fitz.open(stream=stream.getvalue(), filetype='pdf') as packed:
-        result = packed.tobytes(garbage=4, deflate=True, deflate_fonts=True, use_objstms=1)
-    if len(result) >= source.stat().st_size:
-        result = source.read_bytes()
-
-    with fitz.open(source) as before, fitz.open(stream=result, filetype='pdf') as after:
-        if len(before) != len(after):
-            raise ValueError('Sıkıştırmada sayfa sayısı değişti.')
-        for number, (a, b) in enumerate(zip(before, after), 1):
-            if a.rect != b.rect or a.get_text() != b.get_text():
-                raise ValueError(f'Sıkıştırmada metin veya sayfa boyutu değişti: {number}')
-            images_a, images_b = a.get_images(full=True), b.get_images(full=True)
-            if len(images_a) != 1 or len(images_b) != 1:
-                raise ValueError(f'Taranmış sayfada tek görüntü bekleniyordu: {number}')
-            x, y = fitz.Pixmap(before, images_a[0][0]), fitz.Pixmap(after, images_b[0][0])
-            if ((x.width, x.height, x.n) != (y.width, y.height, y.n)
-                    or hashlib.sha256(x.samples).digest() != hashlib.sha256(y.samples).digest()):
-                raise ValueError(f'Sıkıştırmada görüntü pikselleri değişti: {number}')
-            if a.get_pixmap(dpi=72, alpha=False).samples != b.get_pixmap(dpi=72, alpha=False).samples:
-                raise ValueError(f'Sıkıştırmada görünüm değişti: {number}')
-            if number % 25 == 0:
-                notify(f'Sıkıştırma doğrulaması: {number}/{len(before)}')
-                fitz.TOOLS.store_shrink(100)
-        count = len(before)
+    count = len(writer.pages)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open('xb') as output:
-        output.write(result)
+    # Serialise and repack through private files: do not retain three complete
+    # PDF byte strings alongside the pypdf object graph for a large book.
+    with tempfile.TemporaryDirectory(prefix='.stou-lossless-',dir=destination.parent) as folder:
+        intermediate=Path(folder)/'objects.pdf';result=Path(folder)/'verified.pdf'
+        with intermediate.open('xb') as stream:
+            writer.write(stream)
+        writer.close()
+        del writer
+        with fitz.open(intermediate) as packed:
+            packed.save(result,garbage=4,deflate=True,deflate_fonts=True,use_objstms=1)
+        if result.stat().st_size >= source.stat().st_size:
+            shutil.copyfile(source,result)
+            repacked=0
+        verify(source,result,notify=lambda e: notify(f"Sıkıştırma doğrulaması: {e['page']}/{e['total']}"))
+        if file_digest(source)!=source_hash:
+            raise ValueError('Kaynak PDF işlem sırasında değişti; yeni çıktı yayımlanmadı.')
+        publish(result,destination)
     return {'pages': count, 'before_bytes': source.stat().st_size,
-            'after_bytes': len(result), 'repacked_images': repacked,
+            'after_bytes': destination.stat().st_size, 'repacked_images': repacked,
             'image_pixels_identical': True, 'text_identical': True,
             'page_renders_identical': True}

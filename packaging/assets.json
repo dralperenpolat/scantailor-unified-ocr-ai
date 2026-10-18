@@ -6,7 +6,8 @@
     "PaddlePaddle/PP-OCRv5_server_det": "ca867c897ecbca8873081573a802ad70d499cb94",
     "PaddlePaddle/latin_PP-OCRv5_mobile_rec": "ab2cd5cc5fa6309be2e5acdfe66eca2c2c127d57",
     "PaddlePaddle/PP-DocLayout-S": "8ac289e66575bb9bba6e15c53719d8b15cc9b3b2",
-    "tanguymagne/UVDoc": "4c9b82b537057aff2526e6dd118a847cdd072e82"
+    "tanguymagne/UVDoc": "4c9b82b537057aff2526e6dd118a847cdd072e82",
+    "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
   },
   "assets": [
     {
@@ -181,6 +182,24 @@
       "path": "resources/tessdata_best/tur.traineddata",
       "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/tur.traineddata",
       "sha256": "e0c3338dc17503dc7d335a507c9ae01b2b46cfd07561171e1e1ac55d85e8e438",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "resources/paddle-models/official_models/PP-OCRv6_small_rec/inference.json",
+      "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec/resolve/bd619643acac4b9650c040234da8d944476ee3f1/inference.json",
+      "sha256": "f0bf53c853937a917affdd74467472167727f8ab0f0f7bded01c4a16c27e46e6",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "resources/paddle-models/official_models/PP-OCRv6_small_rec/inference.pdiparams",
+      "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec/resolve/bd619643acac4b9650c040234da8d944476ee3f1/inference.pdiparams",
+      "sha256": "406e1e689c9a7fbb04178007a3fe10cf852afe7bf8bb3bc6dbb9d532b13bd907",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "resources/paddle-models/official_models/PP-OCRv6_small_rec/inference.yml",
+      "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec/resolve/bd619643acac4b9650c040234da8d944476ee3f1/inference.yml",
+      "sha256": "ab078671bb49f06228eadccd34f1bb501e157f7a047095ffb943ba81512c77d1",
       "license": "Apache-2.0"
     }
   ]

@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.5.0
+# ScanTailor OCR Unified · 0.6.0
 
 **English** | [Türkçe](README.tr.md)
 
-Version 0.5.0 adds an ordered 0–12 workflow, page-by-page PDF/OCR updates, startup folder settings, CPU Fast with Tesseract and deferred OCR, a SQLite queue and project cache controls. [Download 0.5.0](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/tag/v0.5.0) or see the [workflow and build notes](packaging/BUILD-0.5.0.md).
+Version 0.6.0 adds five navigation sections with an expanded stage view, five compression profiles, target file size, sample-page comparisons and cancellation. PDF/OCR updates use the lossless master and retain a separate compressed reading copy. Existing projects and earlier PDF versions are preserved.
 
 A desktop application for cleaning up book photographs and creating searchable PDFs. It builds on the six image-processing filters of [ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental), adding a book queue, OCR, PDF export, UVDoc dewarping suggestions and Paddle-based content review. Documents are processed on your computer. A GPU is optional.
 
@@ -10,11 +10,19 @@ A desktop application for cleaning up book photographs and creating searchable P
 
 The repository is named **scantailor-unified-ocr-ai**; the application is called **ScanTailor OCR Unified**.
 
+## Compression
+
+Choose **Lossless, Balanced, Small file, Target size or Custom** in PDF / OCR settings. Target size respects quality limits and cannot always be reached. If compression would increase file size, an identical source copy is retained. Deep lossless repacking is optional: recompressing existing Flate streams can cost substantial time for a small saving on an already optimized book.
+
+Workspace → PDF and export offers page ranges, passwords and three-profile sample comparisons. Small-text protection is enabled by default. JPEG and grayscale conversion may alter appearance; inspect the full PDF. New compressed files are published only after page count, text positions, navigation, annotations and appearance checks.
+
+Open latest PDF opens the reading copy. The lossless master remains available for page updates and OCR. Double-clicking a book in the queue also opens its latest reading copy.
+
 ## Install
 
-**Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-**Linux x64: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Linux x64: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
 The release provides one package per platform: the Windows installer and the Linux archive. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 

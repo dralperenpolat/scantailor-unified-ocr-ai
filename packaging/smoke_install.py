@@ -11,7 +11,7 @@ def verify(app):
     manifest=json.loads((app/'FILES-SHA256.json').read_text('utf8'))
     for name,expected in manifest.items():
         with (app/name).open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==expected,name
-    assert json.loads((app/'release.json').read_text('utf8'))['version']=='0.5.0'
+    assert json.loads((app/'release.json').read_text('utf8'))['version']=='0.6.0'
     return len(manifest)
 
 

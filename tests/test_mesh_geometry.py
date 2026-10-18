@@ -1,6 +1,9 @@
 import unittest
 import numpy as np
-import torch
+try:
+    import torch
+except ImportError:
+    raise unittest.SkipTest("Mesh/Torch checks require the optional AI runtime; the minimal package excludes it.")
 import torch.nn.functional as F
 from scantailor_ocr_unified.mesh_geometry import sample_mesh, remap_mesh
 from scantailor_ocr_unified.engine import sample_original

@@ -22,7 +22,7 @@ def generate(root):
             if name.startswith(('native/','resources/')):
                 components.append({'type':'file','name':name,'hashes':[{'alg':'SHA-256','content':sha}]})
     return {'bomFormat':'CycloneDX','specVersion':'1.6','serialNumber':'urn:uuid:'+str(uuid.uuid4()),'version':1,
-        'metadata':{'component':{'type':'application','name':'ScanTailor OCR Unified','version':'0.5.0'}},'components':components}
+        'metadata':{'component':{'type':'application','name':'ScanTailor OCR Unified','version':json.loads((root/'release.json').read_text('utf8'))['version']}},'components':components}
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('root');p.add_argument('output');a=p.parse_args();Path(a.output).write_text(json.dumps(generate(a.root),indent=2),encoding='utf8')

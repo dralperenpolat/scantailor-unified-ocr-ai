@@ -132,6 +132,67 @@ class OrderedWorkflow(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["body_mm"], rows[1]["body_mm"])
         self.assertFalse(result["verification"]["ocr"])
 
+    def test_compression_preserves_master_and_incremental_page_reuse(self):
+        self.req.update(compression_profile="small")
+        first = wf.create_pdf(self.req, lambda event: None)
+        self.assertNotEqual(first["reading_pdf"], first["pdf"])
+        master_hash = wf.file_hash(first["pdf"])
+        self.assertEqual(first["compressed"]["source_sha256"], master_hash)
+        self.assertLessEqual(Path(first["reading_pdf"]).stat().st_size, Path(first["pdf"]).stat().st_size)
+        self.req["previous_pdf"] = first["pdf"]
+        self.req.update(compression_profile="balanced")
+        with patch.object(wf, "render", side_effect=AssertionError("unchanged pages must not render again")):
+            second = wf.create_pdf(self.req, lambda event: None)
+        self.assertEqual(second["reused_pages"], [1, 2])
+        self.assertEqual(wf.file_hash(first["pdf"]), master_hash)
+        self.assertNotEqual(first["reading_pdf"], second["reading_pdf"])
+        saved = json.loads(Path(second["pdf"]).with_suffix(".workflow.json").read_text("utf8"))
+        self.assertEqual(saved["reading_pdf"], second["reading_pdf"])
+
+    def test_binary_export_uses_ccitt_without_thresholding_gray_pages(self):
+        with Image.open(self.rows[0]["source"]) as image:
+            binary = image.convert("1")
+            gray = image.convert("L")
+            image.close()
+        with fitz.open() as compact, fitz.open() as reference:
+            a = compact.new_page(width=400, height=600)
+            b = reference.new_page(width=400, height=600)
+            wf.embed_image(a, a.rect, binary.convert("L"))
+            stream = io.BytesIO();binary.save(stream, format="PNG")
+            b.insert_image(b.rect, stream=stream.getvalue())
+            images = a.get_images(full=True)
+            self.assertEqual(images[0][4], 1)
+            self.assertIn("/CCITTFaxDecode", compact.xref_get_key(images[0][0], "Filter")[1])
+            self.assertEqual(a.get_pixmap().samples, b.get_pixmap().samples)
+            c = compact.new_page(width=400, height=600)
+            wf.embed_image(c, c.rect, gray)
+            self.assertEqual(c.get_images(full=True)[0][4], 8)
+
+    def test_deep_lossless_option_is_used_by_the_editor_export(self):
+        self.req.update(compression_profile="lossless",compression_options={"recompress_flate":True})
+        result=wf.create_pdf(self.req,lambda event: None)
+        self.assertNotEqual(result["reading_pdf"],result["pdf"])
+        self.assertTrue(result["compressed"]["options"]["recompress_flate"])
+        self.assertTrue(result["compressed"]["lossless"])
+
+    def test_invalid_compression_settings_fail_before_export(self):
+        self.req.update(compression_profile="target",compression_options={"min_dpi":400})
+        with self.assertRaises(ValueError):wf.create_pdf(self.req,lambda event: None)
+        self.assertFalse(Path(self.req["output_dir"]).exists())
+
+    def test_ocr_reading_copy_keeps_text_and_uses_lossless_master(self):
+        base = wf.create_pdf(self.req, lambda event: None)
+        with fitz.open() as layer:
+            layer.new_page(width=595.2756, height=841.8898).insert_text((40, 65), "OCR 123 example", render_mode=3)
+            payload = layer.tobytes()
+        self.req.update(source_pdf=base["pdf"], compression_profile="small")
+        with patch.object(fitz.Pixmap, "pdfocr_tobytes", return_value=payload):
+            result = wf.add_ocr(self.req, lambda event: None)
+        with fitz.open(result["pdf"]) as master, fitz.open(result["reading_pdf"]) as reading:
+            self.assertIn("OCR 123", reading[0].get_text())
+            self.assertEqual(master[0].get_text("words"), reading[0].get_text("words"))
+        self.assertEqual(result["sha256"], wf.file_hash(result["pdf"]))
+
     def test_ocr_uses_final_pdf_preserves_visible_pixels_and_original(self):
         base = wf.create_pdf(self.req, lambda event: None)
         source = Path(base["pdf"])
