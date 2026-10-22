@@ -59,7 +59,10 @@ jobs:
               assert install['manifest_files_verified']>30000
           records=[]
           for path in (Path('packages/windows/scantailor-ocr-unified-0.6.2-windows-x64-full-setup.exe'),Path('packages/linux/scantailor-ocr-unified-0.6.2-linux-x64-full.tar.gz')):
-              with path.open('rb') as stream:sha=hashlib.file_digest(stream,'sha256').hexdigest()
+              hasher=hashlib.sha256()
+              with path.open('rb') as stream:
+                  for chunk in iter(lambda:stream.read(8*1024*1024),b''):hasher.update(chunk)
+              sha=hasher.hexdigest()
               records.append({'name':path.name,'size':path.stat().st_size,'digest':'sha256:'+sha})
           Path('proof/package-digests.json').write_text(json.dumps(records,indent=2))
           PY
