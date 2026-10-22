@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.6.0
+# ScanTailor OCR Unified · 0.6.2
 
 **English** | [Türkçe](README.tr.md)
 
-Version 0.6.0 adds five navigation sections with an expanded stage view, five compression profiles, target file size, sample-page comparisons and cancellation. PDF/OCR updates use the lossless master and retain a separate compressed reading copy. Existing projects and earlier PDF versions are preserved.
+Version 0.6.2 adds fast word baselines, column-aware page boundaries and a joint text line model for geometry correction. AI runs where a measurable defect remains after the fast pass. Suggestions are checked for line error, stretching and held-out text lines. Manual edits are preserved and queued again with their current settings.
 
 A desktop application for cleaning up book photographs and creating searchable PDFs. It builds on the six image-processing filters of [ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental), adding a book queue, OCR, PDF export, UVDoc dewarping suggestions and Paddle-based content review. Documents are processed on your computer. A GPU is optional.
 
@@ -20,11 +20,11 @@ Open latest PDF opens the reading copy. The lossless master remains available fo
 
 ## Install
 
-**Windows x64 · 0.6.0: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.0/scantailor-ocr-unified-0.6.0-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Windows x64 · 0.6.2: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-**Linux x64 · 0.5.0: [Download the last verified Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included. A Linux 0.6.0 binary has not been published; the 0.6.0 features described above are not included in the 0.5.0 package.
+**Linux x64 · 0.6.2: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-The download links above provide one full package per platform and show each published version. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
+The release provides one package per platform: the Windows installer and the Linux archive. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 
 The Windows installer targets Windows 10 version 2004 or later and Windows 11 x64. The Linux package requires Ubuntu 22.04 / glibc 2.35 or later; see the [build instructions](packaging/BUILD.en.md) for other environments.
 
@@ -43,13 +43,13 @@ The full sequence is displayed in **Stages**, with a separate play button and el
 **0 Input → 1 Orientation → 2 Split → 3 Geometry → 4 AI geometry → 5 Content → 6 AI content → 7 Margins → 8 Output → 9 Fingers/stains → 10 PDF → 11 OCR → 12 Cache cleanup.**
 
 1. At **0 Input**, choose images, one folder, a parent folder or a PDF. A parent folder adds separate queue books. PDF import from this screen opens an editable book directly.
-2. Check the normal geometry and content stages. Optional AI stages prepare proposals; preview and apply them separately. Normal and AI screens share the same page settings and allow manual corrections.
+2. Check the normal geometry and content stages. The AI stage play button optimizes the selected scope and applies suitable improvements. Use **Prepare** for comparison only and **Apply** for one candidate. AI support can be disabled at startup. Normal and AI screens share the same page settings and allow manual corrections.
 3. At **8 Output**, set the visible page appearance. At **9 Fingers/stains**, prepare, inspect and apply edge-cleanup proposals for this page, selected pages or the book.
 4. At **10 PDF**, choose the **PDF output folder** with Browse, paper size, fitting, margins and text size. Matching text size measures the image without starting OCR.
 5. At **11 OCR**, add searchable text to the finished PDF. CPU Fast / Tesseract Fast is available for devices without a GPU.
 6. At **12 Cache cleanup**, inspect category sizes, retention choices and cleanup timing. **Settings** and the illustrated, searchable **Help** are available in English and Turkish.
 
-Start with a few representative pages before applying settings to a whole book. Each normal-stage play processes the book through that filter. AI play prepares proposals in the selected scope; **Apply** changes saved page settings. Output, cleanup, PDF and OCR have separate actions.
+Start with a few representative pages before applying settings to a whole book. Each normal-stage play processes the book through that filter. AI play optimizes the selected scope; **Prepare** leaves saved settings unchanged for review. Output, cleanup, PDF and OCR have separate actions.
 
 A manual page edit updates only that page's downstream image and PDF content. Unchanged PDF pages retain their OCR. If a previously searchable PDF is refreshed, changed pages receive OCR automatically. A stale cleanup mask is skipped only on the affected page with a review notice. Book-wide paper/layout changes intentionally update all affected pages; rotating or splitting a source spread can affect both halves. Each PDF is a new version.
 

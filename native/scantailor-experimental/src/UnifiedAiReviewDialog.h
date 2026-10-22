@@ -4,6 +4,8 @@
 #include "UnifiedRuntime.h"
 #include "UnifiedAiReview.h"
 #include "UnifiedReviewStore.h"
+#include "UnifiedReviewRequeue.h"
+#include "UnifiedWorkflow.h"
 #include "BasicImageView.h"
 #include "acceleration/NonAcceleratedOperations.h"
 #include <QDialog>
@@ -33,6 +35,10 @@
 class UnifiedAiReviewDialog : public QDialog {
 public:
     std::function<void(PageId const&)> navigate;
+    std::function<void(std::set<PageId> const&)> reprocess;
+    UnifiedReviewRequeue m_requeue;
+    std::function<void()> completion;
+    QString directory()const{return m_directory;}
     std::function<bool(unified_content::Proposal const&,unified_content::Sample const&,bool)> apply;
     std::function<bool(unified_content::Sample const&,QRectF const&)> undo;
     std::function<std::vector<unified_content::Sample>()> refresh;
@@ -41,7 +47,7 @@ public:
         :QDialog(parent),m_samples(std::move(samples)),m_root(std::move(root)) {
         setObjectName("unifiedAiReview");m_directory=unified_review::directory(m_root,project,"content-v1");if(m_directory.isEmpty())m_directory=m_temp.path();
         for(auto const& s:m_samples)m_stamps.push_back(unified_review::sourceStamp(s.page));
-        setWindowTitle(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni · 0.6.0"));resize(1180,800);
+        setWindowTitle(unified_i18n::text("Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2"));resize(1180,800);
         auto outer=new QVBoxLayout(this);
         auto controls=new QGridLayout;outer->addLayout(controls);
         m_pages=new QComboBox;m_pages->setObjectName("aiPageChoice");m_pages->setMinimumWidth(150);m_pages->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
@@ -134,18 +140,24 @@ private:
         if(m_running||ids.empty()||m_directory.isEmpty())return;
         if(m_future.valid())m_future.get();
         if(refresh){auto fresh=refresh();std::vector<int> updated;for(int id:ids){auto page=m_samples[id].page.id();for(auto const& s:fresh)if(s.page.id()==page){updated.push_back(int(m_samples.size()));m_samples.push_back(s);m_stamps.push_back(unified_review::sourceStamp(s.page));break;}}ids=std::move(updated);if(ids.empty()){m_status->setText(unified_i18n::text("Sayfa geometrisi değişti. Önce içerik aşamasını yeniden işle."));return;}}
-        m_cancel=false;m_error.clear();m_received=0;m_progress->setRange(0,int(ids.size()));m_progress->setValue(0);m_running=true;
+        m_requeue.begin(ids);m_cancel=false;m_error.clear();m_received=0;m_progress->setRange(0,int(ids.size()));m_progress->setValue(0);m_running=true;
         m_single->setEnabled(false);m_book->setEnabled(false);m_device->setEnabled(false);m_stop->setEnabled(true);
         m_status->setText(unified_i18n::text("Paddle hazırlanıyor. Her sayfa bitince aşağıya eklenecek; model ilk açılışta daha uzun sürebilir."));
         unified_ai::Options opts{m_root,m_device->currentData().toString(),true};auto directory=m_directory+"/run-"+QUuid::createUuid().toString(QUuid::WithoutBraces);
         m_future=std::async(std::launch::async,[this,ids,opts,directory]{try{unified_ai::run(m_samples,ids,opts,directory,[this]{return m_cancel.load();},[this](unified_ai::PageResult r){std::lock_guard<std::mutex> lock(m_mutex);m_pending.push_back(std::move(r));});}catch(std::exception const& e){std::lock_guard<std::mutex> lock(m_mutex);m_error=unified_i18n::text(e.what());}});
     }
     void poll(){
+        if(m_running&&matches)m_requeue.inspect(m_samples,[this](auto const& sample){
+            if(matches(sample,nullptr))return true;
+            for(int applied:m_applied){auto const& r=m_rows[applied];if(&m_samples[r.index]==&sample&&matches(sample,&r.proposal.rect))return true;}
+            return false;
+        });
         std::vector<unified_ai::PageResult> pending;{std::lock_guard<std::mutex> lock(m_mutex);pending.swap(m_pending);}
         for(auto& r:pending){auto const& s=m_samples[r.index];new QTreeWidgetItem(m_list,{pageLabel(s),!r.error.isEmpty()?unified_i18n::text("Hata"):r.proposal.rect.isEmpty()?unified_i18n::text("Öneri yok"):s.params.mode()==MODE_MANUAL?unified_i18n::text("Elle seçim korundu"):unified_i18n::text("Öneri hazır")});m_rows.push_back(std::move(r));++m_received;m_progress->setValue(m_received);if(!m_list->currentItem())m_list->setCurrentItem(m_list->topLevelItem(0));}
         if(++m_pollCount%4==0&&isVisible())updateApply();
         if(!pending.empty()){persist();m_status->setText(unified_i18n::text("%1 / %2 sayfa hazır. Sonuçlar kaydediliyor; pencereyi kapatıp açabilirsin.").arg(m_received).arg(m_progress->maximum()));}
-        if(m_running&&m_future.valid()&&m_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){m_future.get();m_running=false;m_single->setEnabled(true);m_book->setEnabled(true);m_device->setEnabled(true);m_stop->setEnabled(false);std::lock_guard<std::mutex> lock(m_mutex);m_status->setText(m_error.isEmpty()?(m_cancel?unified_i18n::text("Analiz durduruldu; tamamlanan sonuçlar kaydedildi."):unified_i18n::text("Analiz tamamlandı. Tek / çoklu / tümünü uygula. Sonuçlar yeniden açılınca geri gelir; proje değişiklikleri için Ctrl+S.")):m_error);}
+        if(m_running&&m_future.valid()&&m_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){m_future.get();m_running=false;m_single->setEnabled(true);m_book->setEnabled(true);m_device->setEnabled(true);m_stop->setEnabled(false);std::lock_guard<std::mutex> lock(m_mutex);m_status->setText(m_error.isEmpty()?(m_cancel?unified_i18n::text("Analiz durduruldu; tamamlanan sonuçlar kaydedildi."):unified_i18n::text("Analiz tamamlandı. Tek / çoklu / tümünü uygula. Sonuçlar yeniden açılınca geri gelir; proje değişiklikleri için Ctrl+S.")):m_error);auto changed=m_requeue.take();auto onComplete=std::move(completion);completion={};if(!m_cancel&&onComplete)onComplete();if(!m_cancel&&!changed.empty()&&reprocess)reprocess(changed);}
+        if(m_running&&m_requeue.size())m_status->setText(unified_workflow::text("Elle değişen %1 sayfa güncel ayarıyla yeniden sıraya alındı.","%1 manually edited pages queued again with current settings.").arg(m_requeue.size()));
     }
     void persist(){
         if(m_rows.empty())return;QJsonArray rows,history;

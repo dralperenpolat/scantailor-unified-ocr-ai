@@ -23,6 +23,7 @@ public:
     void setStepStatus(QString const& id,QString const& status);
     void setNavigationGroup(int group);
     void showAllStages(bool show);
+    void setAiEnabled(bool enabled);
     static int groupForStep(QString const& id);
     QSize sizeHint() const override {return m_sizeHint;}
 signals:
@@ -43,6 +44,7 @@ private:
     QHash<QString,QToolButton*> m_buttons;
     bool m_possible=false,m_running=false;
     bool m_showAll=true;
+    bool m_aiEnabled=false;
     int m_group=0;
     QString m_runningStep;
     QElapsedTimer m_elapsed;

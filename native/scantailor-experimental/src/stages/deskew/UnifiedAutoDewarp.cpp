@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "UnifiedI18n.h"
 #include "UnifiedAutoDewarp.h"
+#include "UnifiedLineFit.h"
+#include "UnifiedTextLineTracer.h"
 #include "ParamsDewarping.h"
 #include "TaskStatus.h"
 #include "acceleration/AcceleratableOperations.h"
 #include "dewarping/DistortionModelBuilder.h"
 #include "dewarping/TextLineTracer.h"
+#include "dewarping/DetectVerticalBounds.h"
 #include "dewarping/TopBottomEdgeTracer.h"
 #include "dewarping/DewarpingImageTransform.h"
 #include "imageproc/AffineImageTransform.h"
@@ -15,8 +18,14 @@
 #include "imageproc/GrayImage.h"
 #include "imageproc/Morphology.h"
 #include "imageproc/AffineTransform.h"
+#include "imageproc/PolygonRasterizer.h"
 #include <QStringList>
 #include <stdexcept>
+#include <QElapsedTimer>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QFile>
 
 namespace deskew {
 using namespace imageproc;
@@ -48,6 +57,8 @@ Evidence sourceEvidence(GrayImage const& image, AffineImageTransform const& tran
     GrayImage sample(ops->affineTransform(image,small.transform(),rect,OutsidePixels::assumeColor(Qt::white)));
     QTransform local; local.translate(-rect.x(),-rect.y()); e.sampleTransform=small.transform()*local;
     BinaryImage binary(binarizeWolf(sample,25,.30f));
+    auto crop=small.transformedCropArea();crop.translate(-rect.x(),-rect.y());
+    PolygonRasterizer::fillExcept(binary,WHITE,crop,Qt::WindingFill);
     QRect interior(QPoint(0,0),rect.size());
     interior.adjust(interior.width()*.12,interior.height()*.12,-interior.width()*.12,-interior.height()*.12);
     auto lineSupport=[&](bool vertical){
@@ -118,15 +129,20 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     AffineImageTransform const& transform, ParamsDewarping const& params, double fov,
     std::shared_ptr<AcceleratableOperations> const& ops, TaskStatus const& status, DebugImages* dbg,
     std::vector<UnifiedDewarpCandidate> const& extra,
-    std::function<QPointF(QPointF const&)> const& currentMapper) {
+    std::function<QPointF(QPointF const&)> const& currentMapper,bool optimizeStrength,QString const& tracePath) {
     UnifiedDewarpSelection result;
+    QElapsedTimer profile;profile.start();QJsonObject timings;
     Evidence const evidence=sourceEvidence(image,transform,ops,status);
+    timings["evidence_ms"]=double(profile.restart());
     if(evidence.sideways){result.report=unified_i18n::text("Karşılaştırma: yan basılmış metinde otomatik eğrilik uygulanmadı");return result;}
     QTransform const inverse=transform.transform().inverted();
     // A direction is a vector: translations must cancel (not map(0,1) alone).
     Vec2d const down(inverse.map(QPointF(0,1))-inverse.map(QPointF(0,0)));
     DistortionModelBuilder text(down),edges(down);
-    TextLineTracer::trace(AffineTransformedImage(image,transform),text,ops,status,dbg);
+    bool const wordEvidence=unifiedTraceWords(image,transform,ops,status,text);
+    if(!wordEvidence && evidence.glyphs.size()>=40)
+        TextLineTracer::trace(AffineTransformedImage(image,transform),text,ops,status,dbg,true);
+    timings["trace_ms"]=double(profile.restart());
     auto bounds=text.verticalBounds();
     if(bounds.first.isNull()||bounds.second.isNull()){
         QRectF const crop=transform.transformedCropArea().boundingRect();
@@ -134,6 +150,7 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     }
     edges.setVerticalBounds(bounds.first,bounds.second);
     TopBottomEdgeTracer::trace(image,bounds,edges,status,dbg);
+    timings["edges_ms"]=double(profile.restart());
     DistortionModelBuilder mixed=text;
     mixed.setVerticalBounds(bounds.first,bounds.second);
     for(auto const& curve:edges.horizontalCurves())mixed.addHorizontalCurve(curve);
@@ -155,7 +172,18 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     double baseline=unifiedTextLineError(text.horizontalCurves(),[&](QPointF const& p){return transform.transform().map(p);},true);
     result.lineCount=int(text.horizontalCurves().size());
     result.currentError=currentMapper?unifiedTextLineError(text.horizontalCurves(),currentMapper):baseline;
+    std::deque<std::vector<QPointF>> validationLines;
+    int lineIndex=0;for(auto const& line:text.horizontalCurves())if(++lineIndex%4==0)validationLines.push_back(line);
+    result.currentValidationError=currentMapper?unifiedTextLineError(validationLines,currentMapper):
+        unifiedTextLineError(validationLines,[&](QPointF const& p){return transform.transform().map(p);},true);
+    if(!tracePath.isEmpty()){
+        QJsonArray lines;for(auto const& line:text.horizontalCurves()){QJsonArray points;for(auto const& p:line){auto q=transform.transform().map(p);points.append(QJsonArray{q.x(),q.y()});}lines.append(points);}
+        auto crop=transform.transformedCropArea().boundingRect();QFile file(tracePath);if(file.open(QIODevice::WriteOnly))file.write(QJsonDocument(QJsonObject{{"lines",lines},{"crop",QJsonArray{crop.x(),crop.y(),crop.width(),crop.height()}}}).toJson(QJsonDocument::Compact));
+    }
     QStringList report;
+    result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,1));
+    result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,3));
+    result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,5));
     // Keep the existing mixed model on exact ties, avoiding arbitrary changes.
     for(auto const& entry:std::vector<std::pair<QString,DistortionModelBuilder const*>>{
         {unified_i18n::text("Birleşik"),&mixed},{unified_i18n::text("Metin"),&text},{unified_i18n::text("Kenar"),&edges}}){
@@ -167,33 +195,49 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
         result.candidates.push_back(std::move(candidate));
     }
     result.candidates.insert(result.candidates.end(),extra.begin(),extra.end());
+    timings["build_ms"]=double(profile.restart());
     for(auto& candidate:result.candidates) {
         status.throwIfCancelled();
         if(candidate.model.isValid()&&candidate.metrics.reason.isEmpty()) {
             candidate.metrics=measure(candidate.model);
             try {
-                DewarpingImageTransform warp(transform.origSize(),transform.origCropArea(),candidate.model.topCurve().polyline(),
-                    candidate.model.bottomCurve().polyline(),fov,params.depthPerception(),params.correctCurves(),params.correctAngle());
-                unifiedMeasureGrid(candidate.metrics,warp.transformedCropArea(),warp.backwardMapper());
-                candidate.lineError=unifiedTextLineError(text.horizontalCurves(),warp.forwardMapper());
-                if(candidate.metrics.reason.isEmpty()){
-                    if(text.horizontalCurves().size()<4 || !unifiedFinite(candidate.lineError))
-                        candidate.metrics.reason=unified_i18n::text("kenarı doğrulayacak yeterli satır yok; elle kontrol gerekli");
-                    else if(unifiedFinite(baseline) && candidate.lineError>baseline*1.15+.5)
-                        candidate.metrics.reason=unified_i18n::text("metin satırları mevcut görüntüden daha fazla bozuluyor");
-                    else candidate.score=candidate.lineError+1.5*std::log(std::max(1.,candidate.metrics.localStretch))
-                        +.5*std::log(std::max(1.,candidate.metrics.areaRatio))+4*(1-candidate.metrics.textCoverage);
+                // Reuse the same traced lines. Tune the bounded native warp
+                // strengths, rather than rerunning inference or weakening gates.
+                std::vector<std::vector<double>> strengths={{candidate.depth>=0?candidate.depth:params.depthPerception().value(),candidate.curves>=0?candidate.curves:params.correctCurves().value(),candidate.angle>=0?candidate.angle:params.correctAngle().value()}};
+                if(optimizeStrength){strengths.push_back({1.,1.,1.});strengths.push_back({1.,2.,2.});strengths.push_back({2.,1.,1.});strengths.push_back({3.,2.,2.});}
+                auto baseMetrics=candidate.metrics;auto best=candidate;bool first=true;
+                for(auto const& strength:strengths){
+                    status.throwIfCancelled();auto trial=candidate;trial.metrics=baseMetrics;
+                    trial.depth=strength[0];trial.curves=strength[1];trial.angle=strength[2];
+                    DewarpingImageTransform warp(transform.origSize(),transform.origCropArea(),trial.model.topCurve().polyline(),
+                        trial.model.bottomCurve().polyline(),fov,DepthPerception(trial.depth),DepthPerception(trial.curves),DepthPerception(trial.angle));
+                    unifiedMeasureGrid(trial.metrics,warp.transformedCropArea(),warp.backwardMapper());
+                    trial.lineError=unifiedTextLineError(text.horizontalCurves(),warp.forwardMapper());
+                    trial.validationError=unifiedTextLineError(validationLines,warp.forwardMapper());
+                    if(trial.metrics.reason.isEmpty()){
+                        // At least two independent held-out lines are needed.
+                        // Sparse title pages can fit straight lines while the
+                        // unconstrained page aspect ratio becomes implausible.
+                        if(text.horizontalCurves().size()<8 || !unifiedFinite(trial.lineError))trial.metrics.reason=unified_i18n::text("kenarı doğrulayacak yeterli satır yok; elle kontrol gerekli");
+                        else if(unifiedFinite(baseline) && trial.lineError>baseline*1.15+.5)trial.metrics.reason=unified_i18n::text("metin satırları mevcut görüntüden daha fazla bozuluyor");
+                        else trial.score=trial.lineError+1.5*std::log(std::max(1.,trial.metrics.localStretch))+.5*std::log(std::max(1.,trial.metrics.areaRatio))+4*(1-trial.metrics.textCoverage);
+                    }
+                    if(first||(trial.accepted()&&(!best.accepted()||trial.score<best.score))){best=trial;first=false;}
                 }
+                candidate=best;
             } catch(std::runtime_error const&){candidate.metrics.reason=unified_i18n::text("kararlı dönüşüm üretilemedi");}
         }
         report << (candidate.accepted()?unified_i18n::text("%1: %2").arg(candidate.source).arg(candidate.score,0,'f',2)
             :unified_i18n::text("%1: elendi (%2)").arg(candidate.source,candidate.metrics.reason));
     }
     int const best=unifiedChooseDewarpCandidate(result.candidates);
-    if(best>=0){result.model=result.candidates[best].model;result.source=result.candidates[best].source;}
+    if(best>=0){auto const& c=result.candidates[best];result.model=c.model;result.source=c.source;result.depth=c.depth;result.curves=c.curves;result.angle=c.angle;}
     result.report=unified_i18n::text("Metin + kenar karşılaştırması · %1\n%2\nSatır: %3 · kenar: %4 · başlangıç satır hatası: %5")
         .arg(best>=0?unified_i18n::text("seçilen: ")+result.source:unified_i18n::text("güvenli aday yok"),report.join(unified_i18n::text(" · ")))
         .arg(text.horizontalCurves().size()).arg(edges.horizontalCurves().size()).arg(baseline,0,'f',2);
+    timings["assess_ms"]=double(profile.elapsed());
+    timings["word_evidence"]=wordEvidence;
+    if(qEnvironmentVariableIsSet("STOU_GEOMETRY_PROFILE"))result.report+="\nPROFILE "+QString::fromUtf8(QJsonDocument(timings).toJson(QJsonDocument::Compact));
     return result;
 }
 }

@@ -70,10 +70,14 @@ void savePreview(QImage const& source,AbstractImageTransform const& input,QStrin
     auto rect=t->transformedCropArea().boundingRect().toAlignedRect();
     if(rect.width()>1600||rect.height()>1600||rect.width()<8||rect.height()<8)throw std::runtime_error("Geometri önizleme boyutu geçersiz.");
     auto image=t->materialize(source,rect,Qt::white,ops);
-    if(!image.save(path))throw std::runtime_error("Geometri önizlemesi yazılamadı.");
+    image=image.convertToFormat(QImage::Format_RGB32);
+    QPainter painter(&image);QPainterPath outside;outside.addRect(image.rect());
+    auto polygon=t->transformedCropArea();polygon.translate(-rect.x(),-rect.y());QPainterPath inside;inside.addPolygon(polygon);
+    painter.fillPath(outside.subtracted(inside),Qt::white);painter.end();
+    if(!image.save(path,"JPG",93))throw std::runtime_error("Geometri önizlemesi yazılamadı.");
 }
 struct Process {
-    QProcess child;QByteArray buffer,errors;
+    QProcess child;QByteArray buffer,errors;bool warmed=false;
     ~Process(){if(child.state()!=QProcess::NotRunning){child.terminate();if(!child.waitForFinished(500)){child.kill();child.waitForFinished(500);}}}
     QJsonObject request(QJsonObject const& input,QString const& root,std::function<bool()> const& cancel){
         if(child.state()==QProcess::NotRunning){
@@ -84,18 +88,19 @@ struct Process {
         }
         child.write(QJsonDocument(input).toJson(QJsonDocument::Compact)+"\n");child.waitForBytesWritten(1000);
         QElapsedTimer timer;timer.start();
-        while(timer.elapsed()<120000){
+        while(timer.elapsed()<(warmed?20000:45000)){
             if(cancel())throw std::runtime_error("Geometri analizi durduruldu.");
             child.waitForReadyRead(100);buffer+=child.readAllStandardOutput();errors+=child.readAllStandardError();
             if(errors.size()>4096)errors=errors.right(4096);
             int end;while((end=buffer.indexOf('\n'))>=0){auto line=buffer.left(end);buffer.remove(0,end+1);
                 if(!line.startsWith("STOUGEOMETRY "))continue;
-                auto result=QJsonDocument::fromJson(line.mid(13)).object();if(result.value("id")==input.value("id"))return result;
+                auto result=QJsonDocument::fromJson(line.mid(13)).object();if(result.value("id")==input.value("id")){warmed=true;return result;}
             }
             if(child.state()==QProcess::NotRunning)throw std::runtime_error((unified_i18n::text("UVDoc kapandı: ")+unified_i18n::text(errors)).toStdString());
             if(buffer.size()>4*1024*1024)throw std::runtime_error("UVDoc yanıt boyutu sınırı aşıldı.");
         }
-        throw std::runtime_error("UVDoc zamanında yanıt vermedi; mevcut geometri korundu.");
+        child.kill();child.waitForFinished(1000);buffer.clear();
+        throw std::runtime_error("UVDoc süre sınırına ulaştı; mevcut geometri korundu.");
     }
 };
 }
@@ -120,24 +125,35 @@ std::vector<Sample> collect(ProjectPages const& pages,StageSequence& stages){
 void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QString const& root,
     QString const& device,bool useAi,QString const& directory,std::function<bool()> const& cancelled,
     std::function<void(Result)> const& completed){
-    QDir().mkpath(directory);Process process;Status status(cancelled);auto ops=std::make_shared<NonAcceleratedOperations>();
+    QString aiUnavailable;QDir().mkpath(directory);Process process;Status status(cancelled);auto ops=std::make_shared<NonAcceleratedOperations>();
     for(int index:indices){
-        if(cancelled())break;if(index<0||size_t(index)>=samples.size())continue;
+        if(cancelled())break;
+        if(index<0||size_t(index)>=samples.size())continue;
         auto const& s=samples[index];Result out;out.index=index;QElapsedTimer timer;timer.start();
         try{
             QImage source=ImageLoader::load(s.page.imageId());if(source.isNull())throw std::runtime_error("Kaynak fotoğraf okunamadı.");
-            out.source=directory+QString("/%1-source.png").arg(index);savePreview(source,s.transform,out.source,ops);
+            out.source=directory+QString("/%1-source.jpg").arg(index);savePreview(source,s.transform,out.source,ops);
             std::shared_ptr<AbstractImageTransform> current;
             try{current=transform(s,s.params);}catch(std::exception const&){current=std::make_shared<AffineImageTransform>(s.transform);}
-            out.current=directory+QString("/%1-current.png").arg(index);savePreview(source,*current,out.current,ops);
+            out.current=directory+QString("/%1-current.jpg").arg(index);savePreview(source,*current,out.current,ops);
             std::vector<deskew::UnifiedDewarpCandidate> extra;
-            QString aiError;
-            if(useAi){
+            QString aiError=aiUnavailable;
+            QString tracePath=qEnvironmentVariableIsSet("STOU_GEOMETRY_PROFILE")?directory+QString("/%1-lines.json").arg(index):QString();
+            auto select=[&]{return deskew::unifiedSelectAutoDewarp(GrayImage(source),s.transform,s.params.getParamsDewarping(),
+                s.params.getParamsSource().photo()?s.params.getParamsSource().fov():0.,ops,status,nullptr,extra,current->forwardMapper(),true,tracePath);};
+            auto selection=select();
+            int nativeBest=deskew::unifiedChooseDewarpCandidate(selection.candidates);
+            double residual=selection.currentError;
+            if(nativeBest>=0)residual=std::min(residual,selection.candidates[nativeBest].lineError);
+            // Inference is useful only when text still shows a measurable
+            // defect. Blank pages and already straight text need no AI pass.
+            bool const needsAi=selection.lineCount>=8 && (!deskew::unifiedFinite(residual)||residual>4.);
+            if(useAi&&needsAi&&aiUnavailable.isEmpty()){
                 // Fit in the correctly oriented, already split page. Coordinates
                 // are mapped back to the original photograph before saving.
                 AffineImageTransform small(s.transform);small.scaleTo(QSize(1500,1500),Qt::KeepAspectRatio);
                 auto rect=small.transformedCropArea().boundingRect().toAlignedRect();
-                auto image=small.materialize(source,rect,Qt::white,ops);
+                auto image=small.materialize(source,rect,Qt::white,ops).convertToFormat(QImage::Format_RGB32);
                 QPainter painter(&image);QPainterPath outside;outside.addRect(image.rect());
                 auto polygon=small.transformedCropArea();polygon.translate(-rect.x(),-rect.y());QPainterPath inside;inside.addPolygon(polygon);
                 painter.fillPath(outside.subtracted(inside),Qt::white);painter.end();
@@ -149,17 +165,17 @@ void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QStr
                     auto curve=[&](char const* key){std::vector<QPointF> points;for(auto value:json.value(key).toArray()){auto p=value.toArray();if(p.size()!=2)throw std::runtime_error("UVDoc eğri koordinatı eksik.");points.push_back(small.transform().inverted().map(QPointF(p[0].toDouble()+rect.x(),p[1].toDouble()+rect.y())));}return Curve(points);};
                     ai.model.setTopCurve(curve("top"));ai.model.setBottomCurve(curve("bottom"));
                     QStringList reasons;for(auto v:json.value("reasons").toArray())reasons<<unified_i18n::display(v.toString());ai.metrics.reason=reasons.join(' ');extra.push_back(std::move(ai));
-                }catch(std::exception const& e){aiError=unified_i18n::text(e.what());}
+                }catch(std::exception const& e){aiError=unified_i18n::text(e.what());aiUnavailable=aiError;}
             }
             status.throwIfCancelled();
-            auto selection=deskew::unifiedSelectAutoDewarp(GrayImage(source),s.transform,s.params.getParamsDewarping(),
-                s.params.getParamsSource().photo()?s.params.getParamsSource().fov():0.,ops,status,nullptr,extra,current->forwardMapper());
+            if(!extra.empty())selection=select();
             out.currentError=selection.currentError;out.report=selection.report;
             if(!aiError.isEmpty())out.report+=unified_i18n::text("\nUVDoc: ")+aiError;
-            int best=deskew::unifiedChooseDewarpCandidate(selection.candidates);
+            else if(useAi&&!needsAi)out.report+=unified_i18n::text("\nAI geçişi gerekmedi: satırlar yeterince düz veya güvenilir metin kanıtı yok.");
             for(auto const& candidate:selection.candidates){
                 status.throwIfCancelled();auto params=s.params;params.setDistortionType(deskew::DistortionType::WARP);
                 params.getParamsDewarping().setDistortionModel(candidate.model);params.getParamsDewarping().setMode(MODE_MANUAL);
+                if(candidate.depth>=0){params.getParamsDewarping().setDepthPerception(DepthPerception(candidate.depth));params.getParamsDewarping().setCorrectCurves(DepthPerception(candidate.curves));params.getParamsDewarping().setCorrectAngle(DepthPerception(candidate.angle));}
                 params.getParamsDewarping().setDetectionReport(unified_i18n::text("İncelenmiş geometri · ")+candidate.source);
                 params.unifiedWarning.clear();params.unifiedGeometry=candidate.metrics.summary();
                 Candidate c{candidate.source,{},candidate.metrics.reason,params,candidate.metrics,candidate.lineError,candidate.score,candidate.accepted()};
@@ -167,12 +183,21 @@ void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QStr
                 // that passed all geometric checks is still reviewable by hand,
                 // but is never a bulk recommendation.
                 if(candidate.model.isValid()&&candidate.source.startsWith("UVDoc")&&candidate.metrics.reason.startsWith(unified_i18n::text("kenarı doğrulayacak yeterli satır yok"))){c.accepted=true;c.reason=unified_i18n::text("Az metin: yalnız görsel incelemeyle tek sayfaya uygulanabilir; toplu önerilmez.");}
-                if(c.accepted){c.path=directory+QString("/%1-candidate-%2.png").arg(index).arg(out.candidates.size());
+                if(c.accepted){c.path=directory+QString("/%1-candidate-%2.jpg").arg(index).arg(out.candidates.size());
                     try{savePreview(source,*transform(s,params),c.path,ops);}catch(std::exception const& e){c.accepted=false;c.reason=unified_i18n::text(e.what());c.path.clear();}}
                 out.candidates.push_back(std::move(c));
             }
-            if(best>=0&&out.candidates[best].accepted&&deskew::unifiedFinite(selection.currentError)&&
-               out.candidates[best].error+.25<selection.currentError*.90)out.recommended=best;
+            deskew::UnifiedGeometryMetrics existingMetrics;
+            deskew::unifiedMeasureGrid(existingMetrics,current->transformedCropArea(),current->backwardMapper());
+            double currentPenalty=1.5*std::log(std::max(1.,existingMetrics.localStretch))+.5*std::log(std::max(1.,existingMetrics.areaRatio));
+            for(size_t i=0;i<out.candidates.size();++i){
+                auto const& c=out.candidates[i];
+                if(!c.accepted||!deskew::unifiedFinite(selection.currentError)||
+                   c.error+.25>=selection.currentError*.90||
+                   c.score+.25>=selection.currentError*.90+currentPenalty||
+                   selection.candidates[i].validationError>selection.currentValidationError*1.05+.25)continue;
+                if(out.recommended<0||c.score<out.candidates[out.recommended].score)out.recommended=int(i);
+            }
             out.report+=out.recommended>=0?unified_i18n::text("\nÖnerilen: ")+out.candidates[out.recommended].name:
                 unified_i18n::text("\nMevcut sonucu değiştirecek yeterli iyileşme bulunmadı.");
         }catch(std::exception const& e){out.error=unified_i18n::text(e.what());}

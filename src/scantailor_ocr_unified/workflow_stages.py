@@ -477,6 +477,9 @@ def run(req, notify=lambda event: None):
         result = create_pdf(req, notify)
     elif mode == "ocr":
         result = add_ocr(req, notify)
+    elif mode == "finalize":
+        from .workflow_finalize import finalize
+        result = finalize(req, notify)
     else:
         raise ValueError("Unknown workflow stage: " + mode)
     atomic_json(work / "result.json", result)

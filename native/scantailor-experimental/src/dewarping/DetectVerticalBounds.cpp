@@ -78,7 +78,7 @@ QLineF findVerticalBound(std::vector<QLineF> const& chords,
 
         // Check if the angle is within range.
         QPointF const vec(candidate_line.p2() - candidate_line.p1());
-        if (std::abs(vec.y()) * min_angle_tan < std::abs(vec.x()))
+        if (std::abs(vec.y()) < std::abs(vec.x()) * min_angle_tan)
         {
             continue;
         }

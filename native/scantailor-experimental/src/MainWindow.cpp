@@ -25,6 +25,7 @@
 #include "UnifiedRuntime.h"
 #include "MainWindow.h"
 #include "UnifiedPanel.h"
+#include "UnifiedProjectCache.h"
 #include "UnifiedStageTools.h"
 #include "UnifiedStageReviewBridge.h"
 #include "stages/deskew/Settings.h"
@@ -1262,6 +1263,12 @@ MainWindow::currentPageChanged(
     }
     m_selectedPage.set(page_info.id(), getCurrentView());
 
+    if(m_workflowReady&&m_workflowStep=="cleanup"){
+        showCleanupPage(page_info.id());
+        if(!(flags&ThumbnailSequence::AVOID_SCROLLING_TO))thumbView->ensureVisible(thumb_rect,0,0);
+        return;
+    }
+
     if ((flags & ThumbnailSequence::SELECTED_BY_USER) || focusButton->isChecked())
     {
         if (!(flags & ThumbnailSequence::AVOID_SCROLLING_TO))
@@ -2182,7 +2189,7 @@ MainWindow::updateWindowTitle()
         project_name = QFileInfo(m_projectFile).baseName();
     }
     QString const version(unified_i18n::text(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.0 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.2 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2779,10 +2786,12 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     auto stages=m_ptrStages;auto samples=unified_content::collect(*m_ptrPages,*stages);
     if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_workflow::text("Önce 3 · Geometrik düzeltme ve 5 · İçerik seçimi aşamalarını işle.","First process 3 · Geometric correction and 5 · Select content."),12000);return nullptr;}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
-    QString identity=m_editBinding.value("job_id").toString(m_projectFile);
+    QString identity=m_editBinding.value("job_id").toString(m_projectFile.isEmpty()?m_outFileNameGen.outDir():m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.0"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(3);goToPage(page);}};
+    syncWorkflowCache();m_workflowCache->own(dialog->directory(),"review");
+    dialog->reprocess=[this](auto const& pages){requeueAiPages(false,pages);};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_content::collect(*m_ptrPages,*stages):std::vector<unified_content::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,QRectF const* applied){return m_ptrStages==stages&&unified_content::matchesCurrent(sample,*stages,applied);};
     dialog->apply=[this,stages](unified_content::Proposal const& p,unified_content::Sample const& s,bool manual){if(m_ptrStages!=stages||!unified_content::applyAi(p,s,*stages,manual))return false;invalidateThumbnail(s.page.id());if(m_ptrThumbSequence->selectionLeader().id()==s.page.id())reloadRequested();return true;};
@@ -2798,7 +2807,9 @@ UnifiedGeometryReviewDialog* MainWindow::ensureGeometryReview(bool show){
     auto stages=m_ptrStages;auto samples=unified_geometry::collect(*m_ptrPages,*stages);
     if(samples.empty()){QMainWindow::statusBar()->showMessage(unified_i18n::text("Önce sayfa yönü, bölme ve geometri aşamalarını işle."),12000);return nullptr;}
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
-    auto dialog=new UnifiedGeometryReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,this,m_editBinding.value("job_id").toString(m_projectFile));
+    auto dialog=new UnifiedGeometryReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,this,m_editBinding.value("job_id").toString(m_projectFile.isEmpty()?m_outFileNameGen.outDir():m_projectFile));
+    syncWorkflowCache();m_workflowCache->own(dialog->directory(),"review");
+    dialog->reprocess=[this](auto const& pages){requeueAiPages(true,pages);};
     dialog->refresh=[this,stages]{return m_ptrStages==stages?unified_geometry::collect(*m_ptrPages,*stages):std::vector<unified_geometry::Sample>{};};
     dialog->matches=[this,stages](auto const& sample,unified_geometry::Candidate const* applied){return m_ptrStages==stages&&unified_geometry::matchesCurrent(sample,*stages,applied);};
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(2);goToPage(page);}};
@@ -2870,20 +2881,23 @@ void MainWindow::refreshStageReviews(){
         if(s.stale&&bar->previewing())returnToProjectView();
         bool geo=bar==m_geometryReviewBar;bool& running=geo?m_aiGeometryRunning:m_aiContentRunning;auto& clock=geo?m_aiGeometryElapsed:m_aiContentElapsed;
         if(s.running&&!running)clock.start();
-        if(clock.isValid()&&(s.running||running))filterList->setStepStatus(geo?"ai_geometry":"ai_content",QString::number(clock.elapsed()/1000)+" s");running=s.running;
+        if(clock.isValid()&&(s.running||running))filterList->setStepStatus(geo?"ai_geometry":"ai_content",unified_workflow::duration(clock.elapsed()));running=s.running;
         bar->showState(s);bar->setEnabled(!isBatchProcessingInProgress());
     };
     update(static_cast<UnifiedGeometryReviewDialog*>(findChild<QDialog*>("unifiedGeometryReview")),m_geometryReviewBar);
     update(static_cast<UnifiedAiReviewDialog*>(findChild<QDialog*>("unifiedAiReview")),m_contentReviewBar);
 }
 void MainWindow::stageReviewAction(bool geometry,int action){
+    if(!QSettings().value("unified/ai_enabled",false).toBool())return;
     if(!isProjectLoaded()||isBatchProcessingInProgress())return;auto bar=geometry?m_geometryReviewBar:m_contentReviewBar;if(!bar)return;
     auto page=m_ptrThumbSequence->selectionLeader().id();if(page.isNull())return;
     if(action==UnifiedStageReviewBar::Changed){refreshStageReviews();return;}
     if(action==UnifiedStageReviewBar::Preview&&!bar->previewing()){returnToProjectView();return;}
     bool all=bar->scope()=="book",single=bar->scope()=="page";auto pages=single?std::set<PageId>{page}:selectedPages();
+    if(action==UnifiedStageReviewBar::Analyze&&!m_aiRequeueTargets.empty()){pages=m_aiRequeueTargets;m_aiRequeueTargets.clear();all=false;single=pages.size()==1;}
     auto run=[&](auto dialog){if(!dialog)return;QString feedback;
         switch(action){
+        case UnifiedStageReviewBar::Optimize:feedback=UnifiedStageReviewBridge::optimize(dialog,pages,all,bar->device());break;
         case UnifiedStageReviewBar::Analyze:feedback=UnifiedStageReviewBridge::analyze(dialog,pages,all,bar->device());break;
         case UnifiedStageReviewBar::Preview:{auto im=UnifiedStageReviewBridge::preview(dialog,page,bar->candidate());if(im.isNull()){bar->setPreview(false);feedback=unified_i18n::text("Önizleme hazır değil; yeniden öneri hazırla.");break;}delete m_stagePreviewImage;m_stagePreviewImage=new BasicImageView(std::make_shared<NonAcceleratedOperations>(),im);auto reviewState=UnifiedStageReviewBridge::state(dialog,page,bar->candidate());m_stagePreviewNote->setText(unified_i18n::text(geometry?"EĞRİ KARŞILAŞTIRMASI · ":"İÇERİK KARŞILAŞTIRMASI · ")+reviewState.detail+unified_i18n::text(" Yakınlaştırma: tekerlek."));m_stagePreviewLayout->addWidget(m_stagePreviewImage,1);m_unifiedViewStack->setCurrentWidget(m_stagePreviewHost);bar->setPreview(true);break;}
         case UnifiedStageReviewBar::Apply:feedback=UnifiedStageReviewBridge::apply(dialog,pages,all,single,bar->allowManual(),bar->candidate());returnToProjectView();break;
@@ -2894,4 +2908,15 @@ void MainWindow::stageReviewAction(bool geometry,int action){
         if(!feedback.isEmpty())QMainWindow::statusBar()->showMessage(feedback,16000);
     };
     if(geometry)run(ensureGeometryReview(false));else run(ensureAiContentReview(false));refreshStageReviews();
+}
+
+void MainWindow::requeueAiPages(bool geometry,std::set<PageId> const& pages){
+    auto project=m_ptrPages;
+    QTimer::singleShot(0,this,[this,geometry,pages,project]{
+        if(m_ptrPages!=project||!isProjectLoaded())return;
+        refreshStageReviews();m_aiRequeueTargets=pages;m_workflowPageTargets=pages;m_workflowPartial=true;
+        filterList->selectStep(geometry?"geometry":"content");m_workflowPending=geometry?"ai_geometry":"ai_content";
+        QMainWindow::statusBar()->showMessage(unified_workflow::text("Elle değişen %1 sayfa yeniden hazırlanıyor; diğer sayfalar korunuyor.","Preparing %1 manually edited pages again; other pages are retained.").arg(pages.size()),12000);
+        startBatchProcessing();
+    });
 }

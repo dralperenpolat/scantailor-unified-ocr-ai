@@ -226,7 +226,7 @@ IF(QT_DEFAULT_MAJOR_VERSION EQUAL 5)
 ELSE()
     TARGET_LINK_LIBRARIES(scantailor-experimental Qt6::Network)
 ENDIF()
-SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.6.0" CACHE STRING "GUI executable name")
+SET(STOU_GUI_OUTPUT_NAME "scantailor-ocr-unified-0.6.2" CACHE STRING "GUI executable name")
 SET_TARGET_PROPERTIES(
     scantailor-experimental PROPERTIES
     OUTPUT_NAME "${STOU_GUI_OUTPUT_NAME}"
@@ -270,6 +270,14 @@ IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_stage_tools.cpp")
     SET_TARGET_PROPERTIES(unified-stage-tools-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 ENDIF()
 IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_review_state.cpp")
+    ADD_EXECUTABLE(unified-fast-geometry-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_fast_geometry.cpp")
+    TARGET_LINK_LIBRARIES(unified-fast-geometry-test
+        "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})
+    SET_TARGET_PROPERTIES(unified-fast-geometry-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ADD_EXECUTABLE(unified-geometry-pilot EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_geometry_pilot.cpp")
+    TARGET_LINK_LIBRARIES(unified-geometry-pilot
+        "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})
+    SET_TARGET_PROPERTIES(unified-geometry-pilot PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
     ADD_EXECUTABLE(unified-review-state-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_review_state.cpp")
     TARGET_LINK_LIBRARIES(unified-review-state-test
         "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})

@@ -41,6 +41,22 @@ static void run(QString captures){
         stages.selectContentFilter()->getSettings()->setPageParams(p.id(),content);
     }
     auto samples=unified_content::collect(*pages,stages);check(samples.size()==4,"valid native pipeline fixture");
+    {
+        UnifiedAiReviewDialog queued(samples,samples[0].page.id(),dir.path(),4,nullptr);
+        queued.matches=[&](auto const& s,auto const* applied){return unified_content::matchesCurrent(s,stages,applied);};
+        std::set<PageId> repeated;queued.reprocess=[&](auto const& ids){repeated=ids;};
+        std::promise<void> worker;queued.m_future=worker.get_future();queued.m_running=true;queued.m_requeue.begin({0,1,2,3});
+        auto changed=samples[0].params;changed.setMode(MODE_MANUAL);changed.setContentBox(ContentBox(t,rect.adjusted(5,5,-5,-5)));
+        stages.selectContentFilter()->getSettings()->setPageParams(samples[0].page.id(),changed);
+        auto geometry=*stages.deskewFilter()->getSettings()->getPageParams(samples[2].page.id());auto original=geometry;geometry.getParamsRotation().setCompensationAngleDeg(2);
+        stages.deskewFilter()->getSettings()->setPageParams(samples[2].page.id(),geometry);
+        queued.poll();queued.poll();check(queued.m_requeue.size()==2,"content run tracks live manual edits once per page");
+        worker.set_value();queued.poll();
+        check(repeated==std::set<PageId>{samples[0].page.id(),samples[2].page.id()},"content requeues exactly pages changed during worker run");
+        check(unified_review::xml(*stages.selectContentFilter()->getSettings()->getPageParams(samples[0].page.id()))==unified_review::xml(changed),"queue keeps manual content edit");
+        stages.selectContentFilter()->getSettings()->setPageParams(samples[0].page.id(),samples[0].params);
+        stages.deskewFilter()->getSettings()->setPageParams(samples[2].page.id(),original);
+    }
     UnifiedAiReviewDialog content(samples,samples[0].page.id(),dir.path(),4,nullptr);
     content.matches=[&](auto const& s,QRectF const* applied){return unified_content::matchesCurrent(s,stages,applied);};
     content.apply=[&](auto const& p,auto const& s,bool manual){return unified_content::applyAi(p,s,stages,manual);};
@@ -66,6 +82,24 @@ static void run(QString captures){
     check(content.m_applied.count(1)&&!content.m_applied.count(2)&&!content.m_applied.count(3),"bulk protects empty, stale and manual content");
 
     auto gs=unified_geometry::collect(*pages,stages);check(gs.size()==4,"geometry fixture");
+    {
+        UnifiedGeometryReviewDialog queued(gs,gs[0].page.id(),dir.path(),nullptr);
+        queued.matches=[&](auto const& s,auto const* candidate){return unified_geometry::matchesCurrent(s,stages,candidate);};
+        queued.apply=[&](auto const& s,auto const& candidate,bool manual){return unified_geometry::apply(s,candidate,stages,manual);};
+        std::set<PageId> repeated;queued.reprocess=[&](auto const& ids){repeated=ids;};
+        unified_geometry::Result candidate;candidate.index=1;candidate.recommended=0;auto fixed=gs[1].params;fixed.getParamsRotation().setCompensationAngleDeg(1);fixed.getParamsRotation().setMode(MODE_MANUAL);
+        candidate.source=images[1].id().filePath();candidate.current=candidate.source;
+        candidate.candidates.push_back({"Metin",candidate.source, {},fixed,{},0,0,true});queued.m_pending.push_back(candidate);queued.poll();
+        UnifiedStageReviewBridge::optimize(&queued,{gs[1].page.id()},false,"cpu");
+        check(!queued.m_running&&queued.m_applied.size()==1,"optimize reuses and applies a fresh useful result without running AI again");
+        std::promise<void> worker;queued.m_future=worker.get_future();queued.m_running=true;queued.m_requeue.begin({0,1,2,3});
+        auto manual=gs[0].params;manual.getParamsRotation().setCompensationAngleDeg(4);manual.getParamsRotation().setMode(MODE_MANUAL);
+        stages.deskewFilter()->getSettings()->setPageParams(gs[0].page.id(),manual);
+        queued.poll();check(queued.m_requeue.size()==1,"geometry tracks manual edits but not its own applied result");
+        worker.set_value();queued.poll();check(repeated==std::set<PageId>{gs[0].page.id()},"geometry requeues only edited identity");
+        check(unified_geometry::state(*stages.deskewFilter()->getSettings()->getPageParams(gs[0].page.id()))==unified_geometry::state(manual),"geometry queue preserves manual curve");
+        for(int i:{0,1})stages.deskewFilter()->getSettings()->setPageParams(gs[i].page.id(),gs[i].params);
+    }
     UnifiedGeometryReviewDialog geo(gs,gs[1].page.id(),dir.path(),nullptr);
     geo.matches=[&](auto const& s,auto const* c){return unified_geometry::matchesCurrent(s,stages,c);};
     geo.apply=[&](auto const& s,auto const& c,bool manual){return unified_geometry::apply(s,c,stages,manual);};

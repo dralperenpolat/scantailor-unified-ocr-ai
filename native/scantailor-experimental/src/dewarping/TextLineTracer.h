@@ -52,7 +52,7 @@ public:
         imageproc::AffineTransformedImage const& input,
         DistortionModelBuilder& output,
         std::shared_ptr<AcceleratableOperations> const& accel_ops,
-        TaskStatus const& status, DebugImages* dbg = nullptr);
+        TaskStatus const& status, DebugImages* dbg = nullptr, bool fast = false);
 private:
     static float attractionForceAt(
         Grid<float> const& field, Vec2f pos, float outside_force);

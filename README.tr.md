@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.6.0
+# ScanTailor OCR Unified · 0.6.2
 
 [English](README.md) | **Türkçe**
 
-0.6.0; beş bölümlü sade gezinme, ayrıntılı aşama görünümü, beş PDF sıkıştırma profili, hedef dosya boyutu, örnek sayfa karşılaştırması ve iptal desteği ekler. PDF/OCR güncellemeleri kayıpsız ana dosyadan yapılır; sıkıştırılmış okuma kopyası ayrıca saklanır. Mevcut projeler ve önceki PDF sürümleri korunur.
+0.6.2; hızlı kelime ve satır tespiti, sütunları ayrı değerlendiren sayfa sınırları ve ortak satır modeliyle geometriyi düzeltir. AI desteği, hızlı yöntemden sonra belirgin sorun kalan sayfalarda çalışır. Öneriler satır sapması, esneme ve modele katılmayan kontrol satırlarıyla karşılaştırılır. Elle düzenlenen sayfalar korunur ve güncel ayarlarıyla yeniden sıraya alınır.
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 
@@ -22,11 +22,11 @@ Son PDF'yi aç düğmesi okuma kopyasını açar. Kaynak ana dosya sonraki sayfa
 
 ## Kurulum
 
-**Windows x64 · 0.6.0: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.0/scantailor-ocr-unified-0.6.0-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Windows x64 · 0.6.2: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-**Linux x64 · 0.5.0: [Son doğrulanmış Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.5.0/scantailor-ocr-unified-0.5.0-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir. Linux 0.6.0 ikili paketi henüz yayımlanmadı; yukarıda anlatılan 0.6.0 yenilikleri 0.5.0 paketinde bulunmaz.
+**Linux x64 · 0.6.2: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-Yukarıdaki bağlantılar her platform için yayımlanmış sürümü ve tek tam paketi gösterir. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+Her platform için tek tam paket yayımlanır: Windows kurulum dosyası ve Linux arşivi. CPU AI modelleri pakete dahildir. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
 
 Windows kurulumu Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux paketi Ubuntu 22.04 / glibc 2.35 veya yenisini gerektirir. Diğer ortamlar için [derleme talimatlarına](packaging/BUILD.md) bakın.
 
@@ -41,13 +41,13 @@ Tam paketler Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanc
 **0 Girdi → 1 Yön → 2 Bölme → 3 Geometri → 4 AI geometri → 5 İçerik → 6 AI içerik → 7 Kenarlar → 8 Çıktı → 9 Parmak/leke → 10 PDF → 11 OCR → 12 Önbellek temizliği.**
 
 1. **0 Girdi:** resim, klasör, üst klasör veya PDF seçin. Üst klasör ayrı kitapları kuyruğa ekler; bu ekrandan seçilen PDF doğrudan düzenlemeye açılır.
-2. Normal geometri ve içerik ayarlarını kontrol edin. AI aşamalarının ▶ düğmesi öneri hazırlar; önizleyip ayrıca uygulayın. Normal ve AI ekranları aynı sayfa ayarını kullanır; ikisinde de elle düzeltme yapılabilir.
+2. Normal geometri ve içerik ayarlarını kontrol edin. AI aşamasının ▶ düğmesi seçili kapsamı optimize eder ve uygun iyileştirmeleri uygular. Yalnız karşılaştırma için **Hazırla**, tek aday için **Uygula** kullanın. Başlangıçta AI desteğini kapatabilirsiniz. Normal ve AI ekranları aynı sayfa ayarını kullanır; ikisinde de elle düzeltme yapılabilir.
 3. **8 Çıktı:** görünümü belirleyin. **9 Parmak/leke:** bu sayfa, seçili sayfalar veya kitap için temizlik önerisini hazırlayıp inceleyin ve uygulayın.
 4. **10 PDF:** görünür **PDF çıktı klasörü / Gözat** alanından kayıt yerini seçin. Kâğıt, sığdırma, kenar ve yazı boyutunu ayarlayın. Yazı eşitleme OCR başlatmadan görüntüden ölçülür.
 5. **11 OCR:** son PDF’ye aranabilir metin ekleyin. GPU olmayan cihazlar için CPU Hızlı / Tesseract Fast kullanılabilir.
 6. **12 Önbellek temizliği:** kategori boyutlarını, saklama seçimlerini ve temizlik zamanını görün. **Ayarlar** ve düğme görselleri içeren aranabilir **Yardım** Türkçe/İngilizcedir.
 
-Önce birkaç örnek sayfayı kontrol edin. Normal aşama ▶ düğmeleri kitabı seçili filtreye kadar işler. AI ▶ seçilen kapsamda öneri hazırlar; Uygula kayıtlı ayarı değiştirir. Çıktı, temizlik, PDF ve OCR ayrı çalışır.
+Önce birkaç örnek sayfayı kontrol edin. Normal aşama ▶ düğmeleri kitabı seçili filtreye kadar işler. AI ▶ seçilen kapsamı optimize eder; Hazırla yalnız karşılaştırma yapar, Uygula seçili adayı kaydeder. Çıktı, temizlik, PDF ve OCR ayrı çalışır.
 
 Bir sayfadaki düzeltme yalnız o sayfanın sonraki görüntü ve PDF işlemlerini yeniler. Diğer sayfaların mevcut OCR metni korunur. Önceden OCR’lı PDF yenilendiğinde yalnız değişen sayfaya otomatik OCR eklenir. Uyuşmayan temizlik maskesi yalnız o sayfada atlanır ve inceleme uyarısı gösterilir. Ortak kâğıt boyutu gibi genel ayarlar ilgili bütün sayfaları; bir çift fotoğrafın yönü/bölünmesi iki alt sayfayı etkileyebilir. Her PDF ayrı sürüm olarak kaydedilir.
 

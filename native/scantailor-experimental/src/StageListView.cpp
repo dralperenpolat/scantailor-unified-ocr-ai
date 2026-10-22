@@ -16,7 +16,7 @@ StageListView::StageListView(QWidget* parent):QTableView(parent) {
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     horizontalHeader()->hide();verticalHeader()->hide();setShowGrid(false);
     auto timer=new QTimer(this);timer->setInterval(1000);
-    connect(timer,&QTimer::timeout,this,[this]{if(m_running)setStepStatus(m_runningStep,QString::number(m_elapsed.elapsed()/1000)+" s");});timer->start();
+    connect(timer,&QTimer::timeout,this,[this]{if(m_running)setStepStatus(m_runningStep,unified_workflow::duration(m_elapsed.elapsed()));});timer->start();
 }
 StageListView::~StageListView()=default;
 void StageListView::setStages(IntrusivePtr<StageSequence> const& stages) {
@@ -47,7 +47,10 @@ void StageListView::updateMetrics(){
 }
 void StageListView::changeEvent(QEvent* event){QTableView::changeEvent(event);if(event->type()==QEvent::FontChange&&m_model)updateMetrics();}
 void StageListView::selectFilter(int filter){auto list=unified_workflow::steps();for(int i=0;i<list.size();++i)if(list[i].filter==filter){selectStep(list[i].id);return;}}
-void StageListView::selectStep(QString const& id){int row=unified_workflow::row(id);if(row>=0){setNavigationGroup(groupForStep(id));selectRow(row);}}
+void StageListView::selectStep(QString const& id){
+    QString visible=(!m_aiEnabled&&id.startsWith("ai_"))?(id=="ai_geometry"?"geometry":"content"):id;
+    int row=unified_workflow::row(visible);if(row>=0){setNavigationGroup(groupForStep(visible));selectRow(row);}
+}
 int StageListView::groupForStep(QString const& id){
     if(id=="input")return 0;
     if(id=="cleanup")return 2;
@@ -57,10 +60,15 @@ int StageListView::groupForStep(QString const& id){
 }
 void StageListView::updateVisibility(){
     if(!m_model)return;
-    for(int i=0;i<m_model->rowCount();++i)setRowHidden(i,!m_showAll&&groupForStep(stepId(i))!=m_group);
+    for(int i=0;i<m_model->rowCount();++i)setRowHidden(i,(!m_aiEnabled&&stepId(i).startsWith("ai_"))||(!m_showAll&&groupForStep(stepId(i))!=m_group));
     updateMetrics();
 }
 void StageListView::setNavigationGroup(int group){m_group=group;updateVisibility();emit navigationGroupChanged(group);}
+void StageListView::setAiEnabled(bool enabled){
+    m_aiEnabled=enabled;
+    if(!enabled&&currentStep().startsWith("ai_"))selectStep(currentStep()=="ai_geometry"?"geometry":"content");
+    updateVisibility();updateButtons();
+}
 void StageListView::showAllStages(bool show){
     m_showAll=show;if(!show&&!currentStep().isEmpty())m_group=groupForStep(currentStep());
     updateVisibility();emit navigationGroupChanged(m_group);
@@ -75,6 +83,6 @@ void StageListView::setBatchProcessingInProgress(bool running){
     if(running==m_running)return;
     m_running=running;
     if(running){m_runningStep=currentStep();m_elapsed.start();}
-    else if(m_elapsed.isValid())setStepStatus(m_runningStep,QString::number(m_elapsed.elapsed()/1000)+" s");
+    else if(m_elapsed.isValid())setStepStatus(m_runningStep,unified_workflow::duration(m_elapsed.elapsed()));
     updateButtons();
 }

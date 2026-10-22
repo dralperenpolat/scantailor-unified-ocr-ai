@@ -16,7 +16,9 @@ struct UnifiedDewarpCandidate {
     dewarping::DistortionModel model;
     UnifiedGeometryMetrics metrics;
     double lineError = 0;
+    double validationError = std::numeric_limits<double>::infinity();
     double score = std::numeric_limits<double>::infinity();
+    double depth=-1,curves=-1,angle=-1;
     bool accepted() const { return model.isValid() && metrics.reason.isEmpty() && unifiedFinite(score); }
 };
 struct UnifiedDewarpSelection {
@@ -24,7 +26,9 @@ struct UnifiedDewarpSelection {
     QString source;
     QString report;
     std::vector<UnifiedDewarpCandidate> candidates;
+    double depth=-1,curves=-1,angle=-1;
     double currentError=std::numeric_limits<double>::infinity();
+    double currentValidationError=std::numeric_limits<double>::infinity();
     int lineCount=0;
 };
 
@@ -41,5 +45,6 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(imageproc::GrayImage const& image
     double fov, std::shared_ptr<AcceleratableOperations> const& ops,
     TaskStatus const& status, DebugImages* dbg = nullptr,
     std::vector<UnifiedDewarpCandidate> const& extra = {},
-    std::function<QPointF(QPointF const&)> const& currentMapper = {});
+    std::function<QPointF(QPointF const&)> const& currentMapper = {}, bool optimizeStrength = false,
+    QString const& tracePath = {});
 }

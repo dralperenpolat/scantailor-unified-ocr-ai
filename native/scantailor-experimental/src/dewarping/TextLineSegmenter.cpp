@@ -122,7 +122,7 @@ TextLineSegmenter::Result
 TextLineSegmenter::process(
     AffineTransformedImage const& image,
     std::shared_ptr<AcceleratableOperations> const& accel_ops,
-    TaskStatus const& status, DebugImages* dbg)
+    TaskStatus const& status, DebugImages* dbg, bool fast)
 {
     status.throwIfCancelled();
 
@@ -153,7 +153,7 @@ TextLineSegmenter::process(
     }
 
     Result result = processDownscaled(
-                        downscaled_image, downscaled_crop_area, accel_ops, status, dbg
+                        downscaled_image, downscaled_crop_area, accel_ops, status, dbg, fast
                     );
 
     // Transform from downscaled_image to image.origImage() coordinates.
@@ -173,7 +173,7 @@ TextLineSegmenter::Result
 TextLineSegmenter::processDownscaled(
     GrayImage const& image, QPolygonF const& crop_area,
     std::shared_ptr<AcceleratableOperations> const& accel_ops,
-    TaskStatus const& status, DebugImages* dbg)
+    TaskStatus const& status, DebugImages* dbg, bool fast)
 {
     int const width = image.width();
     int const height = image.height();
@@ -189,7 +189,7 @@ TextLineSegmenter::processDownscaled(
 
     status.throwIfCancelled();
 
-    std::vector<Vec2f> const sigmas =
+    std::vector<Vec2f> sigmas =
     {
         { 10.f, 0.5f },
         { 20.f, 0.5f },
@@ -198,6 +198,7 @@ TextLineSegmenter::processDownscaled(
         { 10.f, 2.f },
         { 20.f, 2.f }
     };
+    if(fast)sigmas={sigmas[0],sigmas[3],sigmas[4]};
 
     float const base_angle_rad = findSkewAngleRad(image, status, dbg);
 
@@ -205,7 +206,7 @@ TextLineSegmenter::processDownscaled(
 
     std::vector<Vec2f> directions;
     directions.emplace_back(std::cos(base_angle_rad), std::sin(base_angle_rad));
-    double const angle_step_deg = 2.0;
+    double const angle_step_deg = fast?8.0:2.0;
     for (double delta_angle_deg = angle_step_deg;
             delta_angle_deg <= 40.0; delta_angle_deg += angle_step_deg)
     {

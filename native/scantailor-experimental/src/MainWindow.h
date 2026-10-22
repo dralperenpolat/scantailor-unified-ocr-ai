@@ -166,12 +166,17 @@ private:
     void syncWorkflowCache(bool scan=false);
     void finishWorkflowProject(bool discard);
     void cancelWorkflowProcess();
+    void refreshCleanupPages();
+    void showCleanupPage(PageId const& page);
+    void finalizeWorkflowProject();
+    void requeueAiPages(bool geometry,std::set<PageId> const& pages);
+    std::set<PageId> m_aiRequeueTargets;
     UnifiedProjectCache* m_workflowCache=nullptr;
     QByteArray workflowFingerprint() const;
     QJsonArray workflowPages() const;
     QJsonArray m_workflowLastPages;
     std::set<PageId> m_workflowPageTargets;
-    bool m_workflowPartial=false;
+    bool m_workflowPartial=false,m_workflowOcrPending=false;
     QWidget *m_workflowInput=nullptr,*m_workflowTools=nullptr,*m_workflowHelp=nullptr,*m_workflowCleanup=nullptr;
     QLabel *m_workflowTitle=nullptr,*m_workflowStatus=nullptr,*m_cleanupStatus=nullptr,*m_workflowDirty=nullptr;
     QPushButton *m_workflowRun=nullptr,*m_workflowStop=nullptr;

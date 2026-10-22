@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QVector>
 namespace unified_workflow {
+inline QString duration(qint64 milliseconds){return QString::number(milliseconds/1000.,'f',1)+" s";}
 inline QString text(char const* tr, char const* en) {
     auto lang=QCoreApplication::instance()->property("unifiedUiLanguage").toString();
     if(lang.isEmpty())lang=unified_i18n::selectedLanguage();
@@ -16,9 +17,9 @@ inline QVector<Step> steps() {
         {"orientation",text("1 · Yönü düzelt","1 · Fix orientation"),text("Sayfaları 90 derece döndür. ▶ kitabı bu aşamaya kadar işler.","Rotate pages in 90-degree steps. ▶ processes the book through this stage."),0,true},
         {"split",text("2 · Sayfaları böl","2 · Split pages"),text("Çift sayfa fotoğrafını sol ve sağ sayfaya ayır.","Separate a spread into left and right pages."),1,true},
         {"geometry",text("3 · Geometrik düzeltme","3 · Geometric correction"),text("Eğim, perspektif ve eğriliği normal araçlarla düzelt.","Correct skew, perspective and curvature with the standard tools."),2,true},
-        {"ai_geometry",text("4 · AI geometrik düzeltme","4 · AI geometry"),text("▶ AI önerisi hazırlar; önizleyip Uygula ile onayla. Bu ekran da elle düzenlenebilir.","▶ prepares an AI proposal; preview it and choose Apply. You can also edit manually here."),2,true},
+        {"ai_geometry",text("4 · AI geometrik düzeltme","4 · AI geometry"),text("▶ AI, metin ve kenarı karşılaştırır; ölçümde iyileşeni uygular. Elle ayarlar korunur.","▶ compares AI, text and edges, then applies measured improvements. Manual settings are preserved."),2,true},
         {"content",text("5 · İçerik seçimi","5 · Select content"),text("Korunacak metin ve resim alanını seç. AI ekranıyla aynı ayar kullanılır.","Select the text and image area to retain. This shares settings with the AI screen."),3,true},
-        {"ai_content",text("6 · AI içerik seçimi","6 · AI content selection"),text("▶ bölge önerilerini hazırlar. Uygula kayıtlı içerik seçimini değiştirir.","▶ prepares region proposals. Apply updates the saved content selection."),3,true},
+        {"ai_content",text("6 · AI içerik seçimi","6 · AI content selection"),text("▶ içerik önerilerini hazırlar ve uygun olanları uygular. Elle seçimler korunur.","▶ prepares and applies valid content proposals. Manual selections are preserved."),3,true},
         {"margins",text("7 · Kenarlar ve yerleşim","7 · Margins and layout"),text("Sayfa kenarlarını ve hizalamayı düzenle.","Set page margins and alignment."),4,true},
         {"output",text("8 · Çıktı","8 · Output"),text("▶ tüm sayfaların güncel görüntülerini üretir. PDF ve OCR sonraki aşamalardır.","▶ renders current images for all pages. PDF and OCR are subsequent stages."),5,true},
         {"cleanup",text("9 · Parmak ve leke temizliği","9 · Fingers and stains"),text("Çıktı görüntülerinde kenar lekelerini incele; metni koruyarak uygula.","Review edge stains in output images and apply cleanup while protecting text."),-1,true},

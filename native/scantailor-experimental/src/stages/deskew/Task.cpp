@@ -530,28 +530,16 @@ Task::processWarpDistortion(
         }
         DistortionModel distortion_model;
         int detectedLines=0;
-        if(qEnvironmentVariable("STOU_COMPARE_GEOMETRY")=="1") {
+        {
             auto selection=unifiedSelectAutoDewarp(gray_orig_image_factory(),orig_image_transform,
                 params.getParamsDewarping(),params.getParamsSource().photo()?params.getParamsSource().fov():0.,accel_ops,status,m_ptrDbg.get());
             distortion_model=selection.model;comparisonReport=selection.report;detectedLines=selection.lineCount;
+            if(selection.depth>=0){
+                params.getParamsDewarping().setDepthPerception(DepthPerception(selection.depth));
+                params.getParamsDewarping().setCorrectCurves(DepthPerception(selection.curves));
+                params.getParamsDewarping().setCorrectAngle(DepthPerception(selection.angle));
+            }
             params.getParamsDewarping().setDetectionReport(comparisonReport);
-        } else {
-        DistortionModelBuilder model_builder(
-            orig_image_transform.transform().inverted().map(QPointF(0, 1))
-        );
-
-        TextLineTracer::trace(
-            AffineTransformedImage(gray_orig_image_factory(), orig_image_transform),
-            model_builder, accel_ops, status, m_ptrDbg.get()
-        );
-        detectedLines=int(model_builder.horizontalCurves().size());
-
-        TopBottomEdgeTracer::trace(
-            gray_orig_image_factory(), model_builder.verticalBounds(),
-            model_builder, status, m_ptrDbg.get()
-        );
-
-        distortion_model=model_builder.tryBuildModel(m_ptrDbg.get(), &orig_image);
         }
 
         if (!distortion_model.isValid())

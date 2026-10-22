@@ -1053,5 +1053,17 @@
   "Sıkıştırmada metin konumu, sayfa ölçüsü veya açıklama değişti: %1": "Compression changed text position, page dimensions or annotations: %1",
   "Sıkıştırmada PDF bilgileri, yer imleri veya ekleri değişti.": "Compression changed PDF metadata, bookmarks or attachments.",
   "Kayıpsız PDF yeniden paketleniyor": "Repacking PDF losslessly",
-  "Yoğun kayıpsız sıkıştırma · daha yavaş": "Deep lossless compression · slower"
+  "Yoğun kayıpsız sıkıştırma · daha yavaş": "Deep lossless compression · slower",
+  "Perspektif satır modeli": "Text perspective model",
+  "Ortak satır modeli": "Joint text line model",
+  "Esnek satır modeli": "Flexible text line model",
+  "Modeli doğrulayacak yeterli satır desteği yok": "Not enough text line support to validate the model",
+  "Satır modeli kararlı biçimde çözülemedi": "The text line model could not be solved reliably",
+  "Satır modeli aşırı dikey esneme gerektiriyor": "The text line model requires excessive vertical stretching",
+  "Satır modeli sayfanın çok dar bir kısmını kapsıyor": "The text line model covers too little of the page width",
+  "Geometri · hızlı satır modeli / AI · 0.6.2": "Geometry · fast text line model / AI · 0.6.2",
+  "Gerekli sayfalarda AI desteği kullan": "Use AI support where needed",
+  "\nAI geçişi gerekmedi: satırlar yeterince düz veya güvenilir metin kanıtı yok.": "\nAI pass not needed: lines are sufficiently straight or there is insufficient reliable text evidence.",
+  "Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": "AI content and page layout · 0.6.2",
+  " · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": " · AI content and page layout · 0.6.2"
 }

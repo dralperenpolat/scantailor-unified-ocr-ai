@@ -30,6 +30,7 @@ public:
         setButtonText(QWizard::BackButton,tr("Geri"));setButtonText(QWizard::NextButton,tr("İleri"));setButtonText(QWizard::FinishButton,tr("Ayarları kaydet"));setButtonText(QWizard::CancelButton,tr("İptal"));
         auto first=new QWizardPage;first->setTitle(tr("İşlem profili ve OCR"));auto form=new QFormLayout(first);
         auto intro=new QLabel(tr("GPU olmayan cihazlarda CPU hızlı seçeneği önerilir. Bütün seçimleri işlem başlamadan değiştirebilirsiniz."));intro->setWordWrap(true);form->addRow(intro);
+        m_ai=new QCheckBox(tr("Yapay zekâ desteği istiyorum · AI geometri ve AI içerik"));m_ai->setObjectName("setupAiEnabled");m_ai->setChecked(saved.value("ai_enabled").toBool(false));form->addRow(m_ai);
         m_profile=new QComboBox;m_profile->setObjectName("setupProfile");m_profile->addItem(tr("CPU hızlı · Tesseract Fast · OCR en son"),"cpu_fast");m_profile->addItem(tr("CPU kalite · Tesseract Best · OCR en son"),"cpu_quality");m_profile->addItem(tr("GPU · PaddleOCR · ayrıntılı düzeltme"),"gpu_quality");form->addRow(tr("Hazır profil"),m_profile);
         m_engine=new QComboBox;m_engine->setObjectName("setupOcrEngine");m_engine->addItem("Tesseract · CPU","tesseract");m_engine->addItem("PaddleOCR · GPU","paddle");form->addRow(tr("OCR motoru"),m_engine);
         m_quality=new QComboBox;m_quality->addItem(tr("Fast · daha hızlı, küçük dil modeli"),"fast");m_quality->addItem(tr("Best · daha yavaş, doğruluk öncelikli"),"best");form->addRow(tr("Tesseract modeli"),m_quality);
@@ -92,7 +93,7 @@ public:
     }
     QJsonObject values()const{
         auto lang=m_language->currentData().toString();bool paddle=m_engine->currentData()=="paddle";
-        return {{"schema",1},{"setup_complete",true},{"ocr_engine",m_engine->currentData().toString()},{"ocr_device",paddle?"gpu":"cpu"},
+        return {{"schema",1},{"ai_enabled",m_ai->isChecked()},{"setup_complete",true},{"ocr_engine",m_engine->currentData().toString()},{"ocr_device",paddle?"gpu":"cpu"},
             {"tess_quality",m_quality->currentData().toString()},{"language",lang},{"paddle_language",lang=="deu"?"de":lang=="tur"?"tr":"en"},
             {"ocr_timing",m_timing->currentData().toString()},{"auto_warp",m_warp->isChecked()},{"page_cleanup",m_cleanup->isChecked()},{"content_fit",m_fit->isChecked()},
             {"native_scale",m_scale->value()},{"ocr_max_edge",m_scale->value()==1?3000:4200},{"appearance",m_appearance->currentData().toString()},
@@ -105,7 +106,7 @@ public:
 private:
     QComboBox *m_profile,*m_engine,*m_quality,*m_language,*m_timing,*m_ui,*m_appearance,*m_paper,*m_resource;
     UnifiedCompressionOptions* m_compression;
-    QCheckBox *m_warp,*m_cleanup,*m_fit,*m_text;QSpinBox* m_scale;QDoubleSpinBox *m_margin,*m_quota,*m_reserve;QLineEdit *m_output,*m_temp;
+    QCheckBox *m_ai,*m_warp,*m_cleanup,*m_fit,*m_text;QSpinBox* m_scale;QDoubleSpinBox *m_margin,*m_quota,*m_reserve;QLineEdit *m_output,*m_temp;
     static QString tr(char const* text){return unified_i18n::text(text);}
     void pathRow(QFormLayout* form,QString const& title,QLineEdit* edit){auto row=new QHBoxLayout;row->addWidget(edit);auto button=new QPushButton(tr("Klasör seç"));row->addWidget(button);form->addRow(title,row);connect(button,&QPushButton::clicked,this,[this,edit,title]{auto value=QFileDialog::getExistingDirectory(this,title,edit->text());if(!value.isEmpty())edit->setText(value);});}
     void profile(){if(m_profile->currentData()=="custom")return;bool fast=m_profile->currentData()=="cpu_fast",gpu=m_profile->currentData()=="gpu_quality";m_engine->setCurrentIndex(gpu?1:0);m_quality->setCurrentIndex(fast?0:1);m_timing->setCurrentIndex(0);m_warp->setChecked(!fast);m_cleanup->setChecked(!fast);m_fit->setChecked(!fast);m_scale->setValue(fast?1:2);m_appearance->setCurrentIndex(fast?0:2);m_paper->setCurrentIndex(fast?0:1);}

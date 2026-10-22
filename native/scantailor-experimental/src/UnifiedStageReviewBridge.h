@@ -9,6 +9,12 @@
 // persisted proposals and undo groups. Actions resolve PageId, never a row
 // number from the thumbnail's current sort order.
 class UnifiedStageReviewBridge {
+    static bool previewsPresent(UnifiedAiReviewDialog* d,int row){return QFileInfo::exists(d->m_rows[row].imagePath);}
+    static bool previewsPresent(UnifiedGeometryReviewDialog* d,int row){
+        auto const& result=d->m_rows[row];if(!QFileInfo::exists(result.source)||!QFileInfo::exists(result.current))return false;
+        for(auto const& candidate:result.candidates)if(candidate.accepted&&!QFileInfo::exists(candidate.path))return false;
+        return true;
+    }
     template<class D> static std::vector<int> rows(D* d,std::set<PageId> const& pages,bool all){
         std::set<PageId> seen;std::vector<int> ids;
         for(int i=int(d->m_rows.size())-1;i>=0;--i){auto p=d->m_samples[d->m_rows[i].index].page.id();if(!seen.insert(p).second)continue;if(all||pages.count(p))ids.push_back(i);}
@@ -23,12 +29,20 @@ class UnifiedStageReviewBridge {
 public:
     template<class D> static QString analyze(D* d,std::set<PageId> const& pages,bool all,QString const& device){
         if(d->m_running)return unified_i18n::text("Analiz devam ediyor.");
+        d->completion={};
         // Include pages which became ready since the review window was created.
         if(d->refresh){auto freshSamples=d->refresh();for(auto const& sample:freshSamples){bool found=false;for(auto const& old:d->m_samples)if(old.page.id()==sample.page.id()){found=true;break;}if(!found){d->m_samples.push_back(sample);d->m_stamps.push_back(unified_review::sourceStamp(sample.page));d->m_pages->addItem(QFileInfo(sample.page.imageId().filePath()).fileName(),int(d->m_samples.size()-1));}}}
         std::set<PageId> seen;std::vector<int> ids;
-        for(size_t i=0;i<d->m_samples.size();++i){auto p=d->m_samples[i].page.id();if((all||pages.count(p))&&seen.insert(p).second)ids.push_back(int(i));}
+        for(size_t i=0;i<d->m_samples.size();++i){auto p=d->m_samples[i].page.id();if((all||pages.count(p))&&seen.insert(p).second){int existing=row(d,p);if(existing<0||!fresh(d,existing)||!d->m_rows[existing].error.isEmpty()||!previewsPresent(d,existing))ids.push_back(int(i));}}
         d->m_device->setCurrentIndex(device.startsWith("gpu")?1:0);d->start(ids);
-        return ids.empty()?unified_i18n::text("Bu sayfaların önceki aşamaları hazır değil. Önce seçili aşamayı işle."):d->m_status->text();
+        return ids.empty()?unified_i18n::text("Güncel sonuçlar kullanılıyor. Hazır öneriyi inceleyip uygulayın; değişen sayfalar yeniden hesaplanır."):d->m_status->text();
+    }
+    template<class D> static QString optimize(D* d,std::set<PageId> const& pages,bool all,QString const& device){
+        if(d->m_running)return unified_i18n::text("Analiz devam ediyor.");
+        auto feedback=analyze(d,pages,all,device);
+        d->completion=[d,pages,all]{d->applyRows(rows(d,pages,all),false);};
+        if(!d->m_running){auto done=std::move(d->completion);d->completion={};done();}
+        return feedback;
     }
     static UnifiedStageReviewState state(UnifiedAiReviewDialog* d,PageId const& page,int=-1,std::set<PageId> const& targets={},bool all=true){
         auto s=common(d,page);int i=row(d,page);s.revision=i;
@@ -52,6 +66,8 @@ public:
         if(valid)s.selectedMethod=r.candidates[c].name;
         if(s.applied){s.appliedMethod=r.candidates[d->m_applied.at(i)].name;s.manual=false;s.applied=c==d->m_applied.at(i);}
         if(!s.running)s.detail=s.stale?unified_i18n::text("Geometri, yön veya bölme değişti. Eski öneri yeniden hesaplanmalı; mevcut ayarın korundu."):s.applied?unified_i18n::text("Seçili aday bu sayfaya uygulandı. Eğrileri ana görüntüde elle de düzenleyebilirsin."):!s.appliedMethod.isEmpty()?unified_i18n::text("Seçili aday farklı. ▶ Uygula bu sayfada önceki adayın yerine geçer; geri alabilirsin."):!r.error.isEmpty()?unified_i18n::text("Analiz tamamlanamadı: ")+r.error:valid&&!r.candidates[c].accepted?unified_i18n::text("Seçili aday uygun değil: ")+r.candidates[c].reason:r.recommended<0?unified_i18n::text("Öneri yok: yeterli iyileşme doğrulanmadı. Uygun aday varsa tek sayfa için gözle inceleyebilirsin."):unified_i18n::text("Öneri hazır; henüz uygulanmadı. Önce öneriyi göster.");
+        int analyzed=0,recommended=0,applied=0,errors=0;for(int j:rows(d,targets,all)){++analyzed;recommended+=d->m_rows[j].recommended>=0;applied+=d->m_applied.count(j)&&fresh(d,j);errors+=!d->m_rows[j].error.isEmpty();}
+        s.detail+=unified_workflow::text("\nİncelenen: %1 · yararlı öneri: %2 · uygulanan: %3 · hata: %4.","\nAnalyzed: %1 · useful proposals: %2 · applied: %3 · errors: %4.").arg(analyzed).arg(recommended).arg(applied).arg(errors);
         return s;
     }
     static QImage preview(UnifiedAiReviewDialog* d,PageId const& page,int){int i=row(d,page);if(i<0||!fresh(d,i))return {};auto const& r=d->m_rows[i];return unified_ai::preview(r,d->m_samples[r.index],true,true);}

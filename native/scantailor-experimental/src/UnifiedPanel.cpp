@@ -178,6 +178,8 @@ UnifiedPanel::UnifiedPanel(QWidget* parent):QWidget(parent) {
     m_pdfTools->importReady=[this](QJsonObject const& result){return addImportedPdf(result);};
     m_pdfToolsTab=tabs->addTab(m_pdfTools,trU("PDF’den içe aktar"));
     m_ocr=new UnifiedOcrOptions(m_root);tabs->addTab(m_ocr,trU("OCR motoru / dil paketleri"));
+    auto runOcr=new QPushButton(trU("▶ Seçili ayarlarla OCR’ı başlat"));runOcr->setObjectName("workflowOcrRun");runOcr->setMinimumHeight(38);runOcr->setEnabled(false);qobject_cast<QFormLayout*>(m_ocr->layout())->insertRow(0,runOcr);
+    auto ocrScope=new QLabel(trU("Düzenleyicide açık kitabı bu motor ve dillerle işler. Gerekirse önce güncel PDF hazırlanır."));ocrScope->setWordWrap(true);m_ocr->layout()->addWidget(ocrScope);
     auto resources=new QWidget;auto rf=new QFormLayout(resources);rf->setRowWrapPolicy(QFormLayout::WrapLongRows);tabs->addTab(resources,trU("CPU / GPU ve yük sınırları"));
     QSettings settings;
     m_threads=new QSpinBox;m_threads->setRange(1,qMax(1,QThread::idealThreadCount()));m_threads->setValue(settings.value("settings/batch_processing_threads",qMin(4,QThread::idealThreadCount())).toInt());rf->addRow(trU("CPU iş parçacığı / eşzamanlı sayfa"),m_threads);
@@ -336,7 +338,7 @@ void UnifiedPanel::startupSettings(){
     auto path=unified_runtime::data(m_root)+"/preferences.json";QFile file(path);QJsonObject saved;if(file.open(QIODevice::ReadOnly))saved=QJsonDocument::fromJson(file.readAll()).object();file.close();
     auto dialog=new UnifiedStartupDialog(saved,m_output,this);dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog,&QDialog::accepted,this,[this,dialog,path,saved]()mutable{
-        auto value=dialog->values();for(auto it=value.begin();it!=value.end();++it)saved.insert(it.key(),it.value());
+        auto value=dialog->values();QSettings().setValue("unified/ai_enabled",value.value("ai_enabled").toBool());for(auto it=value.begin();it!=value.end();++it)saved.insert(it.key(),it.value());
         if(!writeJson(path,saved)){m_status->setText(trU("Başlangıç ayarları kaydedilemedi; disk alanını ve yazma iznini kontrol edin."));return;}
         m_ocr->setOptions(value);setOcrTiming(value.value("ocr_timing").toString());setPdfLayoutOptions(value);setOutputFinish({});
         m_compression->setOptions(value.value("compression_profile").toString("lossless"),value.value("compression_options").toObject());

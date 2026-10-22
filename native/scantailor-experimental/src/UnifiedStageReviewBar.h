@@ -25,7 +25,7 @@ struct UnifiedStageReviewState {
 // No image processing or project mutation lives in this widget.
 class UnifiedStageReviewBar:public QGroupBox {
 public:
-    enum Action { Analyze,Preview,Apply,Undo,Stop,Advanced,Changed };
+    enum Action { Analyze,Preview,Apply,Undo,Stop,Advanced,Changed,Optimize };
     std::function<void(Action)> action;
     explicit UnifiedStageReviewBar(bool geometry,QWidget* parent):QGroupBox(unified_i18n::text("Öneri hazırla ve uygula"),parent),m_geometry(geometry){
         setObjectName(geometry?"stageGeometryAi":"stageContentAi");setMinimumWidth(0);setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Maximum);auto box=new QVBoxLayout(this);box->setAlignment(Qt::AlignTop);
@@ -37,6 +37,9 @@ public:
         box->addWidget(new QLabel(unified_i18n::text("1. İnceleme yöntemini çalıştır")));
         auto methodRow=new QHBoxLayout;methodRow->addWidget(m_kind,1);box->addLayout(methodRow);
         m_analyze=new QPushButton(unified_i18n::text("▶ Hazırla"));m_analyze->setObjectName("stageReviewAnalyze");m_analyze->setAccessibleName(unified_i18n::text("Seçili yöntemle öneri hazırla"));methodRow->addWidget(m_analyze);connect(m_analyze,&QPushButton::clicked,[this]{if(action)action(Analyze);});
+        m_optimize=new QPushButton(unified_workflow::text("▶ İyileştir ve uygula","▶ Optimize and apply"));m_optimize->setObjectName("stageReviewOptimize");box->addWidget(m_optimize);
+        m_optimize->setToolTip(unified_workflow::text("Kapsamdaki sayfalarda yalnız ölçümde iyileşen öneriyi uygular. Elle ayarlar korunur. Geri alınabilir.","Apply only measured improvements in the selected scope. Manual settings are preserved. Can be undone."));
+        connect(m_optimize,&QPushButton::clicked,[this]{if(action)action(Optimize);});
         m_scopeLabel=new QLabel(unified_i18n::text("İşlem: yalnız bu sayfa"));m_scopeLabel->setWordWrap(true);box->addWidget(m_scopeLabel);
         m_status=new QLabel(unified_i18n::text("Önce öneri hazırla. Görüp beğenirsen uygula."));m_status->setObjectName("stageReviewStatus");m_status->setWordWrap(true);box->addWidget(m_status);
         m_progress=new QProgressBar;m_progress->setTextVisible(true);m_progress->hide();box->addWidget(m_progress);
@@ -76,14 +79,14 @@ public:
         if(m_pageKey!=s.page){resetView();m_pageKey=s.page;}m_page->setText(s.page);m_status->setText(feedback.isEmpty()?s.detail:feedback);
         m_selected->setText(scope()=="page"?unified_i18n::text("Seçili: ")+(s.selectedMethod.isEmpty()?unified_i18n::text("henüz öneri yok"):s.selectedMethod):unified_i18n::text("Toplu işlem: her sayfanın kendi önerilen adayı."));
         m_applied->setText(unified_i18n::text("Bu sayfada uygulanan: ")+(s.stale?unified_i18n::text("eski öneri geçersiz; yeniden hesaplanmalı"):s.appliedMethod.isEmpty()?unified_i18n::text("henüz uygulanmadı"):s.appliedMethod));
-        m_native->setText(unified_workflow::text("Bu AI aşamasındaki ▶ öneri hazırlar. Uygula ile kaydedin. Normal aşama aynı kayıtlı ayarı kullanır; iki ekranda da elle düzenleyebilirsiniz.","▶ in this AI stage prepares proposals. Apply saves them. The standard stage uses the same saved settings; manual editing is available on both screens.")+(s.nativeMethod.isEmpty()?QString():unified_i18n::text("\nBu sayfanın kayıtlı ayarı: ")+s.nativeMethod));
+        m_native->setText(unified_workflow::text("Aşamadaki ▶ veya İyileştir ve uygula uygun sonucu uygular. Hazırla yalnız öneri üretir. Elle ayarlar korunur.","The stage ▶ or Optimize and apply applies suitable results. Prepare only creates proposals. Manual settings are preserved.")+(s.nativeMethod.isEmpty()?QString():unified_i18n::text("\nBu sayfanın kayıtlı ayarı: ")+s.nativeMethod));
         if(m_revision!=s.revision||m_choices!=s.choices){QSignalBlocker b(m_choice);m_choice->clear();m_choice->addItems(s.choices);m_choice->setCurrentIndex(s.choice);m_revision=s.revision;m_choices=s.choices;}
         m_choice->setEnabled(!s.choices.isEmpty()&&!s.stale);m_manual->setVisible(s.manual&&scope()=="page");
-        m_analyze->setEnabled(!s.running&&!s.page.isEmpty());m_stop->setEnabled(s.running);m_device->setEnabled(!s.running);m_kind->setEnabled(!s.running);
+        m_analyze->setEnabled(!s.running&&!s.page.isEmpty());m_optimize->setEnabled(!s.running&&!s.page.isEmpty());m_stop->setEnabled(s.running);m_device->setEnabled(!s.running);m_kind->setEnabled(!s.running);
         m_progress->setVisible(s.running);m_progress->setRange(0,s.total);m_progress->setValue(s.done);
         m_preview->setEnabled(s.previewAvailable&&!s.stale);m_apply->setEnabled(scope()=="page"?s.available&&!s.applied&&(!s.manual||allowManual()):s.bulkAvailable);m_undo->setEnabled(s.undo);
     }
     void trigger(Action a){auto b=a==Analyze?m_analyze:a==Preview?m_preview:a==Apply?m_apply:a==Undo?m_undo:m_stop;if(b->isEnabled())b->click();}
 private:
-    bool m_geometry;QString m_pageKey;int m_revision=-2;QStringList m_choices;QLabel *m_page,*m_scopeLabel,*m_status,*m_selected,*m_applied,*m_native;QProgressBar* m_progress;QComboBox *m_kind,*m_scope,*m_choice,*m_device;QCheckBox* m_manual;QPushButton *m_analyze,*m_preview,*m_apply,*m_undo,*m_stop;
+    bool m_geometry;QString m_pageKey;int m_revision=-2;QStringList m_choices;QLabel *m_page,*m_scopeLabel,*m_status,*m_selected,*m_applied,*m_native;QProgressBar* m_progress;QComboBox *m_kind,*m_scope,*m_choice,*m_device;QCheckBox* m_manual;QPushButton *m_optimize,*m_analyze,*m_preview,*m_apply,*m_undo,*m_stop;
 };

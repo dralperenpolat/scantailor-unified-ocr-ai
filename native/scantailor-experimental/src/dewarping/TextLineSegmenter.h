@@ -74,12 +74,12 @@ public:
     static Result process(
         imageproc::AffineTransformedImage const& image,
         std::shared_ptr<AcceleratableOperations> const& accel_ops,
-        TaskStatus const& status, DebugImages* dbg = nullptr);
+        TaskStatus const& status, DebugImages* dbg = nullptr, bool fast = false);
 private:
     static Result processDownscaled(
         imageproc::GrayImage const& image, QPolygonF const& crop_area,
         std::shared_ptr<AcceleratableOperations> const& accel_ops,
-        TaskStatus const& status, DebugImages* dbg);
+        TaskStatus const& status, DebugImages* dbg, bool fast);
 
     static double findSkewAngleRad(
         imageproc::GrayImage const& image,

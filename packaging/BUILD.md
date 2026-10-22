@@ -1,4 +1,4 @@
-# 0.6.0 paketini yeniden oluşturma
+# 0.6.2 paketini yeniden oluşturma
 
 [English](BUILD.en.md) | **Türkçe**
 
@@ -46,7 +46,7 @@ python3 packaging/fetch_assets.py
 bash packaging/build-linux.sh
 $HOME/stou-tools/python/bin/python3 packaging/stage_linux.py --runtime "$HOME/stou-tools/python" --destination "$HOME/stage-linux"
 LD_LIBRARY_PATH="$HOME/stage-linux/native/bin" "$HOME/stage-linux/runtime/bin/python3" packaging/smoke_cpu.py --root "$HOME/stage-linux" --work "$HOME/qa-linux" --ai
-tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.0-linux-x64.tar.gz .
+tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.2-linux-x64.tar.gz .
 ```
 
 glibc, çekirdek ve ekran sunucusu sistemden gelir; diğer tespit edilen native kitaplıklar pakete alınır. Qt platform eklentileri dahildir. glibc 2.35 altı veya musl sistemleri için bu ikiliyi kullanmayın. Kaynaktan ayrı derleme gerekir.
@@ -62,3 +62,5 @@ Windows EXE'yi boş bir klasöre kurup aynı testi **kurulan** yorumlayıcıyla 
 GitHub Releases'e yalnızca **Windows tam kurulum EXE'sini ve Linux tam paket TAR.GZ arşivini** yükleyin. Her işletim sistemi için tek indirme bağlantısı verin. Hafif paketleri, SBOM, SHA256SUMS ve test sonuçlarını derleme çıktılarında veya yerel arşivde saklayın. Kaynak kodu paketlerle eşleşen Git etiketi üzerinden erişilebilir tutun; GitHub kaynak ZIP/TAR bağlantılarını otomatik ekler. Ayrı kaynak arşivi gerekiyorsa `python packaging/source_archive.py --destination ...` ile yerelde üretin. Lisans ve bildirimleri koruyun.
 
 Arayüz dili testi: `unified-i18n-test` hedefini derleyip `QT_QPA_PLATFORM=offscreen` ile çalıştırın. Test dil seçimi, kalıcılık, ayrı play düğmeleri, ilerleme mesajları ve OCR dil kodlarının korunmasını denetler.
+
+Geometri testi: `unified-fast-geometry-test`, bilinen eğrilik ve perspektifle üretilmiş tek ve çift sütunlu sayfalarda gerçek native dönüşümü ölçer. Düz sayfa, az metinli kapak, boş sayfa, dikey kenar açı sınırı ve iptal de denetlenir. `unified-geometry-pilot` kayıtlı inceleme oturumunu kaynakları değiştirmeden tekrar işler; `STOU_PILOT_PAGES=1,2,3` kapsamı, `STOU_PILOT_AI=0` AI olmadan çalışmayı seçer.

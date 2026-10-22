@@ -6,6 +6,8 @@
 #include "UnifiedRuntime.h"
 #include "UnifiedPanel.h"
 #include "UnifiedStageReviewBar.h"
+#include "UnifiedGeometryReview.h"
+#include "UnifiedContentReview.h"
 #include "StageSequence.h"
 #include "ProjectPages.h"
 #include "ProjectWriter.h"
@@ -103,11 +105,16 @@ void MainWindow::initWorkflow(){
     auto nativeSettings=new QPushButton(text("Uygulama ayarları","Application settings"));actions->addWidget(nativeSettings);connect(nativeSettings,&QPushButton::clicked,this,&MainWindow::openSettingsDialog);
     m_workflowStatus=note({},toolsLayout);m_workflowStatus->setObjectName("workflowStatus");
     m_unified->setParent(m_workflowTools);toolsLayout->addWidget(m_unified,1);m_unified->show();
+    connect(m_unified->findChild<QPushButton*>("workflowOcrRun"),&QPushButton::clicked,this,[this]{runWorkflowStep("ocr");});
     m_unifiedDock->setWidget(new QWidget);m_unifiedDock->hide();m_unifiedDock->toggleViewAction()->setVisible(false);
     m_unifiedViewStack->addWidget(m_workflowTools);
     m_workflowInput=new QWidget;auto input=new QVBoxLayout(m_workflowInput);input->setAlignment(Qt::AlignTop);
     auto heading=note(text("0 · Girdi — kitabı buradan başlatın","0 · Input — start your book here"),input);auto font=heading->font();font.setPointSize(font.pointSize()+3);font.setBold(true);heading->setFont(font);
     note(text("Resim veya PDF → yön → bölme → geometri → isteğe bağlı AI → içerik → kenarlar → Çıktı → temizlik → PDF → OCR → önbellek temizliği. Kaynaklar korunur.","Images or PDF → orientation → split → geometry → optional AI → content → margins → Output → cleanup → PDF → OCR → cache cleanup. Sources are preserved."),input);
+    auto ai=new QCheckBox(text("Yapay zekâ desteği istiyorum · AI geometri ve AI içerik aşamalarını göster","Use AI assistance · show AI geometry and AI content stages"));ai->setObjectName("workflowAiEnabled");input->addWidget(ai);
+    ai->setChecked(QSettings().value("unified/ai_enabled",false).toBool());filterList->setAiEnabled(ai->isChecked());
+    connect(ai,&QCheckBox::toggled,this,[this](bool enabled){QSettings().setValue("unified/ai_enabled",enabled);filterList->setAiEnabled(enabled);});
+    note(text("AI kapalıyken standart düzeltmeler ve OCR çalışır. AI aşamasındaki ▶ uygun önerileri uygular; Hazırla düğmesi yalnız önizleme üretir.","Standard corrections and OCR work with AI disabled. ▶ in an AI stage applies valid proposals; Prepare only creates previews."),input);
     auto inputButton=[&](QString title,QString name,auto fn){auto b=new QPushButton(title);b->setObjectName(name);b->setMinimumHeight(38);input->addWidget(b);connect(b,&QPushButton::clicked,this,fn);};
     inputButton(text("Resim seç","Select images"),"workflowInputImages",[this]{auto paths=QFileDialog::getOpenFileNames(this,text("Resimler","Images"),{},"Images (*.jpg *.jpeg *.png *.tif *.tiff *.bmp)");if(!paths.empty())importWorkflowImages(paths);});
     inputButton(text("Klasör seç","Select folder"),"workflowInputFolder",[this]{auto path=QFileDialog::getExistingDirectory(this,text("Kitap resimlerinin klasörü","Book image folder"));if(!path.isEmpty())importWorkflowImages(imagesIn(path));});
@@ -128,6 +135,8 @@ void MainWindow::initWorkflow(){
     m_workflowCache=new UnifiedProjectCache;m_unifiedViewStack->addWidget(m_workflowCache);
     m_workflowCache->busy=[this]{return isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning)||(m_unified&&m_unified->busy());};
     m_workflowCache->cleanRequested=[this]{runWorkflowStep("storage");};
+    m_workflowCache->finishRequested=[this]{finalizeWorkflowProject();};
+    connect(m_workflowCache->findChild<QPushButton*>("workflowFinishOpen"),&QPushButton::clicked,this,[this]{findChild<QPushButton*>("workflowOpenPdf")->click();});
     m_workflowHelp=unifiedWorkflowHelp();m_unifiedViewStack->addWidget(m_workflowHelp);
     m_workflowCleanup=new QWidget;auto clean=new QVBoxLayout(m_workflowCleanup);
     note(text("9 · Parmak ve leke temizliği","9 · Fingers and stains"),clean);
@@ -142,13 +151,16 @@ void MainWindow::initWorkflow(){
     auto manual=new QPushButton(text("Elle dolgu bölgesi çiz","Draw a manual fill zone"));manual->setObjectName("workflowCleanupManual");clean->addWidget(manual);
     connect(manual,&QPushButton::clicked,this,[this]{m_editFillRequested=true;filterList->selectFilter(5);reloadRequested();});
     m_cleanupStatus=note({},clean);m_cleanupStatus->setObjectName("workflowCleanupStatus");
+    auto summary=note({},clean);summary->setObjectName("workflowCleanupSummary");
+    auto reviewFilter=new QComboBox;reviewFilter->setObjectName("workflowCleanupFilter");
+    reviewFilter->addItems({text("Tüm sayfalar","All pages"),text("Silme önerisi olanlar","Pages with removal proposals"),text("Kontrol gerekenler","Pages needing review")});clean->addWidget(reviewFilter);
     auto list=new QListWidget;list->setObjectName("workflowCleanupPages");list->setMaximumHeight(120);clean->addWidget(list);
     auto preview=new QSplitter;preview->setObjectName("workflowCleanupPreview");clean->addWidget(preview,1);
-    connect(list,&QListWidget::currentRowChanged,this,[this,preview](int row){
-        while(preview->count())delete preview->widget(0);
-        auto pages=m_workflowReceipt.value("pages").toArray();if(row<0||row>=pages.size())return;auto page=pages[row].toObject();
-        for(auto key:{"before","after"}){auto host=new QWidget;auto layout=new QVBoxLayout(host);layout->addWidget(new QLabel(QString(key)=="before"?text("Önce","Before"):text("Sonra · öneri","After · proposal")));QImage image(page.value(key).toString());if(!image.isNull())layout->addWidget(new BasicImageView(std::make_shared<NonAcceleratedOperations>(),image),1);preview->addWidget(host);}
-        auto report=page.value("report").toObject();m_cleanupStatus->setText(text("Silme adayı / belirsiz bölge: ","Removal candidates / uncertain regions: ")+QString::number(report.value("removed").toArray().size())+" / "+QString::number(report.value("uncertain").toArray().size()));
+    connect(reviewFilter,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{refreshCleanupPages();});
+    connect(list,&QListWidget::currentRowChanged,this,[this,list](int row){
+        if(row<0||!isProjectLoaded())return;auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);
+        auto index=list->item(row)->data(Qt::UserRole).toInt();if(index<0||size_t(index)>=sequence.numPages())return;
+        auto page=sequence.pageAt(size_t(index)).id();m_ptrThumbSequence->setSelection(page);showCleanupPage(page);
     });
     m_unifiedViewStack->addWidget(m_workflowCleanup);
     m_unified->importImagesForEditing=[this](QString const& folder){return importWorkflowImages(imagesIn(folder));};
@@ -157,6 +169,52 @@ void MainWindow::initWorkflow(){
     filterList->selectStep("input");selectWorkflowRow(0);resize(qMax(width(),1280),qMax(height(),780));
     resizeDocks({dockWidgetFilters,optionsDock,dockWidgetThumbnails},{filterList->minimumWidth()+12,310,140},Qt::Horizontal);
     m_defaultPanelState=saveState();refreshWorkflowState();
+}
+void MainWindow::refreshCleanupPages(){
+    if(!m_workflowCleanup)return;
+    auto list=m_workflowCleanup->findChild<QListWidget*>("workflowCleanupPages");
+    auto filter=m_workflowCleanup->findChild<QComboBox*>("workflowCleanupFilter");
+    QSignalBlocker block(list);list->clear();
+    QHash<QString,QJsonObject> reviews;int proposed=0,uncertain=0,applied=0;
+    for(auto value:m_workflowReceipt.value("pages").toArray()){
+        auto row=value.toObject();reviews.insert(row.value("key").toString(),row);
+        auto report=row.value("report").toObject();proposed+=!report.value("removed").toArray().isEmpty();uncertain+=!report.value("uncertain").toArray().isEmpty();applied+=row.value("applied").toBool();
+    }
+    auto pages=workflowPages();
+    for(int i=0;i<pages.size();++i){
+        auto page=pages[i].toObject();auto row=reviews.value(page.value("key").toString());auto report=row.value("report").toObject();
+        int removed=report.value("removed").toArray().size(),review=report.value("uncertain").toArray().size();
+        bool stale=!row.isEmpty()&&row.value("input_stamp")!=page.value("input_stamp");
+        QString state=row.isEmpty()?text("Henüz incelenmedi","Not analyzed"):stale?text("Ayar değişti · yeniden hazırla","Settings changed · prepare again"):
+            text("Silme adayı: %1 · kontrol: %2","Removal candidates: %1 · review: %2").arg(removed).arg(review)+(row.value("applied").toBool()?text(" · uygulandı"," · applied"):text(" · öneri"," · proposal"));
+        auto item=new QListWidgetItem(text("Sayfa %1 · ","Page %1 · ").arg(i+1)+state,list);item->setData(Qt::UserRole,i);item->setToolTip(page.value("source").toString());
+        item->setHidden((filter->currentIndex()==1&&!removed)||(filter->currentIndex()==2&&!review&&!stale));
+    }
+    m_workflowCleanup->findChild<QLabel*>("workflowCleanupSummary")->setText(text("%1 sayfa · %2 sayfada silme önerisi · %3 sayfada kontrol · %4 sayfaya uygulandı","%1 pages · %2 with removal proposals · %3 need review · %4 applied").arg(pages.size()).arg(proposed).arg(uncertain).arg(applied));
+    showCleanupPage(m_ptrThumbSequence->selectionLeader().id());
+}
+void MainWindow::showCleanupPage(PageId const& selected){
+    if(!m_workflowCleanup)return;
+    auto preview=m_workflowCleanup->findChild<QSplitter*>("workflowCleanupPreview");
+    while(preview->count())delete preview->widget(0);
+    if(!isProjectLoaded()||selected.isNull()){m_cleanupStatus->setText(text("Önce bir kitap açın.","Open a book first."));return;}
+    auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);int index=-1;
+    for(size_t i=0;i<sequence.numPages();++i)if(sequence.pageAt(i).id()==selected){index=int(i);break;}
+    auto pages=workflowPages();if(index<0||index>=pages.size())return;auto current=pages[index].toObject();QJsonObject review;
+    for(auto value:m_workflowReceipt.value("pages").toArray())if(value.toObject().value("key")==current.value("key")){review=value.toObject();break;}
+    auto list=m_workflowCleanup->findChild<QListWidget*>("workflowCleanupPages");
+    {QSignalBlocker block(list);for(int i=0;i<list->count();++i)if(list->item(i)->data(Qt::UserRole).toInt()==index){list->setCurrentRow(i);list->scrollToItem(list->item(i));break;}}
+    bool ready=!review.isEmpty()&&review.value("input_stamp")==current.value("input_stamp")&&QFileInfo::exists(review.value("before").toString())&&QFileInfo::exists(review.value("after").toString());
+    auto report=review.value("report").toObject();
+    m_cleanupStatus->setText(text("Seçili sayfa: %1 · ","Selected page: %1 · ").arg(index+1)+(ready?text("Silme adayı: %1 · belirsiz: %2 · %3","Removal candidates: %1 · uncertain: %2 · %3").arg(report.value("removed").toArray().size()).arg(report.value("uncertain").toArray().size()).arg(review.value("applied").toBool()?text("uygulandı","applied"):text("henüz uygulanmadı","not applied")):text("Temizliği hazırla ile bu sayfanın önerisini oluşturun.","Use Prepare cleanup to analyze this page.")));
+    for(auto side:{"before","after"}){
+        auto host=new QWidget;auto layout=new QVBoxLayout(host);layout->addWidget(new QLabel(text("Sayfa %1 · ","Page %1 · ").arg(index+1)+(QString(side)=="before"?text("Önce","Before"):text("Sonra · temizlik önerisi","After · cleanup proposal"))));
+        QString path=ready?review.value(side).toString():QString(side)=="before"?current.value("source").toString():QString();
+        if(!ready&&QString(side)=="before"&&!QFileInfo::exists(path))path=selected.imageId().filePath();
+        QImage image(path);if(!image.isNull())layout->addWidget(new BasicImageView(std::make_shared<NonAcceleratedOperations>(),image),1);
+        else {auto note=new QLabel(text("Bu sayfada önizleme hazır değil. Temizliği hazırla düğmesini kullanın.","No preview for this page yet. Use Prepare cleanup."));note->setWordWrap(true);layout->addWidget(note);}
+        preview->addWidget(host);
+    }
 }
 void MainWindow::showWorkflowTools(){
     if(!m_workflowReady){m_unifiedDock->show();m_unifiedDock->raise();return;}
@@ -183,12 +241,12 @@ bool MainWindow::selectWorkflowRow(int row){
     if(filterList->filterForRow(row)>=0){returnToProjectView();return true;}
     if(id=="input")m_unifiedViewStack->setCurrentWidget(m_workflowInput);
     else if(id=="help")m_unifiedViewStack->setCurrentWidget(m_workflowHelp);
-    else if(id=="cleanup")m_unifiedViewStack->setCurrentWidget(m_workflowCleanup);
+    else if(id=="cleanup"){m_unifiedViewStack->setCurrentWidget(m_workflowCleanup);refreshCleanupPages();}
     else if(id=="storage"){m_unifiedViewStack->setCurrentWidget(m_workflowCache);syncWorkflowCache(true);}
     else {
         m_unifiedViewStack->setCurrentWidget(m_workflowTools);
         auto step=unified_workflow::steps().at(row);m_workflowTitle->setText(step.title+"\n"+step.description);
-        m_workflowRun->setVisible(id=="pdf"||id=="ocr");m_workflowRun->setText(id=="ocr"?text("▶ OCR ekle","▶ Add OCR"):text("▶ PDF oluştur","▶ Create PDF"));
+        m_workflowRun->setVisible(id=="pdf"||id=="ocr");m_workflowRun->setText(id=="ocr"?text("▶ Seçili ayarlarla OCR’ı başlat","▶ Start OCR with selected settings"):text("▶ PDF oluştur","▶ Create PDF"));
         if(id=="pdf"||id=="ocr")m_unified->showToolsTab(id=="ocr"?3:1);
     }
     filterList->setBatchProcessingPossible(isProjectLoaded());refreshWorkflowState();return false;
@@ -257,21 +315,26 @@ void MainWindow::saveWorkflowState(){
 }
 void MainWindow::refreshWorkflowState(){
     if(!m_workflowReady)return;
+    bool aiEnabled=QSettings().value("unified/ai_enabled",false).toBool();
+    auto aiChoice=m_workflowInput->findChild<QCheckBox*>("workflowAiEnabled");
+    if(aiChoice->isChecked()!=aiEnabled){QSignalBlocker block(aiChoice);aiChoice->setChecked(aiEnabled);filterList->setAiEnabled(aiEnabled);}
+    aiChoice->setEnabled(!m_aiGeometryRunning&&!m_aiContentRunning&&!isBatchProcessingInProgress());
     if(auto paths=m_workflowInput->findChild<QLabel*>("workflowPaths"))paths->setText(text("PDF klasörü: ","PDF folder: ")+m_unified->workflowOutput()+"\n"+text("Çalışma kaydı: ","Saved run: ")+m_unified->queuePath()+"\n"+text("Açık projenin resim çıktısı: ","Open project's output images: ")+m_outFileNameGen.outDir());
     if(auto folder=m_workflowTools->findChild<QLineEdit*>("workflowPdfOutputFolder"))folder->setText(m_unified->workflowOutput());
     bool running=m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning;
-    bool available=isProjectLoaded()&&!running&&!isBatchProcessingInProgress()&&!m_unified->busy();
+    bool available=isProjectLoaded()&&!running&&!isBatchProcessingInProgress()&&!m_unified->busy()&&!m_aiGeometryRunning&&!m_aiContentRunning&&!m_workflowCache->cleaning();
     m_workflowStop->setEnabled(running);m_workflowRun->setEnabled(available);
     filterList->setBatchProcessingPossible(available);
-    for(auto name:{"workflowRefreshPdf","workflow_cleanup","workflowCleanupManual"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(available);
+    for(auto name:{"workflowRefreshPdf","workflow_cleanup","workflowCleanupManual","workflowOcrRun","workflowFinish"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(available);
     for(auto name:{"workflowInputImages","workflowInputFolder","workflowInputPdf","workflowInputProject","workflowInputSetup","workflowInputOutput","workflowPdfBrowse"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(!running&&!isBatchProcessingInProgress()&&!m_unified->busy());
-    if(running){filterList->setStepStatus(m_workflowProcess->property("stage").toString(),QString::number(m_workflowElapsed.elapsed()/1000)+" s");}
+    if(running){filterList->setStepStatus(m_workflowProcess->property("stage").toString(),unified_workflow::duration(m_workflowElapsed.elapsed()));}
     QString key=m_outFileNameGen.outDir();
     if(key!=m_workflowProjectKey){
         m_workflowProjectKey=key;m_workflowPdf.clear();m_workflowVisualPdf.clear();m_workflowVisualHash.clear();m_workflowPdfStamp.clear();m_workflowReview.clear();m_workflowReceipt={};m_workflowLastPages={};
         QFile saved(key+"/.workflow-state.json");if(!key.isEmpty()&&saved.open(QIODevice::ReadOnly)){auto state=QJsonDocument::fromJson(saved.readAll()).object();m_workflowPdf=state.value("pdf").toString();m_workflowVisualPdf=state.value("visual_pdf").toString();m_workflowVisualHash=state.value("visual_sha256").toString();m_workflowPdfStamp=state.value("stamp").toString().toLatin1();m_workflowReview=state.value("cleanup").toString();m_workflowLastPages=state.value("pages").toArray();QFile review(m_workflowReview);if(review.open(QIODevice::ReadOnly))m_workflowReceipt=QJsonDocument::fromJson(review.readAll()).object();}
     }
     findChild<QPushButton*>("workflowOpenPdf")->setEnabled(QFileInfo::exists(m_workflowPdf));
+    findChild<QPushButton*>("workflowFinishOpen")->setEnabled(QFileInfo::exists(m_workflowPdf));
     findChild<QPushButton*>("workflow_cleanup_apply")->setEnabled(available&&!m_workflowReview.isEmpty());
     findChild<QPushButton*>("workflow_cleanup_undo")->setEnabled(available&&!m_workflowReview.isEmpty()&&m_workflowReceipt.value("applied").toBool());
     if(m_unified->pdfImportRunning())m_workflowDirty->setText(text("PDF içe aktarımı devam ediyor: ","PDF import continues: ")+m_unified->pdfImportStatus()+"\n"+text("İlerlemeye dönmek için PDF içe aktar düğmesini kullanın.","Use Import PDF to return to its progress."));
@@ -279,7 +342,13 @@ void MainWindow::refreshWorkflowState(){
     else m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
 }
 void MainWindow::runWorkflowStep(QString const& id){
-    if(!isProjectLoaded()||m_unified->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+    if(id.startsWith("ai_")&&!QSettings().value("unified/ai_enabled",false).toBool())return;
+    if(!isProjectLoaded()||m_aiGeometryRunning||m_aiContentRunning||m_workflowCache->cleaning()||m_unified->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+    if(id=="ocr"){
+        auto error=m_unified->workflowOcrValidation();
+        if(!error.isEmpty()){m_workflowStatus->setText(error);QMainWindow::statusBar()->showMessage(error,15000);return;}
+        if(m_workflowPdf.isEmpty()||!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp){m_workflowOcrPending=true;runWorkflowStep("pdf");return;}
+    }
     filterList->selectStep(id);
     if(id=="pdf"||id=="cleanup"||id=="ai_geometry"||id=="ai_content"){
         auto current=workflowPages();auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);QHash<QString,QJsonObject> previous;
@@ -296,16 +365,18 @@ void MainWindow::runWorkflowStep(QString const& id){
             bool include=id=="pdf"?(old.value("input_stamp")!=row.value("input_stamp")||(missing&&(!sameSettings||!QFileInfo::exists(m_workflowPdf)||old.value("cleanup_hash").toString()!=masks.value(row.value("key").toString())))):(scope=="book"||(scope=="page"?page==currentId:selected.count(page)));
             if(include)m_workflowPageTargets.insert(page);
         }
+        if(id=="ai_geometry"){for(auto const& sample:unified_geometry::collect(*m_ptrPages,*m_ptrStages))m_workflowPageTargets.erase(sample.page.id());}
+        if(id=="ai_content"){for(auto const& sample:unified_content::collect(*m_ptrPages,*m_ptrStages))m_workflowPageTargets.erase(sample.page.id());}
         if(m_workflowPageTargets.empty()){m_workflowPartial=false;startWorkflowProcess(id);return;}
         QString normal=id=="ai_geometry"?"geometry":id=="ai_content"?"content":"output";
         filterList->selectStep(normal);m_workflowPending=id;startBatchProcessing();return;
     }
-    if(id=="storage"){QElapsedTimer elapsed;elapsed.start();syncWorkflowCache();m_workflowCache->clean();filterList->setStepStatus(id,QString::number(elapsed.elapsed()/1000)+" s");return;}
+    if(id=="storage"){QElapsedTimer elapsed;elapsed.start();syncWorkflowCache();m_workflowCache->clean();filterList->setStepStatus(id,unified_workflow::duration(elapsed.elapsed()));return;}
     if(id=="ocr"){startWorkflowProcess(id);return;}
     if(filterList->filterForRow(unified_workflow::row(id))>=0)startBatchProcessing();
 }
 void MainWindow::startWorkflowProcess(QString const& mode){
-    if(mode=="ai_geometry"||mode=="ai_content"){stageReviewAction(mode=="ai_geometry",UnifiedStageReviewBar::Analyze);return;}
+    if(mode=="ai_geometry"||mode=="ai_content"){stageReviewAction(mode=="ai_geometry",m_aiRequeueTargets.empty()?UnifiedStageReviewBar::Optimize:UnifiedStageReviewBar::Analyze);return;}
     if(!isProjectLoaded()||m_unified->busy()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
     auto fail=[this](QString const& message){m_workflowStatus->setText(message);m_cleanupStatus->setText(message);QMainWindow::statusBar()->showMessage(message,15000);};
     if(mode=="ocr"){
@@ -324,7 +395,7 @@ void MainWindow::startWorkflowProcess(QString const& mode){
     syncWorkflowCache();m_workflowCache->own(folder,"work");
     QString ocrCache=m_outFileNameGen.outDir()+"/.ocr-text-cache";QDir().mkpath(ocrCache);m_workflowCache->own(ocrCache,"ocr");
     auto request=m_unified->workflowOptions();request.insert("ocr_cache",ocrCache);request.insert("mode",mode);request.insert("pages",pages);request.insert("work",folder);
-    request.insert("cache_owner",m_outFileNameGen.outDir());request.insert("cancel_file",folder+"/cancel");
+    request.insert("cache_owner",m_outFileNameGen.outDir());request.insert("cancel_file",folder+"/cancel");request.insert("saved_project",m_projectFile);
     request.insert("output_dir",m_unified->workflowOutput());request.insert("project_fingerprint",QString::fromLatin1(workflowFingerprint()));
     request.insert("cleanup_review",m_workflowReview);request.insert("previous_pdf",m_workflowPdf);request.insert("source_pdf",m_workflowVisualPdf);request.insert("source_pdf_sha256",m_workflowVisualHash);
     QString title=m_projectFile.isEmpty()?QFileInfo(m_outFileNameGen.outDir()).dir().dirName():QFileInfo(m_projectFile).completeBaseName();request.insert("title",title);
@@ -332,23 +403,38 @@ void MainWindow::startWorkflowProcess(QString const& mode){
     m_workflowResult=folder+"/result.json";
     if(m_workflowProcess)m_workflowProcess->deleteLater();
     auto process=new QProcess(this);m_workflowProcess=process;process->setObjectName("workflowProcess");
-    QString stage=mode.startsWith("cleanup")?"cleanup":mode;process->setProperty("stage",stage);process->setProperty("fingerprint",workflowFingerprint());process->setProperty("project",m_outFileNameGen.outDir());process->setProperty("work",folder);
-    bool hadOcr=false;for(auto value:m_workflowLastPages)hadOcr|=value.toObject().value("has_ocr").toBool();process->setProperty("refreshOcr",mode=="pdf"&&hadOcr);
+    QString stage=mode=="finalize"?"storage":mode.startsWith("cleanup")?"cleanup":mode;process->setProperty("stage",stage);process->setProperty("finishing",mode=="finalize");process->setProperty("fingerprint",workflowFingerprint());process->setProperty("project",m_outFileNameGen.outDir());process->setProperty("work",folder);
+    bool hadOcr=false;for(auto value:m_workflowLastPages)hadOcr|=value.toObject().value("has_ocr").toBool();process->setProperty("refreshOcr",mode=="pdf"&&(hadOcr||m_workflowOcrPending));if(mode=="pdf")m_workflowOcrPending=false;
     auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("PYTHONPATH",root+"/src");env.insert("OMP_NUM_THREADS",QString::number(request.value("threads").toInt(2)));process->setProcessEnvironment(env);process->setWorkingDirectory(root);
     m_workflowElapsed.start();m_workflowStatus->setText(text("İşlem sürüyor…","Processing…"));m_cleanupStatus->setText(m_workflowStatus->text());
     connect(process,&QProcess::readyReadStandardOutput,this,[this,process]{
         auto buffer=process->property("buffer").toByteArray()+process->readAllStandardOutput();int end;
-        while((end=buffer.indexOf('\n'))>=0){auto line=buffer.left(end);buffer.remove(0,end+1);if(line.startsWith("STOUWORK ")){auto event=QJsonDocument::fromJson(line.mid(9)).object();QString status=QString::number(event.value("page").toInt())+"/"+QString::number(event.value("total").toInt())+" · "+QString::number(m_workflowElapsed.elapsed()/1000)+" s";m_workflowStatus->setText(status);m_cleanupStatus->setText(status);}}
+        while((end=buffer.indexOf('\n'))>=0){auto line=buffer.left(end);buffer.remove(0,end+1);if(line.startsWith("STOUWORK ")){auto event=QJsonDocument::fromJson(line.mid(9)).object();QString phase=event.value("phase").toString();
+            if(phase=="layout")phase=text("Yerleşim ölçülüyor","Measuring layout");else if(phase=="render")phase=text("PDF sayfaları hazırlanıyor","Rendering PDF pages");else if(phase=="verify")phase=text("OCR’lı PDF doğrulanıyor","Verifying searchable PDF");else if(phase=="cleanup")phase=text("Dosyalar temizleniyor","Removing work files");else phase=text("Sayfalar işleniyor","Processing pages");
+            QString status=phase+" · "+QString::number(event.value("page").toInt())+"/"+QString::number(event.value("total").toInt())+" · "+unified_workflow::duration(m_workflowElapsed.elapsed());m_workflowStatus->setText(status);m_cleanupStatus->setText(status);if(process->property("finishing").toBool())m_workflowCache->showProgress(event,status);}}
         process->setProperty("buffer",buffer);
     });
     connect(process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this,process,mode,stage](int code,QProcess::ExitStatus status){
         for(auto name:{"image-pdf.part.pdf","fitted-pdf.part.pdf"})QFile::remove(process->property("work").toString()+"/"+name);
         QFile result(m_workflowResult);QJsonObject data;if(result.open(QIODevice::ReadOnly))data=QJsonDocument::fromJson(result.readAll()).object();
-        auto message=code==0&&status==QProcess::NormalExit&&data.value("ok").toBool()?text("Tamamlandı · ","Completed · ")+QString::number(m_workflowElapsed.elapsed()/1000)+" s":text("İşlem tamamlanmadı: ","Operation did not complete: ")+QString::fromUtf8(process->readAllStandardError()).right(900);
-        m_workflowStatus->setText(message);m_cleanupStatus->setText(message);filterList->setStepStatus(stage,QString::number(m_workflowElapsed.elapsed()/1000)+" s");
+        result.close();
+        if(mode=="finalize"){
+            bool success=code==0&&status==QProcess::NormalExit&&data.value("ok").toBool();
+            auto detail=success?text("Tamamlandı · yalnız OCR’lı PDF bırakıldı. Proje kapatıldı.","Completed · only the searchable PDF remains. Project closed."):
+                text("Temizlik tamamlanmadı; OCR’lı PDF korundu. ","Cleanup did not complete; searchable PDF is preserved. ")+QString::fromUtf8(process->readAllStandardError()).right(700);
+            if(success){
+                if(!data.value("retained").toArray().isEmpty())detail=text("Proje kapatıldı; OCR’lı PDF ve sahipliği doğrulanamayan %1 dosya korundu.","Project closed; searchable PDF and %1 files with unverified ownership retained.").arg(data.value("retained").toArray().size());
+                auto pdf=data.value("pdf").toString();closeProjectWithoutSaving();m_workflowCache->context({}, {}, {}, {}, {});refreshWorkflowState();m_workflowPdf=pdf;
+                auto folder=process->property("work").toString();for(auto name:{"request.json","result.json",".stou-cache-owner.json","cancel"})QFile::remove(folder+"/"+name);QDir().rmdir(folder);
+                filterList->selectStep("storage");detail+="\n"+text("Silindi: %1 · %2 dosya","Removed: %1 · %2 files").arg(UnifiedProjectCache::sizeText(qint64(data.value("bytes").toDouble()))).arg(data.value("files").toInt())+"\n"+pdf;
+            }else if(!data.value("skipped").toArray().isEmpty())detail+="\n"+text("Kaldırılamayan dosya: ","Files not removed: ")+QString::number(data.value("skipped").toArray().size());
+            m_workflowCache->showProgress({{"page",1},{"total",1}},detail);m_workflowStatus->setText(detail);refreshWorkflowState();return;
+        }
+        auto message=code==0&&status==QProcess::NormalExit&&data.value("ok").toBool()?text("Tamamlandı · ","Completed · ")+unified_workflow::duration(m_workflowElapsed.elapsed()):text("İşlem tamamlanmadı: ","Operation did not complete: ")+QString::fromUtf8(process->readAllStandardError()).right(900);
+        m_workflowStatus->setText(message);m_cleanupStatus->setText(message);filterList->setStepStatus(stage,unified_workflow::duration(m_workflowElapsed.elapsed()));
         if(code==0&&data.value("ok").toBool()&&process->property("project").toString()==m_outFileNameGen.outDir()){
             if(mode=="cleanup"||mode.startsWith("cleanup_")){if(mode.startsWith("cleanup_"))m_workflowPdfStamp.clear();m_workflowReview=data.value("receipt").toString();m_workflowReceipt=data;
-                auto list=m_workflowCleanup->findChild<QListWidget*>("workflowCleanupPages");list->clear();for(auto value:data.value("pages").toArray()){auto row=value.toObject();list->addItem(text("Sayfa ","Page ")+QString::number(row.value("page").toInt()));}if(list->count())list->setCurrentRow(0);
+                refreshCleanupPages();
                 m_cleanupStatus->setText(message+" · "+(data.value("applied").toBool()?text("PDF'ye dahil edilecek","Will be included in PDF"):text("Öneri; henüz uygulanmadı","Proposal; not applied")));
             }else if(mode=="pdf"||mode=="ocr"){m_workflowPdf=data.value("pdf").toString();m_workflowLastPages=data.value("records").toArray();m_workflowVisualPdf=m_workflowPdf;m_workflowVisualHash=data.value("sha256").toString();m_workflowPdfStamp=process->property("fingerprint").toByteArray();m_workflowStatus->setText(message+"\n"+text("Yenilenen / korunan sayfa: ","Updated / preserved pages: ")+QString::number(data.value("changed_pages").toArray().size())+" / "+QString::number(data.value("reused_pages").toArray().size())+"\n"+m_workflowPdf);}
         }
@@ -365,10 +451,17 @@ void MainWindow::startWorkflowProcess(QString const& mode){
             if(!stale.isEmpty())m_workflowStatus->setText(m_workflowStatus->text()+"\n"+text("Yeni düzeltme nedeniyle bu sayfaların leke temizliği tekrar incelenmeli: ","Review stain cleanup again on these edited pages: ")+stale.join(", "));
             m_workflowCache->clean(mode);
         }
-        if(success&&process->property("refreshOcr").toBool()&&!data.value("changed_pages").toArray().isEmpty())QTimer::singleShot(0,this,[this]{runWorkflowStep("ocr");});
+        if(success&&process->property("refreshOcr").toBool())QTimer::singleShot(0,this,[this]{runWorkflowStep("ocr");});
     });
     connect(process,&QProcess::errorOccurred,this,[this,process](QProcess::ProcessError error){if(error==QProcess::FailedToStart){m_workflowStatus->setText(process->errorString());m_cleanupStatus->setText(process->errorString());refreshWorkflowState();}});
     process->start(unified_runtime::python(root),{"-u","-m","scantailor_ocr_unified.workflow_stages",requestPath});refreshWorkflowState();
+}
+void MainWindow::finalizeWorkflowProject(){
+    if(!isProjectLoaded()||m_unified->busy()||isBatchProcessingInProgress()||m_aiGeometryRunning||m_aiContentRunning||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+    bool complete=!m_workflowLastPages.isEmpty();for(auto value:m_workflowLastPages)complete&=value.toObject().value("has_ocr").toBool();
+    if(!complete||!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp){m_workflowCache->showProgress({{"page",0},{"total",1}},text("Önce güncel ayarlarla OCR’ı tamamlayın. Hiçbir dosya silinmedi.","Complete OCR with current settings first. No files were removed."));return;}
+    m_ptrInteractiveQueue->cancelAndClear();m_ptrWorkerThreadPool->shutdown();
+    startWorkflowProcess("finalize");
 }
 void MainWindow::syncWorkflowCache(bool scan){
     if(!m_workflowCache)return;

@@ -52,10 +52,10 @@ void
 TextLineTracer::trace(
     AffineTransformedImage const& input, DistortionModelBuilder& output,
     std::shared_ptr<AcceleratableOperations> const& accel_ops,
-    TaskStatus const& status, DebugImages* dbg)
+    TaskStatus const& status, DebugImages* dbg, bool fast)
 {
     TextLineSegmenter::Result segmentation(
-        TextLineSegmenter::process(input, accel_ops, status, dbg)
+        TextLineSegmenter::process(input, accel_ops, status, dbg, fast)
     );
 
     status.throwIfCancelled();

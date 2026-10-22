@@ -15,6 +15,7 @@
 #include <QHeaderView>
 #include <QProcess>
 #include <QStackedWidget>
+#include <QListWidget>
 
 class UnifiedWorkflowTest {
     template<class Condition> static void wait(Condition done,int limit=90000){
@@ -68,6 +69,10 @@ public:
         check(list->isRowHidden(unified_workflow::row("geometry")),"simple PDF group hides unrelated geometry controls");
         list->selectFilter(2);check(!list->isRowHidden(unified_workflow::row("geometry")),"engine navigation reveals its selected group");
         all->setChecked(true);
+        auto ai=window.findChild<QCheckBox*>("workflowAiEnabled");check(ai,"AI preference on input screen");ai->setChecked(false);
+        check(list->isRowHidden(unified_workflow::row("ai_geometry"))&&list->isRowHidden(unified_workflow::row("ai_content")),"AI off hides both stages even in all-stage mode");
+        list->selectStep("ai_geometry");check(list->currentStep()=="geometry","AI off prevents menu navigation into hidden AI stage");
+        ai->setChecked(true);check(!list->isRowHidden(unified_workflow::row("ai_geometry")),"AI on restores geometry stage");
         list->selectRow(unified_workflow::row("content"));all->setChecked(false);
         check(!list->isRowHidden(unified_workflow::row("content")),"collapsing after a direct row selection retains the current stage");
         all->setChecked(true);
@@ -211,6 +216,14 @@ public:
         wait([&]{return !window.m_workflowReview.isEmpty()&&window.m_workflowProcess->state()==QProcess::NotRunning;});
         window.startWorkflowProcess("cleanup_apply");wait([&]{return window.m_workflowProcess->state()==QProcess::NotRunning;});
         check(window.m_workflowReceipt.value("applied").toBool(),"cleanup apply stores explicit approval");
+        auto second=window.m_ptrPages->toPageSequence(PAGE_VIEW).pageAt(1);
+        window.currentPageChanged(second,QRectF(),ThumbnailSequence::SELECTED_BY_USER);
+        check(window.m_cleanupStatus->text().contains("2"),"thumbnail selection immediately selects cleanup preview page");
+        check(window.m_unifiedViewStack->currentWidget()==window.m_workflowCleanup,"thumbnail click remains on cleanup screen");
+        auto cleanupList=window.m_workflowCleanup->findChild<QListWidget*>("workflowCleanupPages");cleanupList->setCurrentRow(0);
+        check(window.m_ptrThumbSequence->selectionLeader().id()==window.m_ptrPages->toPageSequence(PAGE_VIEW).pageAt(0).id(),"cleanup list selection synchronizes right thumbnail");
+        window.filterList->selectStep("ocr");QApplication::processEvents();
+        check(window.findChild<QPushButton*>("workflowOcrRun")->isVisible(),"OCR options contain a visible run button");window.filterList->selectStep("cleanup");
         if(!captures.isEmpty())check(window.grab().save(captures+"/workflow-cleanup-en.png"),"cleanup preview screenshot");
         window.runWorkflowStep("pdf");wait([&]{return window.m_workflowPdf!=firstPdf&&!window.isBatchProcessingInProgress()&&window.m_workflowProcess->state()==QProcess::NotRunning;});
         check(QFileInfo::exists(firstPdf),"refresh preserves previous PDF version");
@@ -230,9 +243,8 @@ public:
         params=settings->getPageParams(sample.page.id());auto corrected=updated.rect.adjusted(-2,-2,2,2);params->setContentBox(ContentBox(*updated.transform,corrected));params->setContentSizePx(corrected.size());settings->setPageParams(sample.page.id(),*params);
         window.m_ptrStages->pageLayoutFilter()->setContentBox(sample.page.id(),corrected);
         window.runWorkflowStep("ocr");
-        check(window.m_workflowPdf==pdfBeforeEdit&&window.m_workflowProcess->state()==QProcess::NotRunning,"OCR refuses stale upstream settings");
+        check(window.m_workflowPdf==pdfBeforeEdit&&window.isBatchProcessingInProgress(),"OCR starts native refresh for stale upstream settings");
         std::cerr<<"workflow single page refresh"<<std::endl;
-        window.runWorkflowStep("pdf");
         wait([&]{return window.m_workflowPdf!=pdfBeforeEdit&&window.m_workflowPdf.contains("-OCR.pdf")&&!window.isBatchProcessingInProgress()&&window.m_workflowProcess->state()==QProcess::NotRunning;});
         check(window.m_batchTotal==1,"single page edit renders only that native output");
         QFile report(window.m_workflowResult);check(report.open(QIODevice::ReadOnly),"incremental OCR receipt");
@@ -260,6 +272,25 @@ public:
         window.filterList->selectStep("input");QApplication::processEvents();
         check(window.filterList->columnWidth(0)>=QFontMetrics(window.filterList->font()).horizontalAdvance(unified_workflow::steps().at(9).title),"large font stage names fit");
         if(!captures.isEmpty())check(window.grab().save(captures+"/workflow-large-font-en.png"),"large font screenshot");
+        // Independent, unsaved project: OCR button prepares its missing PDF,
+        // then finalization leaves only the verified searchable PDF and sources.
+        window.closeProjectWithoutSaving();window.refreshWorkflowState();
+        window.importWorkflowImages(files);window.refreshWorkflowState();
+        window.filterList->selectStep("ocr");window.refreshWorkflowState();
+        window.findChild<QPushButton*>("workflowOcrRun")->click();
+        wait([&]{return window.m_workflowPdf.contains("-OCR.pdf")&&!window.isBatchProcessingInProgress()&&window.m_workflowProcess&&window.m_workflowProcess->state()==QProcess::NotRunning;});
+        check(window.m_workflowLastPages.size()==2,"direct OCR button generates the entire new book");
+        auto completedPdf=window.m_workflowPdf,generatedRoot=window.m_outFileNameGen.outDir();
+        window.filterList->selectStep("storage");window.refreshWorkflowState();
+        window.findChild<QPushButton*>("workflowFinish")->click();
+        wait([&]{return window.m_workflowProcess->state()==QProcess::NotRunning;});
+        if(window.isProjectLoaded())std::cerr<<window.m_workflowStatus->text().toUtf8().constData()<<std::endl;
+        check(!window.isProjectLoaded(),"finish verifies PDF, cleans generated files and closes project");
+        check(window.findChild<QPushButton*>("workflowFinishOpen")->isEnabled(),"finished project still offers opening the final PDF");
+        if(QFileInfo::exists(generatedRoot)){std::cerr<<window.m_workflowStatus->text().toUtf8().constData()<<std::endl;QDirIterator remaining(generatedRoot,QDir::Files|QDir::Hidden|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);while(remaining.hasNext())std::cerr<<"retained "<<remaining.next().toUtf8().constData()<<std::endl;}
+        check(QFileInfo::exists(completedPdf)&&!QFileInfo::exists(generatedRoot),"finish keeps searchable PDF without native cache");
+        for(auto path:files)check(QFileInfo::exists(path),"finish preserves original source images");
+        if(!captures.isEmpty())check(window.grab().save(captures+"/workflow-finished-en.png"),"finished workflow screenshot");
         window.m_closing=true; // Test-owned project already saved; no modal close prompt.
     }
 };

@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 import time
 
-VERSION = 'native-uvdoc-curves-1'
+VERSION = 'native-uvdoc-grid-2'
 ROOT = Path(os.environ.get('STOU_ROOT',Path(__file__).resolve().parents[2]))
 sys.path.insert(0,str(ROOT/'src'))
 from scantailor_ocr_unified.runtime_layout import resource_path
@@ -37,7 +37,7 @@ def curves_from_grid(grid, size):
     if ratio > 12: reasons.append('UVDoc ağında yerel büyütme farkı aşırı.')
     if outside > .02: reasons.append('UVDoc ağı kaynak alanının dışına taşıyor.')
     curves = [(row+1)*np.array([width-1, height-1])/2 for row in (grid[0], grid[-1])]
-    return {'top': curves[0].tolist(), 'bottom': curves[1].tolist(),
+    return {'top': curves[0].tolist(), 'bottom': curves[1].tolist(), 'grid': grid.tolist(),
             'folds': folds, 'area_ratio': ratio, 'outside': outside, 'reasons': reasons}
 
 

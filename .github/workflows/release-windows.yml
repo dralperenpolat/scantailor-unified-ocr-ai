@@ -1,8 +1,6 @@
 name: Build and verify Windows release
 on:
   workflow_dispatch:
-  push:
-    branches: [feature/finalize-060]
 permissions:
   contents: read
   id-token: write
@@ -17,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [minimal, full]
+        variant: [full]
     defaults:
       run:
         shell: pwsh
@@ -58,7 +56,7 @@ jobs:
           $env:PATH="$prefix\bin;$env:PATH"
           ./packaging/build-windows.ps1 -Prefix $prefix
           if ($LASTEXITCODE) { throw 'Build failed' }
-          & "$prefix\bin\cmake.exe" --build native/release060 --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test -j2
+          & "$prefix\bin\cmake.exe" --build native/release062 --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test -j2
           if ($LASTEXITCODE) { throw 'UI test build failed' }
           $runtime="$env:RUNNER_TEMP\baseline\runtime"
           if ('${{ matrix.variant }}' -eq 'minimal') { $runtime="$env:RUNNER_TEMP\minimal-runtime" }
@@ -70,6 +68,8 @@ jobs:
           $stage="$env:RUNNER_TEMP\stage"; $qa="$env:RUNNER_TEMP\qa"
           $env:PATH="$stage\native\bin;$env:PATH"
           $env:QT_PLUGIN_PATH="$stage\native\bin"
+          $env:QT_QPA_FONTDIR="$env:WINDIR\Fonts"
+          $env:STOU_PYTHON="$stage\runtime\python.exe"
           $env:HF_HUB_OFFLINE='1'; $env:TRANSFORMERS_OFFLINE='1'
           $env:HTTP_PROXY='http://127.0.0.1:9'; $env:HTTPS_PROXY=$env:HTTP_PROXY; $env:ALL_PROXY=$env:HTTP_PROXY
           & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\cpu" --fast
@@ -80,17 +80,19 @@ jobs:
           }
           & "$stage\runtime\python.exe" packaging/smoke_pdf_import.py --root $stage --work "$qa\pdf"
           if ($LASTEXITCODE) { throw 'PDF test failed' }
+          & native/release062/unified-fast-geometry-test.exe
+          if ($LASTEXITCODE) { throw 'Geometry regression failed' }
           Write-Output 'Checking native review state'
-          & native/release060/unified-review-state-test.exe
+          & native/release062/unified-review-state-test.exe
           if ($LASTEXITCODE) { throw 'Review UI test failed' }
           Write-Output 'Checking native stage controls and PDF import'
-          & native/release060/unified-stage-tools-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
+          & native/release062/unified-stage-tools-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Stage UI test failed' }
           Write-Output 'Checking language and startup settings'
           $env:STOU_TEST_WORKFLOW='1'
-          & native/release060/unified-i18n-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
+          & native/release062/unified-i18n-test.exe "$qa\ui" $stage "$qa\pdf\Türkçe PDF deneme.pdf"
           if ($LASTEXITCODE) { throw 'Language/setup UI test failed' }
-          & native/release060/unified-compression-test.exe $stage "$qa\pdf\Türkçe PDF deneme.pdf" "$qa\compression"
+          & native/release062/unified-compression-test.exe $stage "$qa\pdf\Türkçe PDF deneme.pdf" "$qa\compression"
           if ($LASTEXITCODE) { throw 'Compression UI test failed' }
       - name: Build installer and test upgrade and uninstall
         run: |
@@ -114,7 +116,7 @@ jobs:
           sbom-path: release/sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: release-windows-0.6.0-${{ matrix.variant }}
+          name: release-windows-0.6.2-${{ matrix.variant }}
           path: release/
           compression-level: 0
           retention-days: 3

@@ -1,4 +1,4 @@
-# Rebuild the 0.6.0 packages
+# Rebuild the 0.6.2 packages
 
 **English** | [Türkçe](BUILD.md)
 
@@ -46,7 +46,7 @@ python3 packaging/fetch_assets.py
 bash packaging/build-linux.sh
 $HOME/stou-tools/python/bin/python3 packaging/stage_linux.py --runtime "$HOME/stou-tools/python" --destination "$HOME/stage-linux"
 LD_LIBRARY_PATH="$HOME/stage-linux/native/bin" "$HOME/stage-linux/runtime/bin/python3" packaging/smoke_cpu.py --root "$HOME/stage-linux" --work "$HOME/qa-linux" --ai
-tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.0-linux-x64.tar.gz .
+tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.2-linux-x64.tar.gz .
 ```
 
 The system supplies glibc, the kernel and the display server. Other detected native dependencies and Qt platform plugins are bundled. This binary requires glibc 2.35 or later; musl systems need a separate source build.

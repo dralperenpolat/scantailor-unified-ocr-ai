@@ -14,6 +14,7 @@ SET(
     Settings.cpp Settings.h
     Task.cpp Task.h
     UnifiedAutoDewarp.cpp UnifiedAutoDewarp.h
+    UnifiedTextLineTracer.cpp UnifiedTextLineTracer.h UnifiedLineFit.h
     CacheDrivenTask.cpp CacheDrivenTask.h
     Dependencies.cpp Dependencies.h
     DistortionType.cpp DistortionType.h

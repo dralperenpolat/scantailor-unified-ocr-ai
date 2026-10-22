@@ -4,6 +4,8 @@
 #include "UnifiedRuntime.h"
 #include "UnifiedGeometryReview.h"
 #include "UnifiedReviewStore.h"
+#include "UnifiedReviewRequeue.h"
+#include "UnifiedWorkflow.h"
 #include "BasicImageView.h"
 #include "acceleration/NonAcceleratedOperations.h"
 #include <QDialog>
@@ -30,18 +32,22 @@
 class UnifiedGeometryReviewDialog:public QDialog {
 public:
     std::function<void(PageId const&)> navigate;
+    std::function<void(std::set<PageId> const&)> reprocess;
+    UnifiedReviewRequeue m_requeue;
+    std::function<void()> completion;
+    QString directory()const{return m_directory;}
     std::function<bool(unified_geometry::Sample const&,unified_geometry::Candidate const&,bool)> apply;
     std::function<bool(unified_geometry::Sample const&,unified_geometry::Candidate const&)> undo;
     std::function<std::vector<unified_geometry::Sample>()> refresh;
     std::function<bool(unified_geometry::Sample const&,unified_geometry::Candidate const*)> matches;
     UnifiedGeometryReviewDialog(std::vector<unified_geometry::Sample> samples,PageId selected,QString root,QWidget* parent,QString project={})
         :QDialog(parent),m_samples(std::move(samples)),m_root(std::move(root)) {
-        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · metin / kenar / UVDoc · 0.6.0"));resize(1320,850);
-        m_directory=unified_review::directory(m_root,project,"geometry-v1");if(m_directory.isEmpty())m_directory=m_temp.path();
+        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · hızlı satır modeli / AI · 0.6.2"));resize(1320,850);
+        m_directory=unified_review::directory(m_root,project,"geometry-v2");if(m_directory.isEmpty())m_directory=m_temp.path();
         for(auto const& s:m_samples)m_stamps.push_back(unified_review::sourceStamp(s.page));
         auto outer=new QVBoxLayout(this);auto controls=new QGridLayout;outer->addLayout(controls);
         m_pages=new QComboBox;m_pages->setObjectName("geometryPageChoice");for(size_t i=0;i<m_samples.size();++i){m_pages->addItem(label(m_samples[i]),int(i));if(m_samples[i].page.id()==selected)m_pages->setCurrentIndex(int(i));}controls->addWidget(m_pages,0,0,1,2);
-        m_ai=new QCheckBox(unified_i18n::text("UVDoc eğri önerisini de karşılaştır"));m_ai->setChecked(true);controls->addWidget(m_ai,0,2);
+        m_ai=new QCheckBox(unified_i18n::text("Gerekli sayfalarda AI desteği kullan"));m_ai->setChecked(true);controls->addWidget(m_ai,0,2);
         m_device=new QComboBox;m_device->addItem("CPU","cpu");m_device->addItem("GPU / CUDA","cuda");controls->addWidget(m_device,0,3);
         m_single=new QPushButton(unified_i18n::text("Seçili sayfayı çözümle"));m_single->setObjectName("geometryAnalyzeSelected");controls->addWidget(m_single,1,0);
         m_book=new QPushButton(unified_i18n::text("Açık kitabı çözümle"));m_book->setObjectName("geometryAnalyzeBook");controls->addWidget(m_book,1,1);
@@ -106,8 +112,8 @@ private:
         m_stale.insert(i);m_list->topLevelItem(i)->setText(1,unified_i18n::text("Sayfa değişti · yeniden hesaplanmalı"));return false;
     }
     void image(int i,QString const& path){delete m_views[i];m_views[i]=nullptr;QImage im(path);if(!im.isNull()){m_views[i]=new BasicImageView(std::make_shared<NonAcceleratedOperations>(),im);m_images[i]->addWidget(m_views[i]);}}
-    void showRow(){int i=row();if(i<0)return;auto const& r=m_rows[i];image(0,r.source);image(1,r.current);{QSignalBlocker b(m_candidates);m_candidates->clear();for(size_t c=0;c<r.candidates.size();++c){auto const& candidate=r.candidates[c];m_candidates->addItem(candidate.name+(int(c)==r.recommended?unified_i18n::text(" · önerilen"):QString())+(!candidate.accepted?unified_i18n::text(" · uygun değil"):QString()),int(c));}m_candidates->setCurrentIndex(r.recommended>=0?r.recommended:0);}showCandidate();}
-    void showCandidate(){int i=row(),c=m_candidates->currentData().toInt();if(i<0)return;auto const& r=m_rows[i];QString reason=r.error;QString path;if(c>=0&&size_t(c)<r.candidates.size()){auto const& candidate=r.candidates[c];path=candidate.path;reason+=unified_i18n::text("%1 · satır sapması %2 → %3 /1000 · %4").arg(candidate.name).arg(r.currentError,0,'f',2).arg(candidate.error,0,'f',2).arg(candidate.reason);}image(2,path);m_detail->setText(reason);m_detail->setToolTip(r.report);m_manual->setEnabled(m_samples[r.index].params.mode()==MODE_MANUAL);updateApply();}
+    void showRow(){int i=row();if(i<0)return;auto const& r=m_rows[i];image(0,r.source);image(1,r.current);{QSignalBlocker b(m_candidates);m_candidates->clear();for(size_t c=0;c<r.candidates.size();++c){auto const& candidate=r.candidates[c];m_candidates->addItem(candidate.name+(int(c)==r.recommended?unified_i18n::text(" · önerilen"):QString())+(!candidate.accepted?unified_i18n::text(" · uygun değil"):QString()),int(c));}int preferred=r.recommended; if(preferred<0)for(size_t c=0;c<r.candidates.size();++c)if(r.candidates[c].accepted&&(preferred<0||r.candidates[c].score<r.candidates[preferred].score))preferred=int(c);m_candidates->setCurrentIndex(preferred>=0?preferred:0);}showCandidate();}
+    void showCandidate(){int i=row(),c=m_candidates->currentData().toInt();if(i<0)return;auto const& r=m_rows[i];QString reason=r.error;QString path;if(c>=0&&size_t(c)<r.candidates.size()){auto const& candidate=r.candidates[c];path=candidate.path;if(deskew::unifiedFinite(r.currentError)&&candidate.accepted)reason+=unified_i18n::text("%1 · satır sapması %2 → %3 /1000 · %4").arg(candidate.name).arg(r.currentError,0,'f',2).arg(candidate.error,0,'f',2).arg(candidate.reason);else reason+=candidate.name+" · "+candidate.reason;}image(2,path);m_detail->setText(reason);m_detail->setToolTip(r.report);m_manual->setEnabled(m_samples[r.index].params.mode()==MODE_MANUAL);updateApply();}
     void updateApply(){
         int i=row(),c=m_candidates->currentData().toInt();bool fresh=currentResult(i);
         bool yes=fresh&&c>=0&&size_t(c)<m_rows[i].candidates.size()&&m_rows[i].candidates[c].accepted&&(!m_applied.count(i)||m_applied.at(i)!=c);
@@ -134,13 +140,19 @@ private:
     }
     void start(std::vector<int> ids){if(m_running||ids.empty())return;if(m_future.valid())m_future.get();
         if(refresh){auto fresh=refresh();std::vector<int> updated;for(int id:ids){auto page=m_samples[id].page.id();for(auto const& s:fresh)if(s.page.id()==page){updated.push_back(int(m_samples.size()));m_samples.push_back(s);m_stamps.push_back(unified_review::sourceStamp(s.page));break;}}ids=std::move(updated);if(ids.empty())return;}
-        m_running=true;m_cancel=false;m_received=0;m_error.clear();m_progress->setRange(0,int(ids.size()));m_progress->setValue(0);m_single->setEnabled(false);m_book->setEnabled(false);m_device->setEnabled(false);m_ai->setEnabled(false);m_stop->setEnabled(true);
+        m_requeue.begin(ids);m_running=true;m_cancel=false;m_received=0;m_error.clear();m_progress->setRange(0,int(ids.size()));m_progress->setValue(0);m_single->setEnabled(false);m_book->setEnabled(false);m_device->setEnabled(false);m_ai->setEnabled(false);m_stop->setEnabled(true);
         auto dir=m_directory+"/run-"+QUuid::createUuid().toString(QUuid::WithoutBraces);auto device=m_device->currentData().toString();bool ai=m_ai->isChecked();m_status->setText(unified_i18n::text("Geometri karşılaştırılıyor. Her sayfa bitince görünür; pencere kapansa da çalışma ve kayıt sürer."));
         m_future=std::async(std::launch::async,[this,ids,dir,device,ai]{try{unified_geometry::run(m_samples,ids,m_root,device,ai,dir,[this]{return m_cancel.load();},[this](auto r){std::lock_guard<std::mutex> lock(m_mutex);m_pending.push_back(std::move(r));});}catch(std::exception const& e){std::lock_guard<std::mutex> lock(m_mutex);m_error=unified_i18n::text(e.what());}});
     }
-    void poll(){std::vector<unified_geometry::Result> pending;{std::lock_guard<std::mutex> lock(m_mutex);pending.swap(m_pending);}for(auto& r:pending){auto text=!r.error.isEmpty()?unified_i18n::text("Hata"):r.recommended>=0?unified_i18n::text("Öneri hazır"):unified_i18n::text("Mevcut geometri korunsun");auto title=label(m_samples[r.index]);m_rows.push_back(std::move(r));new QTreeWidgetItem(m_list,{title,text});m_progress->setValue(++m_received);if(!m_list->currentItem())m_list->setCurrentItem(m_list->topLevelItem(0));}if(!pending.empty())persist();
+    void poll(){
+        if(m_running&&matches){m_requeue.inspect(m_samples,[this](auto const& sample){
+            if(matches(sample,nullptr))return true;
+            for(auto const& applied:m_applied){auto const& r=m_rows[applied.first];if(&m_samples[r.index]==&sample&&matches(sample,&r.candidates[applied.second]))return true;}
+            return false;
+        });if(m_requeue.size())m_status->setText(unified_workflow::text("Elle değişen %1 sayfa güncel ayarıyla yeniden sıraya alındı.","%1 manually edited pages queued again with current settings.").arg(m_requeue.size()));}
+        std::vector<unified_geometry::Result> pending;{std::lock_guard<std::mutex> lock(m_mutex);pending.swap(m_pending);}for(auto& r:pending){auto text=!r.error.isEmpty()?unified_i18n::text("Hata"):r.recommended>=0?unified_i18n::text("Öneri hazır"):unified_i18n::text("Mevcut geometri korunsun");auto title=label(m_samples[r.index]);m_rows.push_back(std::move(r));new QTreeWidgetItem(m_list,{title,text});m_progress->setValue(++m_received);if(!m_list->currentItem())m_list->setCurrentItem(m_list->topLevelItem(0));}if(!pending.empty())persist();
         if(++m_pollCount%4==0&&isVisible())updateApply();
-        if(m_running&&m_future.valid()&&m_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){m_future.get();m_running=false;m_single->setEnabled(true);m_book->setEnabled(true);m_device->setEnabled(true);m_ai->setEnabled(true);m_stop->setEnabled(false);m_status->setText(m_error.isEmpty()?unified_i18n::text("Analiz %1. %2 sonuç kaydedildi; uygulanan satırlar korunuyor.").arg(m_cancel?unified_i18n::text("durduruldu"):unified_i18n::text("tamamlandı")).arg(m_received):m_error);}}
+        if(m_running&&m_future.valid()&&m_future.wait_for(std::chrono::seconds(0))==std::future_status::ready){m_future.get();m_running=false;m_single->setEnabled(true);m_book->setEnabled(true);m_device->setEnabled(true);m_ai->setEnabled(true);m_stop->setEnabled(false);m_status->setText(m_error.isEmpty()?unified_i18n::text("Analiz %1. %2 sonuç kaydedildi; uygulanan satırlar korunuyor.").arg(m_cancel?unified_i18n::text("durduruldu"):unified_i18n::text("tamamlandı")).arg(m_received):m_error);auto changed=m_requeue.take();auto onComplete=std::move(completion);completion={};if(!m_cancel&&onComplete)onComplete();if(!m_cancel&&!changed.empty()&&reprocess)reprocess(changed);}}
     void persist(){if(m_rows.empty())return;QJsonArray rows,history;for(size_t i=0;i<m_rows.size();++i){auto const& r=m_rows[i];auto const& s=m_samples[r.index];QJsonArray candidates;for(auto const& c:r.candidates)candidates.append(QJsonObject{{"name",c.name},{"path",c.path},{"reason",c.reason},{"params",unified_geometry::state(c.params)},{"error",c.error},{"score",c.score},{"accepted",c.accepted}});rows.append(QJsonObject{{"key",unified_review::key(s.page)},{"stamp",m_stamps[r.index]},{"transform",s.transform.fingerprint()},{"params",s.state},{"source",r.source},{"current",r.current},{"error",r.error},{"report",r.report},{"seconds",r.seconds},{"currentError",r.currentError},{"recommended",r.recommended},{"candidates",candidates},{"applied",m_applied.count(int(i))?m_applied[int(i)]:-1},{"stale",bool(m_stale.count(int(i)))}});}for(auto const& group:m_history){QJsonArray g;for(auto p:group)g.append(QJsonArray{p.row,p.candidate,p.previous});history.append(g);}if(!unified_review::save(m_directory+"/session.json",{{"schema",1},{"rows",rows},{"history",history},{"selected",row()}}))m_status->setText(unified_i18n::text("İnceleme kaydı yazılamadı; sonuçlar yalnız bellekte."));}
     void restore(){auto saved=unified_review::load(m_directory+"/session.json");if(saved.value("schema").toInt()!=1)return;QMap<int,int> mapped;int old=-1;
         for(auto value:saved.value("rows").toArray()){++old;auto o=value.toObject();int index=-1;for(size_t j=0;j<m_samples.size();++j)if(unified_review::key(m_samples[j].page)==o.value("key").toString()){index=int(j);break;}if(index<0)continue;auto s=m_samples[index];auto el=unified_review::element(o.value("params").toString());if(el.isNull())continue;
