@@ -1165,7 +1165,7 @@
   "tests/geometry_uvdoc_pilot.py": "fd0b98cc594e4997d6c352bbb923de6d7eee6e766c28dfec090b7b53093cb0ce",
   "tests/geometry_words_pilot.py": "2b8bd2853b69f20f6b961b71d1363cf72e9eade9010bfdf24b7dab469a391434",
   "tests/native_compression.cpp": "3cb1f5dbfa749c665f59cb55adda70c29c746e404b46e355a4bd2982c8d605e2",
-  "tests/native_fast_geometry.cpp": "9111440e0c89884f38e2795e8ea65558fc187e87dafd641ff7ffa7af773fe84e",
+  "tests/native_fast_geometry.cpp": "0e70f1656ad9a1d16dc50b6de4cec2060a587e6edb4b8298bf1fe4b07ea6c8c2",
   "tests/native_geometry_pilot.cpp": "838ae506b8efc7a224886d6ddb7a582e8ff961c23ad745e483952c207fd09f21",
   "tests/native_i18n.cpp": "1af1fc24f2fc5389dc378bf78f4159f52ac0bd8f7fae5844d7afc86d6257b5bf",
   "tests/native_review_state.cpp": "a967b243b210ae7080ec89a868d0249a7c08e3cda1e4bceb89d4e8d20e9e0c0d",

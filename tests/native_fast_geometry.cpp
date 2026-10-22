@@ -12,6 +12,8 @@
 #include "TaskStatus.h"
 #include <QApplication>
 #include <QPainter>
+#include <QFontMetricsF>
+#include <QFontInfo>
 #include <QDir>
 #include <iostream>
 #include <stdexcept>
@@ -35,7 +37,9 @@ int main(int argc,char** argv) {
     for(int scenario=0;scenario<4;++scenario) {
         bool const columns=scenario==3;
         QImage flat(1100,1500,QImage::Format_RGB32);flat.fill(Qt::white);
-        QPainter painter(&flat);QFont font("Arial");font.setPixelSize(16);painter.setFont(font);painter.setPen(Qt::black);
+        QPainter painter(&flat);QFont font(qEnvironmentVariable("STOU_GEOMETRY_TEST_FONT","Arial"));font.setPixelSize(16);painter.setFont(font);painter.setPen(Qt::black);
+        QString const lineText=columns?"Document text with separate columns, 123":"Document baseline with consistent type size, margins and punctuation, 123. A sample line of text.";
+        double const textWidth=QFontMetricsF(font).horizontalAdvance(lineText);
         std::deque<std::vector<QPointF>> truth;
         auto sourcePoint=[&](double x,double y) {
             double u=(x-550.)/1000.,v=y/1500.;
@@ -43,8 +47,11 @@ int main(int argc,char** argv) {
             return QPointF(x,y+bend);
         };
         for(int row=0;row<38;++row) for(int column=0;column<(columns?2:1);++column) {
-            double y=150+row*31,x0=columns?90+column*500:90,x1=columns?490+column*500:1000;
-            painter.drawText(QPointF(x0,y),columns?"Document text with separate columns, 123":"Document baseline with consistent type size, margins and punctuation, 123. A sample line of text.");
+            double y=150+row*31,x0=columns?90+column*500:90;
+            // Ground truth covers the text actually drawn. Font substitution on
+            // Linux can change its width; blank margins contain no text baseline.
+            double x1=std::min(double(flat.width()-1),x0+textWidth);
+            painter.drawText(QPointF(x0,y),lineText);
             std::vector<QPointF> line;
             for(int i=0;i<=40;++i) line.push_back(sourcePoint(x0+(x1-x0)*i/40.,y));
             truth.push_back(std::move(line));
@@ -69,7 +76,7 @@ int main(int argc,char** argv) {
             result.model.bottomCurve().polyline(),0,dewarping::DepthPerception(result.depth),dewarping::DepthPerception(result.curves),dewarping::DepthPerception(result.angle));
         double before=deskew::unifiedTextLineError(truth,[](auto p){return p;},true);
         double after=deskew::unifiedTextLineError(truth,transform.forwardMapper());
-        std::cout<<"scenario="<<scenario<<" before="<<before<<" after="<<after<<" lines="<<result.lineCount<<std::endl;
+        std::cout<<"scenario="<<scenario<<" font="<<QFontInfo(font).family().toStdString()<<" width="<<textWidth<<" before="<<before<<" after="<<after<<" lines="<<result.lineCount<<std::endl;
         warped.save(QString::fromLocal8Bit(argc>1?argv[1]:".")+QString("/synthetic-%1.png").arg(scenario));
         check(after<3.5,"known baselines are not straight after native correction");
         if(scenario>0) check(after<before*.35,"correction did not recover the synthetic camera distortion");
