@@ -16,13 +16,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh run watch 40203011297 --interval 20 --exit-status --repo "$GITHUB_REPOSITORY"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/40203011297" > windows-run.json
+          gh run watch 40204625550 --interval 20 --exit-status --repo "$GITHUB_REPOSITORY"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/40204625550" > windows-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/40201253449" > linux-run.json
           gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > release-before.json
           python3 - <<'PY'
           import json
-          expected={'windows':'2684e537e6e28eaa65e3e06ed91a62cb6bac764c','linux':'b9beb6f61348e40ea01a2f4c14b1ef20eab59dd6'}
+          expected={'windows':'b6fa500f2828cea23b8cf81a4a9294481ab89db1','linux':'b9beb6f61348e40ea01a2f4c14b1ef20eab59dd6'}
           for platform,sha in expected.items():
               run=json.load(open(platform+'-run.json'))
               assert run['conclusion']=='success' and run['head_sha']==sha
@@ -35,7 +35,7 @@ jobs:
         with:
           name: release-windows-0.6.4-full
           path: packages/windows
-          run-id: '40203011297'
+          run-id: '40204625550'
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
