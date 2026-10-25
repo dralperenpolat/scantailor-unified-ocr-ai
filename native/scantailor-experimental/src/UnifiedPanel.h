@@ -60,7 +60,8 @@ public:
     void setEditorContext(QString const& title, QString const& path);
     void clearPreviewSelection() { m_previewJob.clear(); m_previewPath.clear(); }
     void setPreviewPath(QString const& path) { m_previewPath = path; }
-    void editPreview(int stage=3);
+    QJsonObject previewJob() const;
+    void editPreview(int stage=3,QString const& workflowStep={});
     QString editCopy(QJsonObject const& target) const;
     QString revisionSnapshotPath() const;
     bool submitRevision(QJsonObject const& binding, QString const& snapshot);
@@ -75,6 +76,7 @@ signals:
     void captureRequested();
     void openRequested(QString const& path);
     void editRequested(QJsonObject const& target, int stage);
+    void editFeedback(QString const& message);
     void settingsRequested();
     void accelerationChanged();
     void selectionPreviewRequested(QString const& title, QJsonArray const& images, QString const& path);
@@ -85,10 +87,12 @@ private:
     bool addImportedPdf(QJsonObject const& result);
     void adoptJobRevision(QJsonObject const& before, QJsonObject const& after);
     friend class UnifiedQueueSelectionTest;
+    friend class UnifiedWorkflowTest;
     QString m_root, m_queuePath, m_requestPath, m_controlPath, m_output;
     QString m_paddleVersion="PP-OCRv5";
     QJsonArray m_jobs;
     QHash<QString, QJsonArray> m_livePreviews;
+    QHash<QString, QJsonObject> m_liveProgress;
     quint64 m_selectionRequest = 0;
     QString m_previewJob, m_previewPath;
     QTimer* m_previewRefresh = nullptr;
@@ -100,6 +104,7 @@ private:
     QString m_monitorRequest, m_monitorLog;
     qint64 m_monitorOffset=0;
     qint64 m_monitorQueueRead=0;
+    void refreshQueueJobs(bool force=false);
     void pollExternal();
     void attachMonitor(QString const& path);
     void updateRevisionStatus();

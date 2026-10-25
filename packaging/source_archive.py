@@ -5,7 +5,7 @@ import argparse,hashlib,json,re,shutil,zipfile
 def main():
     p=argparse.ArgumentParser();p.add_argument('--destination',required=True);a=p.parse_args()
     root=Path(__file__).resolve().parents[1];dest=Path(a.destination).resolve();dest.mkdir(parents=True,exist_ok=True)
-    tree=dest/'scantailor-unified-ocr-ai-0.6.2-source';tree.mkdir(exist_ok=True)
+    tree=dest/'scantailor-unified-ocr-ai-0.6.3-source';tree.mkdir(exist_ok=True)
     files=[]
     for name in ('README.md','README.tr.md','LICENSE','THIRD_PARTY_NOTICES.md','pyproject.toml','.gitignore'):
         files.append(root/name)
@@ -30,7 +30,7 @@ def main():
         if not target.exists() or target.read_bytes()!=payload:target.write_bytes(payload)
         checksums[relative.as_posix()]=hashlib.sha256(payload).hexdigest()
     (tree/'SOURCE-SHA256.json').write_text(json.dumps(checksums,indent=2),'utf8')
-    archive=dest/'scantailor-unified-ocr-ai-0.6.2-source.zip'
+    archive=dest/'scantailor-unified-ocr-ai-0.6.3-source.zip'
     with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         for relative in (*checksums, 'SOURCE-SHA256.json'):
             source=tree/relative

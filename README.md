@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.6.2
+# ScanTailor OCR Unified · 0.6.3
 
 **English** | [Türkçe](README.tr.md)
 
-Version 0.6.2 adds fast word baselines, column-aware page boundaries and a joint text line model for geometry correction. AI runs where a measurable defect remains after the fast pass. Suggestions are checked for line error, stretching and held-out text lines. Manual edits are preserved and queued again with their current settings.
+Version 0.6.3 fixes page editing during active batch processing. Geometry and margin controls open the selected page, and selecting a book shows all its stages, including PDF/OCR, with its own progress. Saving from the PDF/OCR screen queues a revision for that book while preserving the running worker and its source project.
 
 A desktop application for cleaning up book photographs and creating searchable PDFs. It builds on the six image-processing filters of [ScanTailor Experimental](https://github.com/ImageProcessing-ElectronicPublications/scantailor-experimental), adding a book queue, OCR, PDF export, UVDoc dewarping suggestions and Paddle-based content review. Documents are processed on your computer. A GPU is optional.
 

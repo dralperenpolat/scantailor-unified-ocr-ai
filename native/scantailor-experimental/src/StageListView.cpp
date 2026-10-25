@@ -23,6 +23,7 @@ void StageListView::setStages(IntrusivePtr<StageSequence> const& stages) {
     Q_UNUSED(stages);
     if(m_model)m_model->deleteLater();
     m_buttons.clear();
+    m_editorStatuses.clear();m_queueView=false;
     auto list=unified_workflow::steps();m_model=new QStandardItemModel(list.size(),3,this);setModel(m_model);
     for(int i=0;i<list.size();++i){auto const step=list[i];
         auto item=new QStandardItem(step.title);item->setToolTip(step.description);item->setData(step.id,Qt::UserRole);m_model->setItem(i,0,item);
@@ -60,7 +61,7 @@ int StageListView::groupForStep(QString const& id){
 }
 void StageListView::updateVisibility(){
     if(!m_model)return;
-    for(int i=0;i<m_model->rowCount();++i)setRowHidden(i,(!m_aiEnabled&&stepId(i).startsWith("ai_"))||(!m_showAll&&groupForStep(stepId(i))!=m_group));
+    for(int i=0;i<m_model->rowCount();++i)setRowHidden(i,(!m_aiEnabled&&stepId(i).startsWith("ai_"))||(!m_queueView&&!m_showAll&&groupForStep(stepId(i))!=m_group));
     updateMetrics();
 }
 void StageListView::setNavigationGroup(int group){m_group=group;updateVisibility();emit navigationGroupChanged(group);}
@@ -76,8 +77,28 @@ void StageListView::showAllStages(bool show){
 QString StageListView::currentStep()const{return stepId(currentIndex().row());}
 QString StageListView::stepId(int row)const{auto list=unified_workflow::steps();return row>=0&&row<list.size()?list[row].id:QString();}
 int StageListView::filterForRow(int row)const{auto list=unified_workflow::steps();return row>=0&&row<list.size()?list[row].filter:-1;}
-void StageListView::setStepStatus(QString const& id,QString const& status){int row=unified_workflow::row(id);if(row<0||!m_model)return;m_model->item(row,1)->setText(status);m_model->item(row,1)->setToolTip(status);}
-void StageListView::updateButtons(){for(auto b:m_buttons)b->setEnabled(m_possible&&!m_running);}
+void StageListView::setStepStatus(QString const& id,QString const& status){
+    m_editorStatuses.insert(id,status);int row=unified_workflow::row(id);if(row<0||!m_model||m_queueView)return;
+    m_model->item(row,1)->setText(status);m_model->item(row,1)->setToolTip(status);
+}
+void StageListView::showQueueProgress(QHash<QString,QString> const& statuses,QString const& active){
+    if(!m_model)return;
+    bool changed=!m_queueView;m_queueView=true;
+    for(int i=0;i<m_model->rowCount();++i){
+        auto id=stepId(i);m_model->item(i,1)->setText(statuses.value(id));m_model->item(i,1)->setToolTip(statuses.value(id));
+        auto font=m_model->item(i,0)->font();font.setBold(id==active);m_model->item(i,0)->setFont(font);
+    }
+    if(changed){updateVisibility();updateButtons();}
+}
+void StageListView::clearQueueProgress(){
+    if(!m_queueView)return;m_queueView=false;
+    for(int i=0;i<m_model->rowCount();++i){
+        setStepStatus(stepId(i),m_editorStatuses.value(stepId(i)));
+        auto font=m_model->item(i,0)->font();font.setBold(false);m_model->item(i,0)->setFont(font);
+    }
+    updateVisibility();updateButtons();
+}
+void StageListView::updateButtons(){for(auto b:m_buttons)b->setEnabled(m_possible&&!m_running&&!m_queueView);}
 void StageListView::setBatchProcessingPossible(bool possible){m_possible=possible;updateButtons();}
 void StageListView::setBatchProcessingInProgress(bool running){
     if(running==m_running)return;

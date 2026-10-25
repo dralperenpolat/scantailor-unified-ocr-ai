@@ -6,6 +6,11 @@
 #include "UnifiedWorkflow.h"
 #include "UnifiedProjectCache.h"
 #include "UnifiedContentReview.h"
+#include "UnifiedQueuePreview.h"
+#include "ProcessingTaskQueue.h"
+#include "stages/deskew/OptionsWidget.h"
+#include "stages/select_content/OptionsWidget.h"
+#include "stages/page_layout/OptionsWidget.h"
 #include "stages/select_content/Filter.h"
 #include "stages/select_content/Settings.h"
 #include "stages/page_layout/Filter.h"
@@ -25,6 +30,99 @@ class UnifiedWorkflowTest {
         QApplication::processEvents();
     }
 public:
+    static void queueEditing(QString const& folder,QString const& captures){
+        MainWindow window;window.resize(1366,820);window.show();auto panel=window.m_unified;
+        QStringList inputs;
+        for(int i=0;i<2;++i){
+            QImage image(800,1100,QImage::Format_RGB32);image.fill(Qt::white);image.setDotsPerMeterX(5906);image.setDotsPerMeterY(5906);
+            QPainter painter(&image);painter.setPen(Qt::black);painter.setFont(QFont("Arial",15));
+            for(int line=0;line<30;++line)painter.drawText(80,100+line*28,QString("Queue edit test page %1, line %2").arg(i+1).arg(line+1));
+            painter.end();auto path=folder+QString("/queue-input-%1.png").arg(i);check(image.save(path),"queue edit source fixture");inputs<<path;
+        }
+        check(window.importWorkflowImages(inputs),"queue fixture opens");
+        window.runWorkflowStep("content");wait([&]{return !window.isBatchProcessingInProgress();});
+        auto sourceProject=folder+"/worker.ScanTailor";
+        check(window.saveProjectWithFeedback(sourceProject),"worker project fixture saved");
+        auto read=[](QString const& path){QFile f(path);check(f.open(QIODevice::ReadOnly),"read queue fixture");return f.readAll();};
+        auto sourceBytes=read(sourceProject);
+        window.switchToNewProject(IntrusivePtr<ProjectPages>(new ProjectPages),QString());
+        QJsonObject pending{{"id","running-book"},{"title","Running queue book"},{"folder",folder},{"status","Preparing"}};
+        QJsonObject other{{"id","other-book"},{"title","Other book"},{"status","Output"}};
+        auto writeQueue=[&](QJsonArray const& jobs){QSaveFile f(panel->queuePath());check(f.open(QIODevice::WriteOnly),"write queue fixture");f.write(QJsonDocument(QJsonObject{{"schema",2},{"output_root",folder+"/output"},{"jobs",jobs}}).toJson());check(f.commit(),"publish queue fixture");};
+        writeQueue({pending,other});panel->loadQueue();panel->refreshBooks();
+        panel->m_worker.start(unified_runtime::python(unified_runtime::root()),{"-u","-c","import sys; print('ready', flush=True); sys.stdin.read()"});
+        check(panel->m_worker.waitForStarted(5000),"owned worker starts");
+        struct WorkerStop { QProcess& process; ~WorkerStop(){process.kill();process.waitForFinished(3000);} } stop{panel->m_worker};
+        auto pid=panel->m_worker.processId();check(panel->busy(),"queue stays active while editing");
+        window.showWorkflowTools();
+        panel->showSelection("running-book",inputs[1]);
+        wait([&]{return window.m_unifiedViewStack->currentWidget()==window.m_queuePreview&&window.m_queuePreview->currentPath()==inputs[1];});
+        window.refreshWorkflowState();
+        check(window.dockWidgetFilters->isVisible()&&window.dockWidgetThumbnails->isVisible(),"book selection shows stages and pages from the queue settings view");
+        check(!window.filterList->isRowHidden(unified_workflow::row("geometry"))&&!window.filterList->isRowHidden(unified_workflow::row("pdf"))&&!window.filterList->isRowHidden(unified_workflow::row("ocr")),"selected queue book exposes its PDF and editing stages together");
+        auto edit=window.m_queuePreview->findChild<QPushButton*>("queueEditStage3");check(edit,"page edit button exists");edit->click();
+        auto feedback=window.m_queuePreview->findChild<QLabel*>("queueEditStatus");
+        check(feedback&&!feedback->isHidden()&&!feedback->text().isEmpty(),"unready source has a visible explanation beside the edit buttons");
+        panel->event({{"job","running-book"},{"book","Running queue book"},{"stage","Margins"},{"detail","Page three"},{"page",3},{"total",10}});
+        panel->event({{"job","other-book"},{"book","Other book"},{"stage","Output"},{"page",9},{"total",20}});
+        window.refreshWorkflowState();
+        check(!feedback->isHidden(),"live progress does not erase the edit explanation");
+        check(window.filterList->model()->index(unified_workflow::row("margins"),1).data().toString()=="3/10","left stages show the selected book's live page count");
+        check(window.filterList->model()->index(unified_workflow::row("output"),1).data().toString().isEmpty(),"another book's progress does not replace the selected book's stages");
+        check(window.dockWidgetFilters->windowTitle().contains("Running queue book"),"stage heading identifies the selected book");
+        if(!captures.isEmpty())check(window.grab().save(captures+"/queue-book-stages.png"),"queue stages screenshot");
+        auto ready=pending;ready.insert("project",sourceProject);ready.insert("status","Ready");
+        writeQueue({other,ready});auto queueBytes=read(panel->queuePath());
+        check(panel->m_jobs[0].toObject().value("project").toString().isEmpty(),"UI initially lacks project published by its worker");
+        edit->click();
+        check(window.isProjectLoaded(),"edit button opens a newly prepared queue page while its worker runs");
+        auto editable=window.m_projectFile;check(editable!=sourceProject&&QFileInfo::exists(editable),"queue edits use a separate project copy");
+        auto selected=window.m_ptrThumbSequence->selectionLeader().id();
+        check(QFileInfo(selected.imageId().filePath()).absoluteFilePath()==QFileInfo(inputs[1]).absoluteFilePath()&&window.m_curFilter==3,"selected queue page opens at content stage");
+        wait([&]{return window.m_ptrOptionsWidget==window.m_ptrStages->selectContentFilter()->optionsWidget();});
+        for(int stage:{2,2,4,3,2}){
+            panel->showSelection("running-book",inputs[1]);
+            wait([&]{return window.m_unifiedViewStack->currentWidget()==window.m_queuePreview;});
+            auto button=window.m_queuePreview->findChild<QPushButton*>(QString("queueEditStage%1").arg(stage));check(button,"queue stage button exists");button->click();
+            wait([&]{return window.m_ptrInteractiveQueue->allProcessed();});
+            check(window.m_projectFile==editable&&window.m_curFilter==stage,"stage button reuses the edit copy at requested filter");
+            check(window.m_ptrThumbSequence->selectionLeader().id()==selected,"stage button preserves selected page identity");
+            check(window.m_unifiedViewStack->currentWidget()==window.m_editorHost&&window.filterOptions->isEnabled(),"queue preview gives way to enabled editor controls");
+            check(window.scrollArea->parentWidget()->isVisible(),"native stage options are visible");
+            if(stage==2){
+                auto angle=window.m_ptrStages->deskewFilter()->optionsWidget()->findChild<QDoubleSpinBox*>("angleSpinBox");
+                check(angle&&angle->isEnabled(),"geometry angle control is enabled");auto before=window.workflowFingerprint();angle->setValue(angle->value()+.25);
+                check(window.workflowFingerprint()!=before,"geometry control changes this page's saved settings");
+            }
+            if(stage==4){
+                auto margin=window.m_ptrStages->pageLayoutFilter()->optionsWidget()->findChild<QDoubleSpinBox*>("leftMarginSpinBox");
+                check(margin&&margin->isEnabled(),"margin control is enabled");auto before=window.workflowFingerprint();margin->setValue(margin->value()+1);
+                check(window.workflowFingerprint()!=before,"margin control changes this page's saved settings");
+            }
+            check(panel->m_worker.state()==QProcess::Running&&panel->m_worker.processId()==pid,"editing never stops or replaces the queue worker");
+            if(!captures.isEmpty())check(window.grab().save(captures+QString("/queue-edit-stage-%1.png").arg(stage)),"queue edit screenshot");
+        }
+        check(read(sourceProject)==sourceBytes&&read(panel->queuePath())==queueBytes,"page navigation and manual edits preserve worker project and queue files");
+        for(auto step:{"pdf","ocr"}){
+            panel->showSelection("running-book",inputs[1]);wait([&]{return window.m_unifiedViewStack->currentWidget()==window.m_queuePreview;});
+            window.filterList->selectStep(step);
+            check(window.m_workflowStep==step&&window.m_editBinding.value("job_id")=="running-book"&&window.m_projectFile==editable,"PDF/OCR stages open the selected queue book's edit context");
+            window.refreshWorkflowState();check(window.m_workflowRun->isEnabled(),"selected book's PDF revision can be queued while the worker runs");
+        }
+        panel->setOcrTiming("none");window.m_workflowRun->click();
+        auto requests=QDir(panel->queuePath()+".edits").entryList({"*.request.json"},QDir::Files);
+        check(requests.size()==1,"PDF action creates one durable queue revision");
+        auto request=QJsonDocument::fromJson(read(panel->queuePath()+".edits/"+requests.first())).object();
+        check(request.value("job_id")=="running-book"&&QFileInfo::exists(request.value("snapshot").toString()),"PDF revision targets only the selected book's saved edit snapshot");
+        check(read(sourceProject)==sourceBytes&&read(panel->queuePath())==queueBytes,"PDF update submission preserves the worker's source and queue checkpoint");
+        ready.insert("edit_completed_id","published-revision");writeQueue({other,ready});
+        panel->m_monitorQueueRead=0;panel->pollExternal();
+        check(panel->m_jobs[0].toObject().value("edit_completed_id")=="published-revision","owned worker polling refreshes durable job metadata by ID despite reordered disk rows");
+        check(panel->m_jobs[0].toObject().value("status")=="Margins","metadata polling preserves live progress");
+        check(panel->m_worker.state()==QProcess::Running&&panel->m_worker.processId()==pid,"PDF/OCR navigation and polling leave the worker running");
+        window.m_closing=true;
+        std::cout<<"PASS active queue page editing, geometry, margins, page identity and source isolation"<<std::endl;
+    }
     static void profileProject(){
         auto path=qEnvironmentVariable("STOU_TEST_PROJECT");if(path.isEmpty())return;
         MainWindow window;window.show();QElapsedTimer clock;clock.start();window.openProject(path);

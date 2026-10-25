@@ -286,7 +286,7 @@ bool UnifiedPanel::openSavedQueue(QString const& path){
         if(id.isEmpty()||ids.contains(id))return fail(text("Çalışma kaydında eksik veya yinelenen kitap kimliği var.","Saved run contains missing or duplicate book IDs."));
         ids.insert(id);
     }
-    m_previewRefresh->stop();++m_selectionRequest;m_previewJob.clear();m_previewPath.clear();m_livePreviews.clear();
+    m_previewRefresh->stop();++m_selectionRequest;m_previewJob.clear();m_previewPath.clear();m_livePreviews.clear();m_liveProgress.clear();
     m_revisionJob.clear();m_revisionToken.clear();m_revisionStartPending=false;m_revisionStatus->hide();
     m_queuePath=candidate;m_jobs={};m_pages->clear();m_books->clear();m_progress->setValue(0);
     m_controlPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/control-"+uid()+".json";
@@ -414,12 +414,26 @@ void UnifiedPanel::previewBook(QString const& id,int page){
     }
     showSelection(id,path);
 }
-void UnifiedPanel::editPreview(int stage){
+QJsonObject UnifiedPanel::previewJob()const{
+    for(auto value:m_jobs){auto job=value.toObject();if(job.value("id").toString()!=m_previewJob)continue;
+        job.insert("live_progress",m_liveProgress.value(m_previewJob));return job;
+    }
+    return {};
+}
+void UnifiedPanel::editPreview(int stage,QString const& workflowStep){
+    // The worker may have published the project after this preview was opened.
+    // Refresh durable metadata without replacing the selected book/page.
+    refreshQueueJobs(true);
+    emit editFeedback(QString());
     QString id=m_previewJob;
     if(id.isEmpty()&&m_books->currentItem())id=m_books->currentItem()->data(0,Qt::UserRole+1).toString();
     for(auto value:m_jobs){auto job=value.toObject();if(job.value("id").toString()!=id)continue;
         auto target=unifiedEditTarget(job,m_previewPath,m_livePreviews.value(id));
-        if(target.isEmpty()){m_status->setText(trU("Bu sayfanın kaynak projesi henüz hazır değil veya sayfa bağlantısı bulunamadı."));return;}
+        if(target.isEmpty()){
+            auto message=trU("Bu sayfanın kaynak projesi henüz hazır değil veya sayfa bağlantısı bulunamadı.");
+            m_status->setText(message);emit editFeedback(message);return;
+        }
+        if(!workflowStep.isEmpty())target.insert("workflow_step",workflowStep);
         emit editRequested(target,stage);return;
     }
 }
@@ -528,31 +542,37 @@ void UnifiedPanel::adoptJobRevision(QJsonObject const& before,QJsonObject const&
         if(!m_previewRefresh->isActive())m_previewRefresh->start();
     }
 }
+void UnifiedPanel::refreshQueueJobs(bool force){
+    auto now=QDateTime::currentMSecsSinceEpoch();
+    if(!force&&now-m_monitorQueueRead<5000)return;
+    m_monitorQueueRead=now;
+    QFile queue(queueReadPath(m_queuePath));if(!queue.open(QIODevice::ReadOnly))return;
+    auto saved=QJsonDocument::fromJson(queue.readAll()).object();queue.close();
+    if(saved.value("schema").toInt()!=1&&saved.value("schema").toInt()!=2)return;
+    QHash<QString,QJsonObject> jobs;
+    for(auto value:saved.value("jobs").toArray()){
+        auto job=value.toObject();auto id=job.value("id").toString();
+        if(!id.isEmpty())jobs.insert(id,job);
+    }
+    // Both owned and monitored workers publish new projects and revisions.
+    // Match IDs, not positions, and keep live progress and list selection.
+    for(int i=0;i<m_jobs.size();++i){
+        auto before=m_jobs.at(i).toObject();auto found=jobs.constFind(before.value("id").toString());
+        if(found==jobs.constEnd())continue;
+        auto after=found.value();adoptJobRevision(before,after);
+        for(auto key:{"status","detail"})if(before.contains(key))after.insert(key,before.value(key));
+        m_jobs.replace(i,after);
+    }
+}
 void UnifiedPanel::pollExternal(){
-    if(m_monitorRequest.isEmpty()||m_worker.state()!=QProcess::NotRunning)return;
+    if(m_worker.state()!=QProcess::NotRunning){refreshQueueJobs();return;}
+    if(m_monitorRequest.isEmpty())return;
     QFile status(m_monitorRequest+".session.json");QJsonObject state;
     if(status.open(QIODevice::ReadOnly)){auto bytes=status.readAll();status.close();state=QJsonDocument::fromJson(bytes).object();}
     bool running=(state.value("state").toString()=="running"||state.value("state").toString()=="resource_pause") && unifiedProcessRunning(qint64(state.value("pid").toDouble()));
     bool changed=running!=m_externalRunning;m_externalRunning=running;
     m_start->setEnabled(!running);m_prepare->setEnabled(!running);
-    auto now=QDateTime::currentMSecsSinceEpoch();
-    if(running && (changed || now-m_monitorQueueRead>=5000)){
-        m_monitorQueueRead=now;
-        // Bring newly prepared projects and final PDFs into the existing rows
-        // without rebuilding page lists or stealing the user's selection.
-        QFile queue(queueReadPath(m_queuePath));if(queue.open(QIODevice::ReadOnly)){
-            auto bytes=queue.readAll();queue.close();
-            auto saved=QJsonDocument::fromJson(bytes).object().value("jobs").toArray();
-            for(int i=0;i<qMin(saved.size(),m_jobs.size());++i){auto a=m_jobs.at(i).toObject(),b=saved.at(i).toObject();
-                if(a.value("id")!=b.value("id"))continue;
-                adoptJobRevision(a,b);
-                // Keep the latest live status, but refresh every durable field,
-                // including revision IDs and manual export policies.
-                for(auto key:{"status","detail"})if(a.contains(key))b.insert(key,a.value(key));
-                m_jobs.replace(i,b);
-            }
-        }
-    }
+    if(running)refreshQueueJobs(changed);
     QFile log(m_monitorLog);
     if(log.open(QIODevice::ReadOnly)){
         if(log.size()<m_monitorOffset)m_monitorOffset=0;
@@ -568,11 +588,16 @@ void UnifiedPanel::pollExternal(){
     // is being replayed. Do not show a stale stage or duplicate preview rows.
     auto latest=state.value("event").toObject();
     if(running && !latest.isEmpty()){
+        auto id=latest.value("job").toString();m_liveProgress.insert(id,latest);
+        for(int i=0;i<m_jobs.size();++i){auto job=m_jobs[i].toObject();if(job.value("id").toString()!=id)continue;
+            job.insert("status",latest.value("stage"));job.insert("detail",latest.value("detail"));m_jobs.replace(i,job);break;
+        }
         m_status->setText(latest.value("book").toString()+" · "+unified_i18n::display(latest.value("stage").toString())+" · "+unified_i18n::display(latest.value("detail").toString()));
         if(latest.contains("total")){m_progress->setRange(0,qMax(1,latest.value("total").toInt()));m_progress->setValue(latest.value("page").toInt());}
     }
 }
 void UnifiedPanel::event(QJsonObject const& o){
+    if(!o.value("job").toString().isEmpty())m_liveProgress.insert(o.value("job").toString(),o);
     QString detail=o.value("detail").toString(),stage=o.value("stage").toString(),title=o.value("book").toString();
     m_status->setText(title+" · "+unified_i18n::display(stage)+" · "+unified_i18n::display(detail));m_log->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss ")+m_status->text());
     if(o.contains("total")){m_progress->setRange(0,qMax(1,o.value("total").toInt()));m_progress->setValue(o.value("page").toInt());}

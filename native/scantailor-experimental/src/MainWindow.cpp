@@ -291,6 +291,7 @@ MainWindow::MainWindow()
     });
     connect(m_unified, &UnifiedPanel::captureRequested, this, &MainWindow::captureUnifiedProject);
     connect(m_unified, &UnifiedPanel::editRequested, this, &MainWindow::openQueuePage);
+    connect(m_unified, &UnifiedPanel::editFeedback, m_queuePreview, &UnifiedQueuePreview::showEditStatus);
     connect(m_unified, &UnifiedPanel::openRequested, this, [this](QString const& path){
         // Explicit editing is the only queue action which replaces the editor.
         // Keep its normal save/cancel flow for unsaved manual adjustments.
@@ -306,8 +307,10 @@ MainWindow::MainWindow()
         m_queueThumbStack->setCurrentWidget(m_queueThumbnails);
         // Editing controls still belong to the preserved open project.
         filterOptions->setEnabled(false);
-        dockWidgetFilters->setWindowTitle(unified_i18n::text("Aşamalar · üstte Bu sayfayı düzenle'yi seçin"));
+        scrollArea->parentWidget()->hide();
+        dockWidgetFilters->show();dockWidgetThumbnails->show();
         dockWidgetThumbnails->setWindowTitle(unified_i18n::text("Küçük resimler · ")+title);
+        refreshWorkflowState();
     });
     connect(m_unified,&UnifiedPanel::selectionPreviewUpdated,this,[this](QString const& title,QJsonArray const& images,QString const& path){
         if(m_unifiedViewStack->currentWidget()!=m_queuePreview)return;
@@ -2189,7 +2192,7 @@ MainWindow::updateWindowTitle()
         project_name = QFileInfo(m_projectFile).baseName();
     }
     QString const version(unified_i18n::text(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.2 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.3 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2702,6 +2705,10 @@ void MainWindow::setUnifiedPdfAppearance(QString const& appearance) {
     QMainWindow::statusBar()->showMessage(unified_i18n::text("Sonraki PDF işlemlerinin görünümü güncellendi. Output → PDF görünümü alanı ve alt panel aynı ayarı kullanır; çalışan iş değişmez."),7000);
 }
 void MainWindow::returnToProjectView() {
+    filterList->clearQueueProgress();
+    if(auto all=findChild<QCheckBox*>("workflowShowAllStages")){
+        QSignalBlocker block(all);all->setChecked(QSettings().value("unified/all_workflow_stages",false).toBool());all->setEnabled(true);
+    }
     if(m_geometryReviewBar)m_geometryReviewBar->setPreview(false);
     if(m_contentReviewBar)m_contentReviewBar->setPreview(false);
     m_unifiedViewStack->setCurrentWidget(m_editorHost);
@@ -2746,9 +2753,14 @@ void MainWindow::selectQueueEditPage(QJsonObject const& target,int stage){
         QMainWindow::statusBar()->showMessage(unified_i18n::text("Sayfa bölme değişmiş. Kaynak sayfayı sağdaki küçük resimlerden seçin."),9000);return;
     }
     returnToProjectView();m_editFillRequested=stage==6;
-    filterList->selectFilter(qBound(0,stage==6?5:stage,5));goToPage(selected);
+    filterList->selectFilter(qBound(0,stage==6?5:stage,5));
+    // Reopening the same stage may not emit selectionChanged. Restore its
+    // controls explicitly after the read-only queue preview hid them.
+    selectWorkflowRow(unified_workflow::row(filterList->currentStep()));goToPage(selected);
     dockWidgetFilters->show();dockWidgetThumbnails->show();
     m_editLabel->setText(target.value("title").toString()+unified_i18n::text(" · sayfa %1 · ").arg(target.value("page").toInt())+QFileInfo(selected.imageId().filePath()).fileName()+" · "+selected.subPageAsString());
+    auto step=target.value("workflow_step").toString();
+    if(!step.isEmpty()){filterList->selectStep(step);selectWorkflowRow(unified_workflow::row(step));}
 }
 void MainWindow::reviewBookContent(){
     if(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()==0||isBatchProcessingInProgress())return;
@@ -2788,7 +2800,7 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile.isEmpty()?m_outFileNameGen.outDir():m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.3"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(3);goToPage(page);}};
     syncWorkflowCache();m_workflowCache->own(dialog->directory(),"review");
     dialog->reprocess=[this](auto const& pages){requeueAiPages(false,pages);};

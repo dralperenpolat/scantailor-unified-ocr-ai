@@ -39,6 +39,10 @@ UnifiedQueuePreview::UnifiedQueuePreview(QWidget* parent) : QWidget(parent)
     auto back = new QPushButton(unified_i18n::text("Açık projeye dön"));
     bar->addWidget(back);
     connect(back, &QPushButton::clicked, this, [this] { if (returnToEditor) returnToEditor(); });
+    m_editStatus=new QLabel;
+    m_editStatus->setObjectName("queueEditStatus");m_editStatus->setWordWrap(true);
+    m_editStatus->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Maximum);
+    layout->addWidget(m_editStatus);m_editStatus->hide();
     auto navigation = new QHBoxLayout;
     layout->addLayout(navigation);
     m_previous = new QPushButton(unified_i18n::text("‹"));
@@ -106,6 +110,10 @@ void UnifiedQueuePreview::showSelection(QString const& title, QJsonArray const& 
 }
 
 QString UnifiedQueuePreview::currentPath() const { return m_choices->currentData().toString(); }
+void UnifiedQueuePreview::showEditStatus(QString const& message)
+{
+    m_editStatus->setText(message);m_editStatus->setVisible(!message.isEmpty());
+}
 void UnifiedQueuePreview::setCurrentPath(QString const& path)
 {
     int index = m_choices->findData(path);
@@ -114,6 +122,7 @@ void UnifiedQueuePreview::setCurrentPath(QString const& path)
 
 void UnifiedQueuePreview::selectImage()
 {
+    showEditStatus(QString());
     ++m_generation;
     if(m_loader)m_loader->requestInterruption();
     m_pendingPath = m_choices->currentData().toString();

@@ -34,6 +34,10 @@ int main(int argc,char** argv){
     TiffMetadataLoader::registerMyself();FastImageMetadataLoader::registerMyself();
     if(argc>1)QDir().mkpath(QString::fromLocal8Bit(argv[1]));
     try {
+        if(qEnvironmentVariable("STOU_TEST_QUEUE_EDIT")=="1"){
+            UnifiedWorkflowTest::queueEditing(temp.path(),argc>1?QString::fromLocal8Bit(argv[1]):QString());
+            return 0;
+        }
         QSettings().setValue("unified/ocr_languages","deu+eng");QSettings().setValue("unified/paddle_language","de");
         QSettings().setValue("unified/ui_language","tr");check(unified_i18n::selectedLanguage()=="tr","saved Turkish selection");
         {
@@ -90,7 +94,7 @@ int main(int argc,char** argv){
         const auto queueBytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",outputRoot},{"jobs",QJsonArray{queuedJob}}}).toJson();
         QFile queue(temp.path()+"/queue.json");check(queue.open(QIODevice::WriteOnly),"write synthetic queue");queue.write(queueBytes);queue.close();
         MainWindow window;window.resize(1280,900);window.show();
-        check(window.windowTitle().contains("0.6.2"),"window reports the current application version");
+        check(window.windowTitle().contains("0.6.3"),"window reports the current application version");
         auto languageEn=window.findChild<QAction*>("unifiedLanguage_en"),languageTr=window.findChild<QAction*>("unifiedLanguage_tr");
         check(languageEn&&languageTr&&languageEn->isChecked(),"English menu choice checked");
         check(languageTr->text()==QString::fromUtf8("Türkçe"),"Turkish endonym stays recognizable");

@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.6.2
+# ScanTailor OCR Unified · 0.6.3
 
 [English](README.md) | **Türkçe**
 
-0.6.2; hızlı kelime ve satır tespiti, sütunları ayrı değerlendiren sayfa sınırları ve ortak satır modeliyle geometriyi düzeltir. AI desteği, hızlı yöntemden sonra belirgin sorun kalan sayfalarda çalışır. Öneriler satır sapması, esneme ve modele katılmayan kontrol satırlarıyla karşılaştırılır. Elle düzenlenen sayfalar korunur ve güncel ayarlarıyla yeniden sıraya alınır.
+0.6.3, toplu işlem sürerken seçilen sayfayı düzenleyicide açar. Geometri ve kenarlar düğmeleri doğru sayfaya gider; kitaba tıklanınca PDF/OCR dahil tüm aşamalar ve o kitabın ilerlemesi solda görünür. PDF/OCR ekranından kaydedilen değişiklikler yalnızca seçilen kitabın güncelleme sırasına eklenir. Çalışan iş ve kaynak proje korunur.
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 

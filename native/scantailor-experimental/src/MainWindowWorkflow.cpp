@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "MainWindow.h"
 #include "UnifiedWorkflow.h"
+#include "UnifiedQueueWorkflow.h"
 #include "UnifiedWorkflowHelp.h"
 #include "UnifiedProjectCache.h"
 #include "UnifiedRuntime.h"
@@ -89,6 +90,10 @@ void MainWindow::initWorkflow(){
     }
     if(stagesLayout){stagesLayout->addWidget(m_workflowDirty);auto refresh=new QPushButton(text("Çıktıyı ve PDF'yi yenile","Refresh Output and PDF"));refresh->setObjectName("workflowRefreshPdf");stagesLayout->addWidget(refresh);connect(refresh,&QPushButton::clicked,this,[this]{runWorkflowStep("pdf");});stagesLayout->addStretch();}
     connect(filterList,&StageListView::launchStep,this,&MainWindow::runWorkflowStep);
+    connect(filterList,&QTableView::clicked,this,[this](QModelIndex const& index){
+        // A click on the already-selected row does not emit selectionChanged.
+        if(m_unifiedViewStack->currentWidget()==m_queuePreview)selectWorkflowRow(index.row());
+    });
     // Reuse the existing settings widgets, not a second copy of their values.
     m_workflowTools=new QWidget;auto toolsLayout=new QVBoxLayout(m_workflowTools);
     m_workflowTitle=note({},toolsLayout);m_workflowTitle->setObjectName("workflowToolsTitle");
@@ -231,7 +236,10 @@ bool MainWindow::selectWorkflowRow(int row){
             "Processing continues. Wait for completion or use Stop before changing stages."),8000);
         return false;
     }
-    if(m_unifiedViewStack->currentWidget()==m_queuePreview&&filterList->filterForRow(row)>=0){m_unified->editPreview(filterList->filterForRow(row));return false;}
+    if(m_unifiedViewStack->currentWidget()==m_queuePreview&&id!="input"&&id!="settings"&&id!="help"){
+        m_unified->editPreview(qMax(0,filterList->filterForRow(row)),id);return false;
+    }
+    filterList->clearQueueProgress();
     m_workflowStep=id;m_unified->setWorkflowContext(id);
     dockWidgetFilters->setWindowTitle(text("Aşamalar · resimden PDF’ye","Stages · images to PDF"));
     if(m_geometryReviewBar)m_geometryReviewBar->setVisible(id=="ai_geometry");
@@ -245,7 +253,7 @@ bool MainWindow::selectWorkflowRow(int row){
     else if(id=="storage"){m_unifiedViewStack->setCurrentWidget(m_workflowCache);syncWorkflowCache(true);}
     else {
         m_unifiedViewStack->setCurrentWidget(m_workflowTools);
-        auto step=unified_workflow::steps().at(row);m_workflowTitle->setText(step.title+"\n"+step.description);
+        auto step=unified_workflow::steps().at(row);m_workflowTitle->setText((m_editBinding.isEmpty()?QString():m_editBinding.value("title").toString()+" · ")+step.title+"\n"+step.description);
         m_workflowRun->setVisible(id=="pdf"||id=="ocr");m_workflowRun->setText(id=="ocr"?text("▶ Seçili ayarlarla OCR’ı başlat","▶ Start OCR with selected settings"):text("▶ PDF oluştur","▶ Create PDF"));
         if(id=="pdf"||id=="ocr")m_unified->showToolsTab(id=="ocr"?3:1);
     }
@@ -324,6 +332,10 @@ void MainWindow::refreshWorkflowState(){
     bool running=m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning;
     bool available=isProjectLoaded()&&!running&&!isBatchProcessingInProgress()&&!m_unified->busy()&&!m_aiGeometryRunning&&!m_aiContentRunning&&!m_workflowCache->cleaning();
     m_workflowStop->setEnabled(running);m_workflowRun->setEnabled(available);
+    if(!m_editBinding.isEmpty()&&(m_workflowStep=="pdf"||m_workflowStep=="ocr")){
+        m_workflowRun->setText(text("▶ Kaydet ve bu kitabın PDF’sini güncelle","▶ Save and update this book's PDF"));
+        m_workflowRun->setEnabled(isProjectLoaded()&&!running&&!isBatchProcessingInProgress()&&!m_aiGeometryRunning&&!m_aiContentRunning&&!m_workflowCache->cleaning());
+    }
     filterList->setBatchProcessingPossible(available);
     for(auto name:{"workflowRefreshPdf","workflow_cleanup","workflowCleanupManual","workflowOcrRun","workflowFinish"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(available);
     for(auto name:{"workflowInputImages","workflowInputFolder","workflowInputPdf","workflowInputProject","workflowInputSetup","workflowInputOutput","workflowPdfBrowse"})if(auto button=findChild<QPushButton*>(name))button->setEnabled(!running&&!isBatchProcessingInProgress()&&!m_unified->busy());
@@ -340,9 +352,26 @@ void MainWindow::refreshWorkflowState(){
     if(m_unified->pdfImportRunning())m_workflowDirty->setText(text("PDF içe aktarımı devam ediyor: ","PDF import continues: ")+m_unified->pdfImportStatus()+"\n"+text("İlerlemeye dönmek için PDF içe aktar düğmesini kullanın.","Use Import PDF to return to its progress."));
     else if(running)m_workflowDirty->setText(text("İşlem arka planda devam ediyor: ","Processing continues in the background: ")+m_workflowStatus->text());
     else m_workflowDirty->setText(!isProjectLoaded()?text("0 · Girdi ile bir kitap açın.","Open a book at 0 · Input."):m_workflowPdf.isEmpty()?text("Çıktı → temizlik → PDF → OCR\nPDF henüz oluşturulmadı.","Output → cleanup → PDF → OCR\nPDF has not been created yet."):(!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp)?text("Ayarlar değişti. Çıktı/PDF yenilenmeli. Eski PDF korunuyor.","Settings changed. Refresh Output/PDF. The previous PDF is preserved."):text("PDF güncel kayıtlı ayarlarla oluşturuldu.","PDF was created with the current saved settings."));
+    bool queueView=m_unifiedViewStack->currentWidget()==m_queuePreview;
+    auto all=findChild<QCheckBox*>("workflowShowAllStages");
+    {QSignalBlocker block(all);all->setEnabled(!queueView);all->setChecked(queueView||QSettings().value("unified/all_workflow_stages",false).toBool());}
+    if(queueView){
+        auto job=m_unified->previewJob();auto status=job.value("status").toString();
+        filterList->showQueueProgress(unifiedQueueWorkflowStatuses(job),unifiedQueueWorkflowStep(status));
+        dockWidgetFilters->setWindowTitle(text("Aşamalar · ","Stages · ")+job.value("title").toString());
+        auto row=unified_workflow::row(unifiedQueueWorkflowStep(status));
+        auto stage=row>=0?unified_workflow::steps().at(row).title:unified_i18n::display(status);
+        m_workflowDirty->setText(job.value("title").toString()+"\n"+stage+"\n"+unified_i18n::display(job.value("detail").toString()));
+    }else filterList->clearQueueProgress();
 }
 void MainWindow::runWorkflowStep(QString const& id){
     if(id.startsWith("ai_")&&!QSettings().value("unified/ai_enabled",false).toBool())return;
+    if((id=="pdf"||id=="ocr")&&!m_editBinding.isEmpty()){
+        if(!isProjectLoaded()||m_aiGeometryRunning||m_aiContentRunning||m_workflowCache->cleaning()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
+        auto error=m_unified->workflowOcrValidation();
+        if(!error.isEmpty()&&m_unified->ocrTiming()!="none"){m_workflowStatus->setText(error);return;}
+        publishQueueEdit();return;
+    }
     if(!isProjectLoaded()||m_aiGeometryRunning||m_aiContentRunning||m_workflowCache->cleaning()||m_unified->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
     if(id=="ocr"){
         auto error=m_unified->workflowOcrValidation();

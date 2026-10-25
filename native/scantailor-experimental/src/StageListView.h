@@ -21,6 +21,8 @@ public:
     QString stepId(int row) const;
     int filterForRow(int row) const;
     void setStepStatus(QString const& id,QString const& status);
+    void showQueueProgress(QHash<QString,QString> const& statuses,QString const& active);
+    void clearQueueProgress();
     void setNavigationGroup(int group);
     void showAllStages(bool show);
     void setAiEnabled(bool enabled);
@@ -42,6 +44,8 @@ private:
     QSize m_sizeHint;
     QStandardItemModel* m_model=nullptr;
     QHash<QString,QToolButton*> m_buttons;
+    QHash<QString,QString> m_editorStatuses;
+    bool m_queueView=false;
     bool m_possible=false,m_running=false;
     bool m_showAll=true;
     bool m_aiEnabled=false;
