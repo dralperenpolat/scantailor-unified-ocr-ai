@@ -47,6 +47,14 @@ inline QString paddlePython(QString const& base,QString const& device) {
     if(QFileInfo::exists(base+"/release.json"))return python(base);
     return venvPython((shared.isEmpty()?base:shared)+"/resources/runtimes/paddle");
 }
+inline QString geometryPython(QString const& base,QString const& device) {
+    if(device=="cuda"){
+        auto local=data(base);
+        auto candidate=venvPython(local+"/resources/runtimes/geometry_cuda");
+        if(QFileInfo::exists(local+"/resources/geometry-cuda-ready.json") && QFileInfo::exists(candidate))return candidate;
+    }
+    return python(base);
+}
 inline QString cli() {
 #ifdef Q_OS_WIN
     return QCoreApplication::applicationDirPath()+"/scantailor-experimental-cli.exe";

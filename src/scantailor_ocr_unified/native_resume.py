@@ -15,4 +15,16 @@ def resume_native_args(args,resume,job,request):
         not any(not a.startswith('--') and Path(a).resolve()==project for a in args)):
         raise ValueError('Devam kaydı bu motor çağrısıyla eşleşmiyor.')
     args=[a for a in args if not a.startswith('--start-filter=')]
-    return ['--start-filter='+str(stage+1),*args],page
+    # Splitting changes the logical page sequence. An ordinal in the old
+    # sequence cannot safely skip the same ordinal in the expanded sequence.
+    return ['--start-filter='+str(stage+1),*args],0 if stage==1 else page
+
+
+def saved_checkpoint(project):
+    """Read the cursor atomically saved with the project, never UI progress."""
+    import xml.etree.ElementTree as ET
+    node=ET.parse(project).getroot().find('batch-checkpoint')
+    if node is None:return None
+    stage,page,total=(int(node.get(k,'-1')) for k in ('stage','page','total'))
+    if not 0<=stage<=5 or not 0<=page<=total:raise ValueError('Geçersiz proje devam noktası.')
+    return {'stage':stage,'page':page,'total':total,'token':node.get('token','')}

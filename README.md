@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.4
+# ScanTailor OCR Unified · 0.6.5
 
 **English** | [Türkçe](README.tr.md)
+
+Version 0.6.5 bounds full-project checkpoint work for large books. Pause, cancellation and stage completion save settings and their resume cursor together. Projects and intermediates can use a separate fast working disk; completed PDFs are copied and verified in the chosen output folder. AI review uses a separate validated CUDA geometry runtime when installed. After an abrupt process interruption, pages since the last durable checkpoint may need to be processed again.
 
 Version 0.6.4 uses one Windows setup EXE, a stable installation path and one desktop shortcut. Legacy shortcuts are backed up; existing queues, settings and working data are preserved. Setup refuses to replace a running installation. The updated interface can monitor the existing worker and refresh book progress live.
 
@@ -20,9 +22,9 @@ Open latest PDF opens the reading copy. The lossless master remains available fo
 
 ## Install
 
-**Windows x64 · 0.6.2: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-windows-x64-full-setup.exe).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Windows x64: [Download the installer](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Run it and open the app from the Start menu. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
-**Linux x64 · 0.6.2: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-linux-x64-full.tar.gz).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
+**Linux x64: [Download the Linux package](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Extract it and run `ScanTailor-OCR-Unified`. Run `sh install-user.sh` in the same folder to add a menu entry. Python, Qt, Tesseract, PDF tools and CPU AI models are included.
 
 The release provides one package per platform: the Windows installer and the Linux archive. GitHub automatically adds source-code archive links for developers. Technical test records and dependency inventories remain in the build artifacts.
 

@@ -83,7 +83,7 @@ struct Process {
         if(child.state()==QProcess::NotRunning){
             auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("PYTHONIOENCODING","utf-8");env.insert("OMP_NUM_THREADS","2");
             child.setProcessEnvironment(env);child.setWorkingDirectory(root);
-            child.start(unified_runtime::python(root),{"-u",root+"/src/scantailor_ocr_unified/geometry_runtime.py"});
+            child.start(unified_runtime::geometryPython(root,input.value("device").toString()),{"-u",root+"/src/scantailor_ocr_unified/geometry_runtime.py"});
             if(!child.waitForStarted(10000))throw std::runtime_error("UVDoc çalışma ortamı açılamadı.");
         }
         child.write(QJsonDocument(input).toJson(QJsonDocument::Compact)+"\n");child.waitForBytesWritten(1000);

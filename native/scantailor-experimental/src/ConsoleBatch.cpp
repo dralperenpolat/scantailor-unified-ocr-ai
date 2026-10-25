@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <future>
 #include <algorithm>
+#include <functional>
+#include <QElapsedTimer>
 
 
 #include <QCoreApplication>
@@ -268,15 +270,16 @@ void unifiedEvent(QJsonObject const& object) {
     if (qEnvironmentVariableIsSet("STOU_PROGRESS"))
         std::cout << "STOU " << QJsonDocument(object).toJson(QJsonDocument::Compact).constData() << std::endl;
 }
-void unifiedCheckpoint() {
+void unifiedCheckpoint(std::function<void()> const& flush) {
     QString path=qEnvironmentVariable("STOU_CONTROL_FILE");if(path.isEmpty())return;
     bool paused=false;
     for (;;) {
         QFile file(path);QString state;
         if(file.open(QIODevice::ReadOnly))state=QJsonDocument::fromJson(file.readAll()).object().value("state").toString();
-        if(state=="cancel")throw std::runtime_error("Unified: cancelled at page boundary");
+        file.close(); // Do not hold Windows' rename lock while paused or saving.
+        if(state=="cancel"){flush();throw std::runtime_error("Unified: cancelled at page boundary");}
         if(state!="pause")return;
-        if(!paused){unifiedEvent({{"stage",unified_i18n::text("Duraklatıldı")},{"detail",unified_i18n::text("Mevcut sayfa korundu.")}});paused=true;}
+        if(!paused){flush();unifiedEvent({{"stage",unified_i18n::text("Duraklatıldı")},{"detail",unified_i18n::text("Mevcut sayfa korundu.")}});paused=true;}
         QThread::msleep(150);
     }
 }
@@ -285,9 +288,27 @@ void
 ConsoleBatch::process()
 {
     CommandLine const& cli = CommandLine::get();
+    // A full project may contain thousands of pages. Bound repeated XML work,
+    // but flush before acknowledging pause/cancel and at every stage boundary.
+    // The cursor lives in the same atomic XML write as the settings it covers.
+    QElapsedTimer checkpointClock;checkpointClock.start();
+    bool dirty=false;
+    int checkpointMs=5000;
+    if(qEnvironmentVariableIsSet("STOU_CHECKPOINT_MS")){
+        bool ok=false;int value=qEnvironmentVariableIntValue("STOU_CHECKPOINT_MS",&ok);
+        if(ok)checkpointMs=qBound(0,value,60000);
+    }
+    auto flush=[&]{
+        if(dirty && cli.hasOutputProject() && qEnvironmentVariableIsSet("STOU_PROGRESS")){
+            QElapsedTimer elapsed;elapsed.start();saveProject(cli.outputProjectFile());dirty=false;checkpointClock.restart();
+            unifiedEvent({{"checkpoint",QJsonObject{{"stage",m_checkpointFilter},{"page",m_checkpointPage},{"total",m_checkpointTotal}}},
+                {"checkpoint_seconds",elapsed.elapsed()/1000.0}});
+        }
+    };
+    auto checkpoint=[&]{unifiedCheckpoint(flush);};
     auto contentReview=[&]{
         auto samples=unified_content::collect(*m_ptrPages,*m_ptrStages);
-        auto result=unified_content::review(std::move(samples),[&](int n,int total){unifiedCheckpoint();unifiedEvent({{"stage",unified_i18n::text("Kitap içerik denetimi")},{"page",n},{"total",total}});return true;});
+        auto result=unified_content::review(std::move(samples),[&](int n,int total){checkpoint();unifiedEvent({{"stage",unified_i18n::text("Kitap içerik denetimi")},{"page",n},{"total",total}});return true;});
         if(qEnvironmentVariable("STOU_CONTENT_REVIEW")=="apply-safe")for(auto const& p:result.proposals)if(p.safe)unified_content::apply(p,result.samples[p.index],*m_ptrStages);
         QString path=qEnvironmentVariable("STOU_CONTENT_REVIEW_REPORT");
         if(path.isEmpty()&&cli.hasOutputProject())path=cli.outputProjectFile()+".content-review.json";
@@ -328,6 +349,10 @@ ConsoleBatch::process()
         unsigned firstPage=j==startFilterIdx ? unsigned(resumePage) : 0;
         if(firstPage>page_sequence.numPages())throw std::runtime_error("Resume page out of range");
         setupFilter(j, page_sequence.selectAll());
+        m_checkpointFilter=j;m_checkpointPage=int(firstPage);m_checkpointTotal=int(page_sequence.numPages());
+        dirty=true;
+        // Establish a recoverable initial project even before its first page.
+        if(cli.hasOutputProject() && !QFileInfo::exists(cli.outputProjectFile()))flush();
         if(j==m_ptrStages->pageLayoutFilterIdx()&&qEnvironmentVariableIsSet("STOU_CONTENT_REVIEW"))contentReview();
         // Earlier passes establish geometry and the book-wide layout first.
         // Only final, independent output tasks may overlap. Task creation and
@@ -337,7 +362,7 @@ ConsoleBatch::process()
         {
             for (unsigned first = firstPage; first < page_sequence.numPages(); first += output_workers)
             {
-                unifiedCheckpoint();
+                checkpoint();
                 unsigned end = std::min<unsigned>(page_sequence.numPages(), first + output_workers);
                 std::vector<std::future<FilterResultPtr>> tasks;
                 std::vector<BackgroundTaskPtr> preparedTasks;
@@ -354,29 +379,33 @@ ConsoleBatch::process()
                     tasks.push_back(std::async(std::launch::async, [task] { return (*task)(); }));
                 }
                 for (auto& task : tasks) task.get();
-                if (cli.hasOutputProject() && qEnvironmentVariableIsSet("STOU_PROGRESS")) saveProject(cli.outputProjectFile());
+                m_checkpointPage=int(end);dirty=true;
+                if(checkpointClock.elapsed()>=checkpointMs)flush();
                 for (unsigned i = first; i < end; ++i)
                 {
                     PageInfo page = page_sequence.pageAt(i);
                     unifiedEvent({{"stage",m_ptrStages->filterAt(j)->getName()}, {"page",int(i+1)}, {"total",int(page_sequence.numPages())}, {"detail",QFileInfo(page.imageId().filePath()).fileName()}, {"preview",m_outFileNameGen.filePathFor(page.id())}});
                 }
             }
+            flush();
             continue;
         }
         for (unsigned i=firstPage; i<page_sequence.numPages(); i++)
         {
-            unifiedCheckpoint();
+            checkpoint();
             PageInfo page = page_sequence.pageAt(i);
             unifiedEvent({{"stage",m_ptrStages->filterAt(j)->getName()}, {"page",int(i)}, {"total",int(page_sequence.numPages())}, {"detail",QFileInfo(page.imageId().filePath()).fileName()}});
             if (cli.isVerbose())
                 std::cout << "\tProcessing: " << page.imageId().filePath().toLocal8Bit().constData() << "\n";
             BackgroundTaskPtr bgTask = createCompositeTask(page, j);
             (*bgTask)();
+            m_checkpointPage=int(i+1);dirty=true;
+            if(checkpointClock.elapsed()>=checkpointMs)flush();
             QJsonObject event{{"stage",m_ptrStages->filterAt(j)->getName()},{"page",int(i+1)},{"total",int(page_sequence.numPages())},{"detail",QFileInfo(page.imageId().filePath()).fileName()}};
             if(j==m_ptrStages->outputFilterIdx())event.insert("preview",m_outFileNameGen.filePathFor(page.id()));
             unifiedEvent(event);
-            if(cli.hasOutputProject() && qEnvironmentVariableIsSet("STOU_PROGRESS")) saveProject(cli.outputProjectFile());
         }
+        flush();
     }
 }
 
@@ -386,7 +415,17 @@ ConsoleBatch::saveProject(QString const project_file)
     PageInfo fpage = m_ptrPages->toPageSequence(PAGE_VIEW).pageAt(0);
     SelectedPage sPage(fpage.id(), IMAGE_VIEW);
     ProjectWriter writer(m_ptrPages, sPage, m_outFileNameGen);
-    if(!writer.write(project_file, m_ptrStages->filters()))throw std::runtime_error("Project checkpoint write failed");
+    auto document=writer.toXml(m_ptrStages->filters(),QFileInfo(project_file).absolutePath());
+    if(m_checkpointFilter>=0){
+        auto cursor=document.createElement("batch-checkpoint");
+        cursor.setAttribute("stage",m_checkpointFilter);cursor.setAttribute("page",m_checkpointPage);
+        cursor.setAttribute("total",m_checkpointTotal);cursor.setAttribute("token",qEnvironmentVariable("STOU_CHECKPOINT_TOKEN"));
+        document.documentElement().appendChild(cursor);
+    }
+    QSaveFile projectFile(project_file);
+    if(!projectFile.open(QIODevice::WriteOnly))throw std::runtime_error("Project checkpoint write failed");
+    QTextStream stream(&projectFile);document.save(stream,2);stream.flush();
+    if(stream.status()!=QTextStream::Ok || !projectFile.commit())throw std::runtime_error("Project checkpoint write failed");
     QJsonArray outputs;
     auto sequence=m_ptrPages->toPageSequence(PAGE_VIEW);
     for(size_t i=0;i<sequence.numPages();++i)outputs.append(m_outFileNameGen.filePathFor(sequence.pageAt(i).id()));

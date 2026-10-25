@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.4
+# ScanTailor OCR Unified · 0.6.5
 
 [English](README.md) | **Türkçe**
+
+0.6.5, büyük kitaplarda proje kaydını aralıklı yapar; duraklatma, iptal ve aşama sonunda ayarlarla devam noktası birlikte kaydedilir. Proje ve ara dosyalar hızlı bir çalışma diskinde, doğrulanmış PDF kopyaları seçilen çıktı klasöründe tutulabilir. Ayrı ve doğrulanmış CUDA geometri ortamı varsa AI incelemesi onu kullanır. Ani süreç kesilmesinde son kayıttan sonraki birkaç sayfanın yeniden işlenmesi gerekebilir.
 
 0.6.4, tek Windows kurulum EXE’siyle sabit uygulama yolunu ve tek masaüstü kısayolunu günceller. Eski kısayollar yedeklenir; mevcut kuyruk, ayarlar ve çalışma klasörü korunur. Çalışan kurulum dosyaları değiştirilmez. Yeni arayüz mevcut işçiye bağlanır ve kitap durumlarını canlı yeniler.
 
@@ -22,11 +24,11 @@ Son PDF'yi aç düğmesi okuma kopyasını açar. Kaynak ana dosya sonraki sayfa
 
 ## Kurulum
 
-**Windows x64 · 0.6.2: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-windows-x64-full-setup.exe).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Windows x64: [Kurulum dosyasını indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Dosyayı çalıştırıp programı kurun; ardından Başlat menüsünden açın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-**Linux x64 · 0.6.2: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.6.2/scantailor-ocr-unified-0.6.2-linux-x64-full.tar.gz).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
+**Linux x64: [Linux paketini indir](https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases).** Arşivi açıp `ScanTailor-OCR-Unified` dosyasını çalıştırın. Menüye eklemek için aynı klasörde `sh install-user.sh` çalıştırın. Python, Qt, Tesseract, PDF araçları ve CPU AI modelleri dahildir.
 
-Her platform için tek tam paket yayımlanır: Windows kurulum dosyası ve Linux arşivi. CPU AI modelleri pakete dahildir. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
+Sürüm sayfasında yayımlanmış platform ve paket çeşitleri listelenir. Tam (full) paket CPU AI modellerini içerir; minimal paket Tesseract ile başlar ve AI araçlarını isteğe bağlı kurar. GitHub'ın otomatik eklediği “Source code” bağlantıları geliştiriciler içindir. Teknik test kayıtları ve bağımlılık listeleri derleme çıktılarında saklanır.
 
 Windows kurulumu Windows 10 2004 ve sonrası / Windows 11 x64 içindir. Linux paketi Ubuntu 22.04 / glibc 2.35 veya yenisini gerektirir. Diğer ortamlar için [derleme talimatlarına](packaging/BUILD.md) bakın.
 

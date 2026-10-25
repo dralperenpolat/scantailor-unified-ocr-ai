@@ -24,7 +24,7 @@ def main():
     cli=root/('native/bin/scantailor-experimental-cli'+('.exe' if os.name=='nt' else ''))
     request={'root':str(root),'cli':str(cli),'queue':str(queue),'control':str(control),'mode':'prepare',
         'language':'eng','ocr_engine':'tesseract','ocr_device':'cpu','ocr_timing':'none','appearance':'soft_local',
-        'paper':'native','threads':2,'auto_warp':False,'page_cleanup':False,'reclaim_intermediates':False}
+        'paper':'native','threads':2,'auto_warp':False,'page_cleanup':False,'reclaim_intermediates':False,'work_root':str(work/'ssd')}
     def run(name):
         write_json(req,request)
         with (work/(name+'.log')).open('w',encoding='utf8') as log:
@@ -35,6 +35,7 @@ def main():
         return [json.loads(line) for line in (work/(name+'.log')).read_text('utf8').splitlines() if line.startswith('{')]
     events=run('prepare');job=load_queue(queue)['jobs'][0];project=Path(job['project'])
     assert job['status']=='Düzenlemeye hazır' and not job.get('pdf'),job
+    assert project.is_relative_to(work/'ssd'),project
     assert [e['page'] for e in events if e.get('stage')=='Fix Orientation']==[0,1,1,2,2,3],events
     request.update(resume_at_job=job['id'],resume_native={'job_id':job['id'],'project':str(project),'sha256':file_hash(project),'stage':3,'page':1})
     events=run('resume')
@@ -46,6 +47,7 @@ def main():
     request.pop('resume_native');request.pop('resume_at_job');request['revision_only']=True
     run('revision');revised=load_queue(queue)['jobs'][0]
     assert revised['edit_completed_id']=='manual' and Path(revised['pdf']).is_file(),revised
+    assert Path(revised['pdf']).is_relative_to(work/'books'),revised['pdf']
     import fitz
     with fitz.open(revised['pdf']) as pdf:assert len(pdf)==3
     assert all(file_hash(p)==digest for p,digest in original.items())

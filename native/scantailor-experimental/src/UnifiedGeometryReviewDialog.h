@@ -42,13 +42,14 @@ public:
     std::function<bool(unified_geometry::Sample const&,unified_geometry::Candidate const*)> matches;
     UnifiedGeometryReviewDialog(std::vector<unified_geometry::Sample> samples,PageId selected,QString root,QWidget* parent,QString project={})
         :QDialog(parent),m_samples(std::move(samples)),m_root(std::move(root)) {
-        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · hızlı satır modeli / AI · 0.6.2"));resize(1320,850);
+        setObjectName("unifiedGeometryReview");setWindowTitle(unified_i18n::text("Geometri · hızlı satır modeli / AI · 0.6.5"));resize(1320,850);
         m_directory=unified_review::directory(m_root,project,"geometry-v2");if(m_directory.isEmpty())m_directory=m_temp.path();
         for(auto const& s:m_samples)m_stamps.push_back(unified_review::sourceStamp(s.page));
         auto outer=new QVBoxLayout(this);auto controls=new QGridLayout;outer->addLayout(controls);
         m_pages=new QComboBox;m_pages->setObjectName("geometryPageChoice");for(size_t i=0;i<m_samples.size();++i){m_pages->addItem(label(m_samples[i]),int(i));if(m_samples[i].page.id()==selected)m_pages->setCurrentIndex(int(i));}controls->addWidget(m_pages,0,0,1,2);
         m_ai=new QCheckBox(unified_i18n::text("Gerekli sayfalarda AI desteği kullan"));m_ai->setChecked(true);controls->addWidget(m_ai,0,2);
         m_device=new QComboBox;m_device->addItem("CPU","cpu");m_device->addItem("GPU / CUDA","cuda");controls->addWidget(m_device,0,3);
+        if(unified_runtime::geometryPython(m_root,"cuda")!=unified_runtime::python(m_root))m_device->setCurrentIndex(1);
         m_single=new QPushButton(unified_i18n::text("Seçili sayfayı çözümle"));m_single->setObjectName("geometryAnalyzeSelected");controls->addWidget(m_single,1,0);
         m_book=new QPushButton(unified_i18n::text("Açık kitabı çözümle"));m_book->setObjectName("geometryAnalyzeBook");controls->addWidget(m_book,1,1);
         m_stop=new QPushButton(unified_i18n::text("Durdur"));m_stop->setEnabled(false);controls->addWidget(m_stop,1,2);

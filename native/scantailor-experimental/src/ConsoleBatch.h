@@ -64,6 +64,9 @@ private:
     OutputFileNameGenerator m_outFileNameGen;
     IntrusivePtr<ThumbnailPixmapCache> m_ptrThumbnailCache;
     std::unique_ptr<ProjectReader> m_ptrReader;
+    int m_checkpointFilter = -1;
+    int m_checkpointPage = 0;
+    int m_checkpointTotal = 0;
 
     void setupFilter(int idx, std::set<PageId> allPages);
     void setupFixOrientation(std::set<PageId> allPages);

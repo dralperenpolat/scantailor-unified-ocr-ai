@@ -152,7 +152,7 @@ def fingerprint(project,settings):
     root=tree.getroot()
     for e in root.iter():
         for child in list(e):
-            if child.tag in ('output-params','outputParams'):e.remove(child)
+            if child.tag in ('output-params','outputParams','batch-checkpoint'):e.remove(child)
         e.attrib.pop('selected',None)
     data=[ET.tostring(root,encoding='unicode'),settings,[(str(p),file_hash(p)) for p in source_paths(project)]]
     return hashlib.sha256(json.dumps(data,sort_keys=True).encode()).hexdigest()
@@ -309,7 +309,7 @@ class Worker:
         if now-getattr(self,'_space_checked',0)<2:return not getattr(self,'_space_pressure',False)
         self._space_checked=now
         try:
-            ensure_space([self.data.get('output_root',self.queue_path.parent),self.queue_path.parent,temp_root(self.request),data_root(self.request.get('root'))],
+            ensure_space([self.data.get('output_root',self.queue_path.parent),self.request.get('work_root') or self.data.get('output_root',self.queue_path.parent),self.queue_path.parent,temp_root(self.request),data_root(self.request.get('root'))],
                 needed=64*1024**2,reserve_gib=self.request.get('reserve_gib',2))
         except StoragePressure as exc:
             if not getattr(self,'_space_pressure',False):
@@ -324,6 +324,7 @@ class Worker:
         native_control=self.control.with_name(self.control.name+'.native.json')
         last_control=self.effective_control_state();write_json(native_control,{'state':last_control})
         env=os.environ.copy();env.update(STOU_CONTROL_FILE=str(native_control),STOU_PROGRESS='1')
+        env['STOU_CHECKPOINT_TOKEN']=uuid.uuid4().hex
         env.pop('STOU_RESUME_PAGE',None)
         resume=self.request.get('resume_native')
         if resume and not getattr(self,'_native_resumed',False) and resume.get('job_id')==self.job['id']:
@@ -347,6 +348,7 @@ class Worker:
         reader=threading.Thread(target=read_output,daemon=True);reader.start()
         last_progress=time.monotonic();cancel_since=None;last_page='';last_event={};priority=False
         timeout=float(self.request.get('native_page_timeout',180))
+        cancel_grace=30 if any(str(a).startswith('--output-project=') for a in args) else 2
         try:
             while True:
                 state=self.effective_control_state()
@@ -359,7 +361,9 @@ class Worker:
                     now=time.monotonic()
                     if native_state=='cancel':
                         if cancel_since is None:cancel_since=now
-                        if now-cancel_since>=2:
+                        # A large atomic project save must finish before the
+                        # owned native child is stopped at a page boundary.
+                        if now-cancel_since>=cancel_grace:
                             if priority and state!='cancel':raise RevisionPending()
                             raise Cancelled()
                     if state=='pause':last_progress=now
@@ -372,6 +376,11 @@ class Worker:
                 if line.startswith('STOU '):
                     try:event=json.loads(line[5:])
                     except ValueError:continue
+                    if 'checkpoint' in event:
+                        self.job['native_checkpoint']={**event['checkpoint'],'token':env['STOU_CHECKPOINT_TOKEN']}
+                        timings=self.job.setdefault('native_checkpoint_timing',{'count':0,'seconds':0})
+                        timings['count']+=1;timings['seconds']+=event.get('checkpoint_seconds',0)
+                        self.save();continue
                     last_event=dict(event)
                     stage=event.pop('stage','İşleniyor');detail=event.pop('detail','')
                     last_page=f'{stage} · {detail} · sayfa {event.get("page", "?")}'
@@ -413,12 +422,25 @@ class Worker:
     def prepare(self):
         self._prepared_in_pass=False
         job=self.job
-        folder=Path(self.data['output_root'])/(safe_name(job['title'])+'_'+job['id'][:8]);folder.mkdir(parents=True,exist_ok=True)
+        folder=self.book_folder(working=True);folder.mkdir(parents=True,exist_ok=True)
         if job.get('revision_token'):
             token=job['revision_token']
             if not re.fullmatch(r'[A-Za-z0-9-]{1,80}',token):raise ValueError('Geçersiz düzeltme klasörü.')
             folder=folder/'revisions'/token;folder.mkdir(parents=True,exist_ok=True)
         project=folder/'kitap.ScanTailor';out=folder/'out';out.mkdir(exist_ok=True)
+        # Moving the working disk never moves originals or drops saved edits.
+        # Resolve source paths before writing the new copy on the faster disk.
+        previous=Path(job['project']) if job.get('project') else None
+        if not project.exists() and previous and previous.is_file() and not job.get('revision_token'):
+            resume=self.request.get('resume_native')
+            if resume and resume.get('job_id')==job['id']:
+                if Path(resume.get('project','')).resolve()!=previous.resolve() or file_hash(previous)!=resume.get('sha256'):
+                    raise ValueError('Taşınacak devam kaydı doğrulanamadı; önceki proje korundu.')
+            clone_project(previous,project,out)
+            if resume and resume.get('job_id')==job['id']:
+                self.request={**self.request,'resume_native':{**resume,'project':str(project),'sha256':file_hash(project)}}
+            job['work_migration']={'source_project':str(previous),'sha256':file_hash(previous),'time':time.time()}
+            job.pop('native_cache',None)
         initializing=not project.exists() or job.get('preparing',False)
         job.update(project=str(project),work=str(folder));self.save(force=True)
         if not project.exists():
@@ -453,6 +475,14 @@ class Worker:
             # initial preparation resumes successfully.
             set_native_scale(project,self.request['native_scale'])
         return folder,project,out
+    def book_folder(self,working=False):
+        base=(self.request.get('work_root') if working else None) or self.data['output_root']
+        return Path(base)/(safe_name(self.job['title'])+'_'+self.job['id'][:8])
+    def publish_book(self,folder):
+        from .work_storage import publish_book
+        target=self.book_folder()
+        if self.job.get('revision_token'):target=target/'revisions'/self.job['revision_token']
+        publish_book(self.job,folder,target,checkpoint=self.checkpoint)
     def export(self,folder,project,out):
         from .pdf_export import export, verify_page, ocr_protection
         from .engine import soft_monochrome
@@ -918,10 +948,11 @@ class Worker:
                     self.export(folder,project,out)
                     self.finalize_layout(folder)
                     self.finish_book(folder)
+                    self.publish_book(folder)
                 if any(file_hash(p)!=sha for p,sha in before.items()):raise ValueError('İşlem sırasında kaynak dosya değişmiş.')
                 if self.request.get('reclaim_intermediates',False) and job.get('pdf'):
                     from .work_cleanup import reclaim
-                    job['reclaimed']=reclaim(folder,self.data['output_root'],job)
+                    job['reclaimed']=reclaim(folder,self.request.get('work_root') or self.data['output_root'],job)
                 if job.get('edit_request_id') and self.request['mode']!='prepare':
                     job['edit_completed_id']=job['edit_request_id']
                 job.pop('resource_retry',None)

@@ -95,7 +95,7 @@ int main(int argc,char** argv){
         const auto queueBytes=QJsonDocument(QJsonObject{{"schema",1},{"output_root",outputRoot},{"jobs",QJsonArray{queuedJob}}}).toJson();
         QFile queue(temp.path()+"/queue.json");check(queue.open(QIODevice::WriteOnly),"write synthetic queue");queue.write(queueBytes);queue.close();
         MainWindow window;window.resize(1280,900);window.show();
-        check(window.windowTitle().contains("0.6.4"),"window reports the current application version");
+        check(window.windowTitle().contains("0.6.5"),"window reports the current application version");
         auto languageEn=window.findChild<QAction*>("unifiedLanguage_en"),languageTr=window.findChild<QAction*>("unifiedLanguage_tr");
         check(languageEn&&languageTr&&languageEn->isChecked(),"English menu choice checked");
         check(languageTr->text()==QString::fromUtf8("Türkçe"),"Turkish endonym stays recognizable");

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
-      VERSION: '0.6.4'
+      VERSION: '0.6.5'
       QT_QPA_PLATFORM: offscreen
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -60,6 +60,7 @@ jobs:
           export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9
           "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --fast
           "$STAGE/runtime/bin/python3" packaging/smoke_resume.py --root "$STAGE" --work "$QA/resume"
+          "$STAGE/runtime/bin/python3" packaging/smoke_checkpoints.py --root "$STAGE" --work "$QA/checkpoints"
           if [ '${{ matrix.variant }}' = full ]; then
             "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/ai" --ai
           fi
@@ -102,7 +103,7 @@ jobs:
           sbom-path: release/sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: release-linux-0.6.4-${{ matrix.variant }}
+          name: release-linux-0.6.5-${{ matrix.variant }}
           path: release/
           compression-level: 0
           retention-days: 3

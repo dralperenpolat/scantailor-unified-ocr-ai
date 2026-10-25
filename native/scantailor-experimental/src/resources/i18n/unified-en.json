@@ -1065,5 +1065,8 @@
   "Gerekli sayfalarda AI desteği kullan": "Use AI support where needed",
   "\nAI geçişi gerekmedi: satırlar yeterince düz veya güvenilir metin kanıtı yok.": "\nAI pass not needed: lines are sufficiently straight or there is insufficient reliable text evidence.",
   "Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": "AI content and page layout · 0.6.2",
-  " · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": " · AI content and page layout · 0.6.2"
+  " · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": " · AI content and page layout · 0.6.2",
+  "Proje ve ara dosyalar · boşsa PDF klasörü": "Project and intermediate files · blank uses the PDF folder",
+  "OCR geçici klasörü · boşsa sistem": "OCR temporary folder · blank uses the system default",
+  "Geometri · hızlı satır modeli / AI · 0.6.5": "Geometry · fast line model / AI · 0.6.5"
 }

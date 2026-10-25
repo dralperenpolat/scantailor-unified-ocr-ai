@@ -7,7 +7,7 @@ import uuid
 from .runtime_layout import data_root
 
 DEFAULTS = {
-    'schema': 1, 'cache_quota_gib': 10, 'reserve_gib': 2, 'temp_root': '',
+    'schema': 1, 'cache_quota_gib': 10, 'reserve_gib': 2, 'temp_root': '', 'work_root': '',
     'resource_profile': 'balanced', 'compression_profile': 'lossless', 'compression_options': {},
     'ocr_compare': False, 'ocr_confidence_threshold': .85,
     'paddle_version': 'PP-OCRv5', 'structured_text': True,
@@ -50,6 +50,8 @@ def save(value, root=None):
         current[key] = float(current[key])
         if not 0 <= current[key] <= 100000: raise ValueError('Invalid storage limit')
     if current['resource_profile'] not in ('fast','balanced','quiet'): raise ValueError('Invalid resource profile')
+    if current.get('work_root') and not Path(current['work_root']).is_absolute():
+        raise ValueError('Çalışma klasörü tam bir yol olmalı.')
     from .pdf_profiles import configuration
     configuration(current['compression_profile'],current.get('compression_options'))
     if current['output_format'] not in ('pdf','pdfa'): raise ValueError('Invalid output format')

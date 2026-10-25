@@ -81,7 +81,7 @@ private:
     QLabel *m_status,*m_storageSummary,*m_before,*m_after,*m_corpusImage,*m_quality,*m_sizeBefore,*m_sizeAfter;
     QComboBox *m_resource,*m_profile,*m_version,*m_format,*m_jobs;
     QDoubleSpinBox *m_quota,*m_reserve,*m_confidence;
-    QLineEdit *m_temp,*m_ocrmypdf,*m_verapdf,*m_kraken,*m_krakenModel,*m_structure,*m_note,*m_pdf,*m_range,*m_tags,*m_pdfPassword;
+    QLineEdit *m_work,*m_temp,*m_ocrmypdf,*m_verapdf,*m_kraken,*m_krakenModel,*m_structure,*m_note,*m_pdf,*m_range,*m_tags,*m_pdfPassword;
     QCheckBox *m_compare,*m_text,*m_problems,*m_clipped,*m_footnote,*m_splitError,*m_orderError;QSpinBox *m_pilot;
     QTreeWidget *m_storage,*m_pages,*m_samples,*m_sizes;
     QPlainTextEdit *m_reasons,*m_reference,*m_hypothesis;
@@ -138,8 +138,9 @@ private:
     void settingsTab(QTabWidget* tabs){
         auto layout=tab(tabs,"Depolama ve profiller");auto form=new QFormLayout;layout->addLayout(form);
         auto scope=new QLabel(tr("Kapsam: kaydettiğiniz tercihler sonraki işlemlere uygulanır. Çalışan kitap mevcut ayarlarıyla devam eder."));scope->setWordWrap(true);layout->addWidget(scope);
-        m_temp=new QLineEdit;form->addRow(tr("Geçici çalışma klasörü"),m_temp);
-        button(layout,"Çalışma diski seç",[this]{auto p=QFileDialog::getExistingDirectory(this,tr("Çalışma diski seç"),m_temp->text());if(!p.isEmpty())m_temp->setText(p);});
+        m_work=new QLineEdit;m_work->setObjectName("workspaceWorkFolder");form->addRow(tr("Proje ve ara dosyalar · boşsa PDF klasörü"),m_work);
+        button(layout,"Çalışma diski seç",[this]{auto p=QFileDialog::getExistingDirectory(this,tr("Çalışma diski seç"),m_work->text());if(!p.isEmpty())m_work->setText(p);});
+        m_temp=new QLineEdit;form->addRow(tr("OCR geçici klasörü · boşsa sistem"),m_temp);
         m_quota=new QDoubleSpinBox;m_quota->setRange(0,100000);m_quota->setSuffix(" GiB");form->addRow(tr("Yeniden üretilebilir önizleme kotası"),m_quota);
         m_reserve=new QDoubleSpinBox;m_reserve->setRange(.25,10000);m_reserve->setSuffix(" GiB");form->addRow(tr("Diskte korunacak boş alan"),m_reserve);
         m_resource=new QComboBox;for(auto item:QList<QPair<QString,QString>>{{tr("Hızlı"),"fast"},{tr("Dengeli"),"balanced"},{tr("Sessiz"),"quiet"}})m_resource->addItem(item.first,item.second);form->addRow(tr("Kaynak kullanımı"),m_resource);
@@ -167,7 +168,7 @@ private:
         layout->addStretch();
     }
     void loadSettings(){
-        m_temp->setText(m_settings.value("temp_root").toString());m_quota->setValue(m_settings.value("cache_quota_gib").toDouble(10));m_reserve->setValue(m_settings.value("reserve_gib").toDouble(2));
+        m_work->setText(m_settings.value("work_root").toString());m_temp->setText(m_settings.value("temp_root").toString());m_quota->setValue(m_settings.value("cache_quota_gib").toDouble(10));m_reserve->setValue(m_settings.value("reserve_gib").toDouble(2));
         auto set=[this](QComboBox* box,char const* key){int i=box->findData(m_settings.value(key).toString());if(i>=0)box->setCurrentIndex(i);};
         set(m_resource,"resource_profile");set(m_version,"paddle_version");set(m_format,"output_format");
         m_compressionOptions->setOptions(m_settings.value("compression_profile").toString("lossless"),m_settings.value("compression_options").toObject());
@@ -175,7 +176,7 @@ private:
         m_ocrmypdf->setText(m_settings.value("ocrmypdf").toString());m_verapdf->setText(m_settings.value("verapdf").toString());m_kraken->setText(m_settings.value("kraken").toString());m_krakenModel->setText(m_settings.value("kraken_model").toString());m_structure->setText(m_settings.value("structure_python").toString());
     }
     void saveSettings(){
-        m_settings.insert("temp_root",m_temp->text());m_settings.insert("cache_quota_gib",m_quota->value());m_settings.insert("reserve_gib",m_reserve->value());
+        m_settings.insert("work_root",m_work->text().trimmed());m_settings.insert("temp_root",m_temp->text());m_settings.insert("cache_quota_gib",m_quota->value());m_settings.insert("reserve_gib",m_reserve->value());
         m_settings.insert("resource_profile",m_resource->currentData().toString());m_settings.insert("compression_profile",m_compressionOptions->profile());m_settings.insert("compression_options",m_compressionOptions->options());m_settings.insert("output_format",m_format->currentData().toString());
         m_settings.insert("paddle_version",m_version->currentData().toString());m_settings.insert("ocr_compare",m_compare->isChecked());m_settings.insert("ocr_confidence_threshold",m_confidence->value());m_settings.insert("structured_text",m_text->isChecked());
         m_settings.insert("ocrmypdf",m_ocrmypdf->text());m_settings.insert("verapdf",m_verapdf->text());m_settings.insert("kraken",m_kraken->text());m_settings.insert("kraken_model",m_krakenModel->text());m_settings.insert("structure_python",m_structure->text());

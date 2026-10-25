@@ -54,7 +54,8 @@ public:
         auto manual=new QLabel(tr("Mevcut projelerin elle ayarlanmış geometri ve alanları korunur. Boyut küçültme seçenekleri ayrı PDF üretir; görüntü kalitesini pilot sayfalarda karşılaştırın."));manual->setWordWrap(true);process->addRow(manual);addPage(processing);
         auto disks=new QWizardPage;disks->setTitle(tr("Çalışma diski ve sınırlar"));auto paths=new QFormLayout(disks);
         m_output=new QLineEdit(output.isEmpty()?saved.value("preferred_output").toString():output);m_output->setObjectName("setupOutputFolder");pathRow(paths,tr("PDF çıktı klasörü"),m_output);
-        m_temp=new QLineEdit(saved.value("temp_root").toString());m_temp->setObjectName("setupTempFolder");pathRow(paths,tr("Geçici çalışma klasörü · boşsa sistem"),m_temp);
+        m_work=new QLineEdit(saved.value("work_root").toString());m_work->setObjectName("setupWorkFolder");pathRow(paths,tr("Proje ve ara dosyalar · boşsa PDF klasörü"),m_work);
+        m_temp=new QLineEdit(saved.value("temp_root").toString());m_temp->setObjectName("setupTempFolder");pathRow(paths,tr("OCR geçici klasörü · boşsa sistem"),m_temp);
         m_quota=new QDoubleSpinBox;m_quota->setRange(0,100000);m_quota->setValue(saved.value("cache_quota_gib").toDouble(10));m_quota->setSuffix(" GiB");paths->addRow(tr("Önizleme önbelleği kotası"),m_quota);
         m_reserve=new QDoubleSpinBox;m_reserve->setRange(.25,10000);m_reserve->setValue(saved.value("reserve_gib").toDouble(2));m_reserve->setSuffix(" GiB");paths->addRow(tr("Diskte korunacak boş alan"),m_reserve);
         m_resource=new QComboBox;m_resource->addItem(tr("Dengeli"),"balanced");m_resource->addItem(tr("Sessiz · düşük eşzamanlılık"),"quiet");m_resource->addItem(tr("Hızlı · daha fazla kaynak"),"fast");paths->addRow(tr("Kaynak kullanımı"),m_resource);
@@ -75,8 +76,8 @@ public:
             }
         }
         if(currentId()!=2)return true;
-        for(auto edit:{m_output,m_temp}){
-            auto path=edit->text().trimmed();if(edit==m_temp&&path.isEmpty())continue;
+        for(auto edit:{m_output,m_work,m_temp}){
+            auto path=edit->text().trimmed();if(edit!=m_output&&path.isEmpty())continue;
             if(!QDir::isAbsolutePath(path)||!QDir().mkpath(path)){
                 QMessageBox::warning(this,tr("Klasör seç"),tr("Yazılabilir, tam bir klasör yolu seçin."));return false;
             }
@@ -100,13 +101,13 @@ public:
             {"paper",m_paper->currentData().toString()},{"margin_mm",m_margin->value()},{"compression_profile",m_compression->profile()},
             {"compression_options",m_compression->options()},
             {"resource_profile",m_resource->currentData().toString()},{"structured_text",m_text->isChecked()},{"ocr_compare",false},
-            {"temp_root",m_temp->text().trimmed()},{"cache_quota_gib",m_quota->value()},{"reserve_gib",m_reserve->value()},
+            {"work_root",m_work->text().trimmed()},{"temp_root",m_temp->text().trimmed()},{"cache_quota_gib",m_quota->value()},{"reserve_gib",m_reserve->value()},
             {"preferred_output",m_output->text().trimmed()},{"ui_language",m_ui->currentData().toString()}};
     }
 private:
     QComboBox *m_profile,*m_engine,*m_quality,*m_language,*m_timing,*m_ui,*m_appearance,*m_paper,*m_resource;
     UnifiedCompressionOptions* m_compression;
-    QCheckBox *m_ai,*m_warp,*m_cleanup,*m_fit,*m_text;QSpinBox* m_scale;QDoubleSpinBox *m_margin,*m_quota,*m_reserve;QLineEdit *m_output,*m_temp;
+    QCheckBox *m_ai,*m_warp,*m_cleanup,*m_fit,*m_text;QSpinBox* m_scale;QDoubleSpinBox *m_margin,*m_quota,*m_reserve;QLineEdit *m_output,*m_work,*m_temp;
     static QString tr(char const* text){return unified_i18n::text(text);}
     void pathRow(QFormLayout* form,QString const& title,QLineEdit* edit){auto row=new QHBoxLayout;row->addWidget(edit);auto button=new QPushButton(tr("Klasör seç"));row->addWidget(button);form->addRow(title,row);connect(button,&QPushButton::clicked,this,[this,edit,title]{auto value=QFileDialog::getExistingDirectory(this,title,edit->text());if(!value.isEmpty())edit->setText(value);});}
     void profile(){if(m_profile->currentData()=="custom")return;bool fast=m_profile->currentData()=="cpu_fast",gpu=m_profile->currentData()=="gpu_quality";m_engine->setCurrentIndex(gpu?1:0);m_quality->setCurrentIndex(fast?0:1);m_timing->setCurrentIndex(0);m_warp->setChecked(!fast);m_cleanup->setChecked(!fast);m_fit->setChecked(!fast);m_scale->setValue(fast?1:2);m_appearance->setCurrentIndex(fast?0:2);m_paper->setCurrentIndex(fast?0:1);}
