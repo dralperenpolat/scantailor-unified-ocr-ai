@@ -6,7 +6,8 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--work',required=True);a=parser.parse_args()
     root=Path(a.root).resolve();work=Path(a.work).resolve();work.mkdir(parents=True,exist_ok=True)
     os.environ.update(STOU_ROOT=str(root),STOU_DATA=str(work/'user'),STOU_CPU_ONLY='1',QT_QPA_PLATFORM='offscreen',
-        STOU_SETTINGS_NAME='scantailor-resume-test',PYTHONPATH=str(root/'src'),PYTHONNOUSERSITE='1',OMP_NUM_THREADS='2')
+        STOU_SETTINGS_NAME='scantailor-resume-test',PYTHONPATH=str(root/'src'),PYTHONNOUSERSITE='1',
+        PYTHONUTF8='1',PYTHONIOENCODING='utf-8',OMP_NUM_THREADS='2')
     sys.path.insert(0,str(root/'src'))
     from PIL import Image,ImageDraw
     from scantailor_ocr_unified.native_worker import load_queue,write_json
@@ -27,8 +28,10 @@ def main():
     def run(name):
         write_json(req,request)
         with (work/(name+'.log')).open('w',encoding='utf8') as log:
-            subprocess.run([sys.executable,'-u','-m','scantailor_ocr_unified.native_worker',str(req)],
-                stdout=log,stderr=subprocess.STDOUT,check=True,timeout=120)
+            result=subprocess.run([sys.executable,'-u','-m','scantailor_ocr_unified.native_worker',str(req)],
+                stdout=log,stderr=subprocess.STDOUT,timeout=120)
+        if result.returncode:
+            raise RuntimeError((work/(name+'.log')).read_text('utf8',errors='replace')[-12000:])
         return [json.loads(line) for line in (work/(name+'.log')).read_text('utf8').splitlines() if line.startswith('{')]
     events=run('prepare');job=load_queue(queue)['jobs'][0];project=Path(job['project'])
     assert job['status']=='Düzenlemeye hazır' and not job.get('pdf'),job

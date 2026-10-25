@@ -1196,5 +1196,5 @@
   "packaging/install_state.py": "8cb168238093b4987d9d03d86fc7cbdaf5f3055229dac3ed93ea9fd43ef016aa",
   "tests/test_install_state.py": "df8517ed4ca6972d810b9d1311670a2d8e744256b944a83e3222dd980070da8e",
   "src/scantailor_ocr_unified/native_resume.py": "bdd6dd757e293eefa05dcb62d721c3bbd84c5664e279f1df74f349ffd9a6fcd3",
-  "packaging/smoke_resume.py": "9209e95345fbaaea35f75d90369d61f4aa66cf16e2ea5e936363b12bd4ed4bb0"
+  "packaging/smoke_resume.py": "fcfa52ce975ae90fd96f91af99c1281403040647206dc6c075805e5cb9b3397b"
 }
