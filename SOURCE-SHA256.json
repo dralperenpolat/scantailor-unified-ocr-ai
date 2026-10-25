@@ -1,6 +1,6 @@
 {
   ".github/workflows/release-linux.yml": "cdde8d2e6f2f15e32ed4dbb82cba003f995132c9c97daa74b2c80d2b3258bf90",
-  ".github/workflows/release-windows.yml": "6534147418c41d9ffd6311031d6323efdc83a07c0571da6bab9e3d28227c7c9c",
+  ".github/workflows/release-windows.yml": "4033afe9f5a5e5c67c7f6539e0bd90f3605192f70463473158774341305460bf",
   ".github/workflows/verify.yml": "ae2b806f4fa17a8b1ffa1d8116f5c00ec51be3ee8eb2271d721a497c5846bc7d",
   ".gitignore": "f23b50f490734f129006e21d76359328113d1474084207809bb8bb1d8375ead9",
   "LICENSE": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
@@ -1111,7 +1111,7 @@
   "packaging/source_archive.py": "c7c647bcbc944aed33718c5f8df8ea8c164490132f3573f0525dacca964d6a17",
   "packaging/stage_linux.py": "ff146a2e92c43b8e45ee0502a77870581189b5174d2c04a228c31f9e72220961",
   "packaging/stage_windows.py": "af8fc8a07b5d80b6927afbbce71b194e000721d6d3a6bce8429518854478d968",
-  "packaging/windows.iss": "bbbc4142e9b9f9230b2e47effe6b38439f96ebcad1231e8f6855b7b3ad3c60be",
+  "packaging/windows.iss": "7a0747d4856a7ed699ff2b2da2d4be0ad2b52af5d2f5724705fc7e0bd112f156",
   "pyproject.toml": "18fd8ef4da8c7bb79db9f626239817e149e2a0b864eb32c1ae1b96af9b67b193",
   "src/scantailor_ocr_unified/__init__.py": "52dd8538c49136870d1f1d0870e0421e0c10052a6553367d5a674cb2cc416d00",
   "src/scantailor_ocr_unified/archive_pdf.py": "85fefe2fe5af6a007419d7b39c06766126172a43fcd2ab5c4ebace64f81ec5a1",

@@ -54,9 +54,10 @@ jobs:
         run: |
           $prefix='${{ steps.msys.outputs.msys2-location }}\ucrt64'
           $env:PATH="$prefix\bin;$env:PATH"
-          ./packaging/build-windows.ps1 -Prefix $prefix
+          $jobs=[Math]::Min(4,[Environment]::ProcessorCount)
+          ./packaging/build-windows.ps1 -Prefix $prefix -Jobs $jobs
           if ($LASTEXITCODE) { throw 'Build failed' }
-          & "$prefix\bin\cmake.exe" --build native/release064 --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test -j2
+          & "$prefix\bin\cmake.exe" --build native/release064 --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test -j $jobs
           if ($LASTEXITCODE) { throw 'UI test build failed' }
           $runtime="$env:RUNNER_TEMP\baseline\runtime"
           if ('${{ matrix.variant }}' -eq 'minimal') { $runtime="$env:RUNNER_TEMP\minimal-runtime" }

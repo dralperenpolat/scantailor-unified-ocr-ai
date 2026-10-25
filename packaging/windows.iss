@@ -89,7 +89,8 @@ begin
     for I := 0 to Processes.Count - 1 do begin
       Process := Processes.ItemIndex(I);
       if not VarIsNull(Process.ExecutablePath) then begin
-        FileName := Lowercase(Process.ExecutablePath);
+        FileName := Process.ExecutablePath;
+        FileName := Lowercase(FileName);
         if Pos(Root, FileName) = 1 then begin
           Result := CustomMessage('AppRunning');
           Exit;
@@ -114,8 +115,10 @@ begin
       repeat
         Path := AddBackslash(Folder) + Found.Name;
         Link := Shell.CreateShortcut(Path);
-        Target := Lowercase(Link.TargetPath);
-        Args := Lowercase(Link.Arguments);
+        Target := Link.TargetPath;
+        Target := Lowercase(Target);
+        Args := Link.Arguments;
+        Args := Lowercase(Args);
         if (ExtractFileName(Target) = 'scantailor-ocr-unified.exe') or
            ((ExtractFileName(Target) = 'baslat.cmd') and (Pos('scantailor', Target) > 0)) or
            ((Pos('python', ExtractFileName(Target)) = 1) and (Pos('scantailor', Args) > 0)) then begin
