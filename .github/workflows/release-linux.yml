@@ -1,108 +1,93 @@
-name: Build and verify Linux release
+name: Upload verified 0.6.4 packages
 on:
   workflow_dispatch:
 permissions:
-  contents: read
-  id-token: write
-  attestations: write
+  contents: write
+  actions: read
 jobs:
-  linux:
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [full]
+  upload:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 35
     env:
-      VERSION: '0.6.4'
-      QT_QPA_PLATFORM: offscreen
-      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_ID: '423455847'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential ninja-build qtbase5-dev qttools5-dev qttools5-dev-tools libqt5svg5-dev libeigen3-dev libboost-dev libtiff-dev libjpeg-dev zlib1g-dev libpng-dev ocl-icd-opencl-dev libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 fonts-dejavu-core patchelf file
-          python -m pip install cmake==3.31.10
-      - name: Reuse the verified CPU runtime and pinned models
+      - name: Verify build provenance and unpublished release
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 -o "$RUNNER_TEMP/baseline.tar.gz" https://github.com/dralperenpolat/scantailor-unified-ocr-ai/releases/download/v0.4.5/scantailor-ocr-unified-0.4.5-linux-x64.tar.gz
-          echo "7658a49715ba8bbdf17b0799b6e8c27c180d57dba0bc615647cb88df72459478  $RUNNER_TEMP/baseline.tar.gz" | sha256sum --check
-          mkdir "$RUNNER_TEMP/baseline"
-          tar -xzf "$RUNNER_TEMP/baseline.tar.gz" -C "$RUNNER_TEMP/baseline"
-          cp -a "$RUNNER_TEMP/baseline/resources" resources
-          "$RUNNER_TEMP/baseline/runtime/bin/python3" packaging/fetch_assets.py
-          if [ '${{ matrix.variant }}' = minimal ]; then
-            python packaging/minimal_runtime.py --base "$RUNNER_TEMP/baseline/runtime" --destination "$RUNNER_TEMP/minimal-runtime"
-          fi
-      - name: Compile the application and native UI tests
-        run: |
-          bash packaging/build-linux.sh
-          cmake --build native/release-linux --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test -j2
-      - name: Stage and verify the installed package
-        timeout-minutes: 15
-        shell: bash
-        run: |
-          set -euo pipefail
-          export STAGE="$RUNNER_TEMP/stage-linux"
-          export QA="$RUNNER_TEMP/qa-linux"
-          export LD_LIBRARY_PATH="$STAGE/native/bin"
-          runtime="$RUNNER_TEMP/baseline/runtime"
-          if [ '${{ matrix.variant }}' = minimal ]; then runtime="$RUNNER_TEMP/minimal-runtime"; fi
-          python packaging/stage_linux.py --runtime "$runtime" --destination "$STAGE" --variant '${{ matrix.variant }}'
-          export STOU_PYTHON="$STAGE/runtime/bin/python3"
-          export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
-          export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9
-          "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --fast
-          "$STAGE/runtime/bin/python3" packaging/smoke_resume.py --root "$STAGE" --work "$QA/resume"
-          if [ '${{ matrix.variant }}' = full ]; then
-            "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/ai" --ai
-          fi
-          "$STAGE/runtime/bin/python3" packaging/smoke_pdf_import.py --root "$STAGE" --work "$QA/pdf"
-          native/release-linux/unified-fast-geometry-test
-          native/release-linux/unified-review-state-test
-          native/release-linux/unified-stage-tools-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
-          STOU_TEST_WORKFLOW=1 native/release-linux/unified-i18n-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
-          STOU_TEST_QUEUE_EDIT=1 native/release-linux/unified-i18n-test "$QA/ui" "$STAGE"
-          native/release-linux/unified-compression-test "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf" "$QA/compression"
-          python packaging/smoke_install.py --work "$QA/install" --previous "$RUNNER_TEMP/baseline" --stage "$STAGE"
-          mkdir -p release
-          python - <<'PY'
-          import hashlib, json, os
-          from pathlib import Path
-          stage, qa = Path(os.environ['STAGE']), Path(os.environ['QA'])
-          manifest = json.loads((stage/'FILES-SHA256.json').read_text())
-          for name, expected in manifest.items():
-              with (stage/name).open('rb') as stream:
-                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == expected, name
-          cpu = json.loads((qa/'cpu/result.json').read_text())
-          cpu['pdf'] = 'cpu/books/CPU Deneme_cpu-test/CPU Deneme - Dar Kenar.pdf'
-          result = {'version': os.environ['VERSION'], 'source_commit': os.environ['GITHUB_SHA'],
-                    'platform': 'ubuntu-22.04-x64', 'cpu': cpu,
-                    'pdf_import': json.loads((qa/'pdf/result.json').read_text()),
-                    'native_ui': 'passed', 'manifest_files_verified': len(manifest)}
-          Path('release/linux-acceptance-'+os.environ['VERSION']+'.json').write_text(json.dumps(result, indent=2))
+          gh run watch 40203011297 --interval 20 --exit-status --repo "$GITHUB_REPOSITORY"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/40203011297" > windows-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/40201253449" > linux-run.json
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > release-before.json
+          python3 - <<'PY'
+          import json
+          expected={'windows':'2684e537e6e28eaa65e3e06ed91a62cb6bac764c','linux':'b9beb6f61348e40ea01a2f4c14b1ef20eab59dd6'}
+          for platform,sha in expected.items():
+              run=json.load(open(platform+'-run.json'))
+              assert run['conclusion']=='success' and run['head_sha']==sha
+          release=json.load(open('release-before.json'))
+          assert release['draft'] and release['tag_name']=='v0.6.4'
+          assert release['target_commitish']==expected['windows']
+          assert not release['assets'], 'Refusing to overwrite existing release files'
           PY
-          python packaging/sbom.py "$STAGE" release/sbom.cdx.json
-          cp "$QA/install/install-result.json" release/
-          tar -C "$STAGE" -czf "release/scantailor-ocr-unified-$VERSION-linux-x64-${{ matrix.variant }}.tar.gz" .
-          cp "$QA/pdf/final-1.png" "$QA/pdf/final-2.png" release/
-          cp "$QA/ui/pdf-import-tr.png" "$QA/ui/pdf-import-en.png" release/
-      - uses: actions/attest@v4
+      - uses: actions/download-artifact@v4
         with:
-          subject-path: release/*.tar.gz
-      - uses: actions/attest@v4
+          name: release-windows-0.6.4-full
+          path: packages/windows
+          run-id: '40203011297'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
         with:
-          subject-path: release/*.tar.gz
-          sbom-path: release/sbom.cdx.json
+          name: release-linux-0.6.4-full
+          path: packages/linux
+          run-id: '40201253449'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify package records and upload the two full packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir proof
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          linux=json.loads(Path('packages/linux/linux-acceptance-0.6.4.json').read_text())
+          assert linux['version']=='0.6.4' and linux['source_commit']=='b9beb6f61348e40ea01a2f4c14b1ef20eab59dd6'
+          assert linux['native_ui']=='passed' and linux['manifest_files_verified']>30000
+          for platform in ('windows','linux'):
+              install=json.loads(Path('packages',platform,'install-result.json').read_text())
+              assert all(install[key] for key in ('install','uninstall','user_project_preserved'))
+              assert install['manifest_files_verified']>30000
+          records=[]
+          for path in (Path('packages/windows/scantailor-ocr-unified-0.6.4-windows-x64-full-setup.exe'),Path('packages/linux/scantailor-ocr-unified-0.6.4-linux-x64-full.tar.gz')):
+              hasher=hashlib.sha256()
+              with path.open('rb') as stream:
+                  for chunk in iter(lambda:stream.read(8*1024*1024),b''):hasher.update(chunk)
+              sha=hasher.hexdigest()
+              records.append({'name':path.name,'size':path.stat().st_size,'digest':'sha256:'+sha})
+          Path('proof/package-digests.json').write_text(json.dumps(records,indent=2))
+          PY
+          gh release upload v0.6.4 packages/windows/scantailor-ocr-unified-0.6.4-windows-x64-full-setup.exe --repo "$GITHUB_REPOSITORY"
+          gh release upload v0.6.4 packages/linux/scantailor-ocr-unified-0.6.4-linux-x64-full.tar.gz --repo "$GITHUB_REPOSITORY"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > proof/release-uploaded.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          release=json.loads(Path('proof/release-uploaded.json').read_text())
+          expected=json.loads(Path('proof/package-digests.json').read_text())
+          assets={asset['name']:asset for asset in release['assets']}
+          assert release['draft'] and release['tag_name']=='v0.6.4'
+          assert set(assets)=={item['name'] for item in expected}
+          for item in expected:
+              assert all(assets[item['name']][key]==item[key] for key in ('name','size','digest'))
+          print(json.dumps({'verified_assets':expected,'release_id':release['id']},indent=2))
+          PY
+          cp packages/linux/linux-acceptance-0.6.4.json proof/
+          cp packages/windows/install-result.json proof/windows-install-result.json
+          cp packages/linux/install-result.json proof/linux-install-result.json
+          cp packages/linux/final-1.png packages/linux/final-2.png packages/linux/pdf-import-tr.png proof/
       - uses: actions/upload-artifact@v4
         with:
-          name: release-linux-0.6.4-${{ matrix.variant }}
-          path: release/
-          compression-level: 0
+          name: verified-publication-0.6.4
+          path: proof/
           retention-days: 3
