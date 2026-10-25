@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
+#include <QSettings>
 
 namespace unified_runtime {
 inline QString root() {
@@ -16,6 +17,8 @@ inline QString root() {
 inline QString data(QString const& base) {
     auto value=qEnvironmentVariable("STOU_DATA");if(!value.isEmpty())return value;
     if(!QFileInfo::exists(base+"/release.json"))return base;
+    auto saved=QSettings().value("unified/data_root").toString();
+    if(QDir::isAbsolutePath(saved))return QDir::cleanPath(saved);
     return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)+"/scantailor-ocr-unified";
 }
 inline QString resource(QString const& base,QString const& name) {

@@ -1,8 +1,8 @@
-# ScanTailor OCR Unified · 0.6.3
+# ScanTailor OCR Unified · 0.6.4
 
 [English](README.md) | **Türkçe**
 
-0.6.3, toplu işlem sürerken seçilen sayfayı düzenleyicide açar. Geometri ve kenarlar düğmeleri doğru sayfaya gider; kitaba tıklanınca PDF/OCR dahil tüm aşamalar ve o kitabın ilerlemesi solda görünür. PDF/OCR ekranından kaydedilen değişiklikler yalnızca seçilen kitabın güncelleme sırasına eklenir. Çalışan iş ve kaynak proje korunur.
+0.6.4, tek Windows kurulum EXE’siyle sabit uygulama yolunu ve tek masaüstü kısayolunu günceller. Eski kısayollar yedeklenir; mevcut kuyruk, ayarlar ve çalışma klasörü korunur. Çalışan kurulum dosyaları değiştirilmez. Yeni arayüz mevcut işçiye bağlanır ve kitap durumlarını canlı yeniler.
 
 Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygulaması. Depo adı **scantailor-unified-ocr-ai**; programın adı **ScanTailor OCR Unified**.
 

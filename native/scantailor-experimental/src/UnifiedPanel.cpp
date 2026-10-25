@@ -245,6 +245,9 @@ void UnifiedPanel::attachMonitor(QString const& path){
             auto r=QJsonDocument::fromJson(request.readAll()).object();m_controlPath=r.value("control").toString(m_controlPath);m_monitorLog=r.value("event_log").toString();
             m_ocr->setOptions(r);
             m_paddleVersion=r.value("paddle_version").toString(m_paddleVersion);
+            if(r.contains("threads"))m_threads->setValue(r.value("threads").toInt());
+            if(r.contains("delay_ms"))m_delay->setValue(r.value("delay_ms").toInt());
+            if(r.contains("auto_warp"))m_autoWarp->setChecked(r.value("auto_warp").toBool());
             m_compression->setOptions(r.value("compression_profile").toString("lossless"),r.value("compression_options").toObject());
             if(r.contains("ocr_timing"))setOcrTiming(r.value("ocr_timing").toString());
             if(r.contains("output_finish"))setOutputFinish(r.value("output_finish").toObject());
@@ -524,7 +527,10 @@ void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     QFile preferences(unified_runtime::data(m_root)+"/preferences.json");QJsonObject prefs;if(preferences.open(QIODevice::ReadOnly))prefs=QJsonDocument::fromJson(preferences.readAll()).object();
     request.insert("page_cleanup",m_cleanup->isChecked());request.insert("native_scale",prefs.value("native_scale").toDouble(3));request.insert("reclaim_intermediates",true);QSettings().setValue("unified/pdf_cleanup",m_cleanup->isChecked());
     QSettings stored;stored.setValue("unified/pdf_appearance",m_appearance->currentData());stored.setValue("unified/pdf_paper",m_paper->currentData());stored.setValue("unified/pdf_margin",m_margin->value());stored.setValue("unified/pdf_text_height",m_targetText->value());stored.sync();
-    m_requestPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/request-"+uid()+".json";writeJson(m_requestPath,request);
+    m_requestPath=unified_runtime::data(m_root)+"/projects/Native_Kitaplar/request-"+uid()+".json";
+    request.insert("event_log",m_requestPath+".events.jsonl");
+    if(!writeJson(m_requestPath,request)){m_status->setText(unified_workflow::text("İşlem isteği kaydedilemedi; disk alanını ve yazma iznini kontrol edin.","Could not save the run request; check disk space and write permissions."));return;}
+    stored.setValue("unified/last_queue",m_queuePath);stored.setValue("unified/last_request",m_requestPath);stored.sync();
     m_buffer.clear();m_pages->clear();m_progress->setValue(0);m_start->setEnabled(false);m_prepare->setEnabled(false);
     auto env=QProcessEnvironment::systemEnvironment();env.insert("PYTHONUTF8","1");env.insert("OMP_THREAD_LIMIT",QString::number(m_threads->value()));env.insert("OMP_NUM_THREADS",QString::number(m_threads->value()));
     m_worker.setProcessEnvironment(env);m_worker.setWorkingDirectory(m_root);m_worker.start(unified_runtime::python(m_root),{"-u","-m","scantailor_ocr_unified.native_worker",m_requestPath});
@@ -560,7 +566,10 @@ void UnifiedPanel::refreshQueueJobs(bool force){
         auto before=m_jobs.at(i).toObject();auto found=jobs.constFind(before.value("id").toString());
         if(found==jobs.constEnd())continue;
         auto after=found.value();adoptJobRevision(before,after);
-        for(auto key:{"status","detail"})if(before.contains(key))after.insert(key,before.value(key));
+        // Owned workers deliver every event directly. External monitors can
+        // miss whole jobs, so their completed statuses come from checkpoints.
+        if(m_worker.state()!=QProcess::NotRunning)
+            for(auto key:{"status","detail"})if(before.contains(key))after.insert(key,before.value(key));
         m_jobs.replace(i,after);
     }
 }
@@ -588,10 +597,14 @@ void UnifiedPanel::pollExternal(){
     // is being replayed. Do not show a stale stage or duplicate preview rows.
     auto latest=state.value("event").toObject();
     if(running && !latest.isEmpty()){
+        // Older runs have no event log. Their snapshot still needs to update
+        // book rows and the latest preview, once per distinct event.
+        if(m_monitorLog.isEmpty()&&m_liveProgress.value(latest.value("job").toString())!=latest)event(latest);
         auto id=latest.value("job").toString();m_liveProgress.insert(id,latest);
         for(int i=0;i<m_jobs.size();++i){auto job=m_jobs[i].toObject();if(job.value("id").toString()!=id)continue;
             job.insert("status",latest.value("stage"));job.insert("detail",latest.value("detail"));m_jobs.replace(i,job);break;
         }
+        refreshBooks();
         m_status->setText(latest.value("book").toString()+" · "+unified_i18n::display(latest.value("stage").toString())+" · "+unified_i18n::display(latest.value("detail").toString()));
         if(latest.contains("total")){m_progress->setRange(0,qMax(1,latest.value("total").toInt()));m_progress->setValue(latest.value("page").toInt());}
     }

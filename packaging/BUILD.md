@@ -1,4 +1,4 @@
-# 0.6.3 paketini yeniden oluşturma
+# 0.6.4 paketini yeniden oluşturma
 
 [English](BUILD.en.md) | **Türkçe**
 
@@ -46,7 +46,7 @@ python3 packaging/fetch_assets.py
 bash packaging/build-linux.sh
 $HOME/stou-tools/python/bin/python3 packaging/stage_linux.py --runtime "$HOME/stou-tools/python" --destination "$HOME/stage-linux"
 LD_LIBRARY_PATH="$HOME/stage-linux/native/bin" "$HOME/stage-linux/runtime/bin/python3" packaging/smoke_cpu.py --root "$HOME/stage-linux" --work "$HOME/qa-linux" --ai
-tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.3-linux-x64.tar.gz .
+tar -C "$HOME/stage-linux" -czf scantailor-ocr-unified-0.6.4-linux-x64.tar.gz .
 ```
 
 glibc, çekirdek ve ekran sunucusu sistemden gelir; diğer tespit edilen native kitaplıklar pakete alınır. Qt platform eklentileri dahildir. glibc 2.35 altı veya musl sistemleri için bu ikiliyi kullanmayın. Kaynaktan ayrı derleme gerekir.

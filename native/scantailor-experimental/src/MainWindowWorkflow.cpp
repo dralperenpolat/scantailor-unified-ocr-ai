@@ -172,6 +172,7 @@ void MainWindow::initWorkflow(){
     m_unified->editorProcessing=[this]{return isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning);};
     auto timer=new QTimer(this);connect(timer,&QTimer::timeout,this,&MainWindow::refreshWorkflowState);timer->start(1000);
     filterList->selectStep("input");selectWorkflowRow(0);resize(qMax(width(),1280),qMax(height(),780));
+    if(m_unified->monitoringExternalWorker()){showWorkflowTools();m_unified->showToolsTab(0);}
     resizeDocks({dockWidgetFilters,optionsDock,dockWidgetThumbnails},{filterList->minimumWidth()+12,310,140},Qt::Horizontal);
     m_defaultPanelState=saveState();refreshWorkflowState();
 }

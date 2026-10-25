@@ -30,6 +30,32 @@ class UnifiedWorkflowTest {
         QApplication::processEvents();
     }
 public:
+    static void queueMonitoring(QString const& folder){
+        MainWindow window;auto panel=window.m_unified;
+        QProcess worker;worker.start(unified_runtime::python(unified_runtime::root()),{"-u","-c","import sys; sys.stdin.read()"});
+        check(worker.waitForStarted(5000),"external test worker starts");
+        struct Stop {QProcess& worker;~Stop(){worker.kill();worker.waitForFinished(3000);}} stop{worker};
+        auto put=[](QString const& path,QJsonObject const& value){QSaveFile file(path);check(file.open(QIODevice::WriteOnly),"monitor fixture opens");file.write(QJsonDocument(value).toJson());check(file.commit(),"monitor fixture commits");};
+        auto queue=folder+"/monitor-queue.json",request=folder+"/monitor-request.json";
+        QJsonObject first{{"id","first"},{"title","First book"},{"status","Output"}},second{{"id","second"},{"title","Second book"},{"status","Waiting"}};
+        put(queue,{{"schema",2},{"jobs",QJsonArray{first,second}}});
+        put(request,{{"queue",queue},{"control",folder+"/monitor-control.json"}});
+        QJsonObject event{{"job","second"},{"book","Second book"},{"stage","Margins"},{"page",1},{"total",5}};
+        auto snapshot=[&]{put(request+".session.json",{{"pid",double(worker.processId())},{"state","running"},{"event",event}});};snapshot();
+        check(panel->openSavedQueue(request)&&panel->monitoringExternalWorker(),"saved run attaches to external worker without event log");
+        auto queueEnv=qgetenv("STOU_QUEUE_PATH");qunsetenv("STOU_QUEUE_PATH");
+        {MainWindow restored;check(restored.m_unified->monitoringExternalWorker()&&restored.m_unifiedViewStack->currentWidget()==restored.m_workflowTools,"reopening the application shows the active queue immediately");restored.m_closing=true;}
+        qputenv("STOU_QUEUE_PATH",queueEnv);
+        first.insert("status","Tamamlandı");put(queue,{{"schema",2},{"jobs",QJsonArray{second,first}}});
+        event.insert("stage","Çıktı sonrası OCR");event.insert("page",3);snapshot();panel->m_monitorQueueRead=0;panel->pollExternal();
+        QHash<QString,QTreeWidgetItem*> rows;for(int i=0;i<panel->m_books->topLevelItemCount();++i){auto row=panel->m_books->topLevelItem(i);rows.insert(row->data(0,Qt::UserRole+1).toString(),row);}
+        check(rows.value("first")->text(1)==unified_i18n::display("Tamamlandı"),"monitor picks up completed jobs missed between polls");
+        check(rows.value("second")->text(1)==unified_i18n::display("Çıktı sonrası OCR"),"monitor refreshes visible book rows from the authoritative live snapshot");
+        auto count=panel->m_pages->topLevelItemCount();panel->pollExternal();
+        check(panel->m_pages->topLevelItemCount()==count,"unchanged monitor snapshot never duplicates page rows");
+        check(worker.state()==QProcess::Running,"monitoring never interrupts its worker");window.m_closing=true;
+        std::cout<<"PASS external queue monitoring, checkpoint completion and visible progress"<<std::endl;
+    }
     static void queueEditing(QString const& folder,QString const& captures){
         MainWindow window;window.resize(1366,820);window.show();auto panel=window.m_unified;
         QStringList inputs;

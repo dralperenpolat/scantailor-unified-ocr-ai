@@ -75,6 +75,15 @@ def data_root(root=None):
     # Keep existing development queues and projects exactly where they were.
     if not (root / 'release.json').is_file():
         return root
+    if os.name == 'nt':
+        import winreg
+        name=os.environ.get('STOU_SETTINGS_NAME','scantailor-ocr-unified')
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,'Software\\Scan Tailor\\'+name+'\\unified') as key:
+                saved,_=winreg.QueryValueEx(key,'data_root')
+                if isinstance(saved,str) and Path(saved).is_absolute():return Path(saved).resolve()
+        except OSError:
+            pass
     base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) if os.name == 'nt' else Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
     return base / 'scantailor-ocr-unified'
 
