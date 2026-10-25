@@ -1,6 +1,6 @@
 {
   ".github/workflows/release-linux.yml": "cdde8d2e6f2f15e32ed4dbb82cba003f995132c9c97daa74b2c80d2b3258bf90",
-  ".github/workflows/release-windows.yml": "4033afe9f5a5e5c67c7f6539e0bd90f3605192f70463473158774341305460bf",
+  ".github/workflows/release-windows.yml": "fc18413f079b02367bd69676908f710c6cf3002901a11e2e6776f54efdbc38ef",
   ".github/workflows/verify.yml": "ae2b806f4fa17a8b1ffa1d8116f5c00ec51be3ee8eb2271d721a497c5846bc7d",
   ".gitignore": "f23b50f490734f129006e21d76359328113d1474084207809bb8bb1d8375ead9",
   "LICENSE": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee",
@@ -1105,7 +1105,7 @@
   "packaging/requirements-windows-lock.txt": "0ced554c64f715c44f9c0e3124d8bc5ea9f4dc163167a63001fb78b6ea71bfe8",
   "packaging/sbom.py": "cd9b35b5d80c7892023a503f228f2efcbc3029032faa45dc4a5040468382b161",
   "packaging/smoke_cpu.py": "d5c9572038f8e4a8c5497fb2600132e9100667586e1636432b319b050c8ec9d9",
-  "packaging/smoke_install.py": "5729997b871bce7ca4cda083fb5dd871324b17d428d6918b0fbcf9b24ffc7e39",
+  "packaging/smoke_install.py": "ec415699c9c63da384adb63611c37b8ba7f52eab8994b81b67efe4eb8954ef71",
   "packaging/smoke_instance.py": "e2c6028f15d4db7cdc2ed2a72cbb58855c218f67291503a325e9d6771a86798c",
   "packaging/smoke_pdf_import.py": "f671791b3be167bb60ccb1cabc7d8cab0085d8ebc11dd35983cc9b1673c93b26",
   "packaging/source_archive.py": "c7c647bcbc944aed33718c5f8df8ea8c164490132f3573f0525dacca964d6a17",
@@ -1194,7 +1194,7 @@
   "tests/test_workspace.py": "269f80f9eaf0ee7dcadb67a6263a65abe6c9855e4e5a366f2914135de0c8d177",
   "native/scantailor-experimental/src/UnifiedQueueWorkflow.h": "482e465b0825204c85483409e54a08dfbbe3eaf312e89394f04148751d51b2ea",
   "packaging/install_state.py": "8cb168238093b4987d9d03d86fc7cbdaf5f3055229dac3ed93ea9fd43ef016aa",
-  "tests/test_install_state.py": "df8517ed4ca6972d810b9d1311670a2d8e744256b944a83e3222dd980070da8e",
+  "tests/test_install_state.py": "e4b941c0c167e05e566ca9f4701ac424bd69209b9cafeeec64143d2d15409937",
   "src/scantailor_ocr_unified/native_resume.py": "bdd6dd757e293eefa05dcb62d721c3bbd84c5664e279f1df74f349ffd9a6fcd3",
   "packaging/smoke_resume.py": "fcfa52ce975ae90fd96f91af99c1281403040647206dc6c075805e5cb9b3397b"
 }

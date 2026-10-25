@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,19 @@ state=importlib.util.module_from_spec(spec);spec.loader.exec_module(state)
 
 
 class InstalledProfile(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Windows shortcut integration')
+    def test_shortcut_probe_handles_empty_and_unicode_desktop(self):
+        probe_spec=importlib.util.spec_from_file_location('smoke_install',Path(__file__).parents[1]/'packaging/smoke_install.py')
+        probe=importlib.util.module_from_spec(probe_spec);probe_spec.loader.exec_module(probe)
+        with tempfile.TemporaryDirectory(prefix='stou-shortcut-') as temp:
+            desktop=Path(temp)/'Türkçe deneme';desktop.mkdir()
+            app=Path(temp)/'installed application'
+            self.assertEqual(probe.shortcuts(app,desktop=desktop),[])
+            links=probe.shortcuts(app,True,desktop=desktop)
+            self.assertEqual({item['name'] for item in links},{'ScanTailor OCR Unified.lnk','ScanTailor - Previous work.lnk'})
+            self.assertEqual({Path(item['target']) for item in links},{app/'native/bin/scantailor-ocr-unified.exe'})
+            self.assertEqual(probe.shortcuts(app,desktop=desktop),links)
+
     def fixture(self,base,name,active=False):
         data=base/name;folder=data/'projects/Native_Kitaplar';folder.mkdir(parents=True)
         queue=folder/'kuyruk.json';queue.write_text(json.dumps({'schema':2,'jobs':[{'id':'book'}]}))

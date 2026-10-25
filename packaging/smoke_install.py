@@ -1,17 +1,20 @@
 """Run on disposable CI runners: install, upgrade, uninstall, preserve user data."""
 from pathlib import Path
 import argparse
+import base64
 import hashlib
 import json
 import os
 import subprocess
 
 
-def shortcuts(app, create=False):
+def shortcuts(app, create=False, desktop=None):
     script=r'''
 $ErrorActionPreference='Stop'
+[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 $ws=New-Object -ComObject WScript.Shell
-$desktop=[Environment]::GetFolderPath('Desktop')
+$desktop=$env:STOU_TEST_DESKTOP
+if (!$desktop) { $desktop=[Environment]::GetFolderPath('Desktop') }
 if ($env:STOU_TEST_CREATE_LINKS -eq '1') {
     foreach ($name in @('ScanTailor OCR Unified.lnk','ScanTailor - Previous work.lnk')) {
         $link=$ws.CreateShortcut((Join-Path $desktop $name))
@@ -26,8 +29,11 @@ $items=@(Get-ChildItem -LiteralPath $desktop -Filter '*Scan*Tailor*.lnk' | ForEa
 })
 ConvertTo-Json -InputObject $items -Compress
 '''
-    result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command','-'],input=script,text=True,encoding='utf8',capture_output=True,check=True,
-                          env={**os.environ,'STOU_TEST_INSTALL_APP':str(app),'STOU_TEST_CREATE_LINKS':'1' if create else '0'},creationflags=subprocess.CREATE_NO_WINDOW)
+    # -Command - reads stdin interactively and may leave multiline blocks unevaluated.
+    command=base64.b64encode(script.encode('utf-16-le')).decode('ascii')
+    result=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-EncodedCommand',command],text=True,encoding='utf8',capture_output=True,check=True,timeout=30,
+                          env={**os.environ,'STOU_TEST_INSTALL_APP':str(app),'STOU_TEST_CREATE_LINKS':'1' if create else '0','STOU_TEST_DESKTOP':str(desktop) if desktop is not None else ''},creationflags=subprocess.CREATE_NO_WINDOW)
+    if not result.stdout.strip():raise RuntimeError('Shortcut inspection returned no JSON: '+result.stderr.strip())
     return json.loads(result.stdout.lstrip('\ufeff').strip())
 
 
