@@ -27,7 +27,7 @@ class RevisionsTest(unittest.TestCase):
         worker=object.__new__(Worker);worker.request={'mode':'export','revision_only':revision_only,'paper':'a4_text','margin_mm':10}
         worker.settings={'paper':'a4_text','margin_mm':10};worker.queue_path=self.queue;worker.data=self.data;worker.job=None
         worker.control=self.root/'control.json';write_json(worker.control,{'state':'run'})
-        worker.save=self.save;worker.checkpoint=Mock();worker.emit=Mock();worker.finalize_layout=Mock();worker.export=Mock()
+        worker.save=lambda **kw:self.save();worker.checkpoint=Mock();worker.emit=Mock();worker.finalize_layout=Mock();worker.export=Mock()
         worker.prepare=Mock(return_value=(self.root,self.project,self.root))
         return worker
     def test_only_target_changes_and_previous_edition_stays_intact(self):

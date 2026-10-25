@@ -4,11 +4,17 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch,Mock
 from scantailor_ocr_unified.native_worker import Worker,write_json,save_queue,load_queue
 
 
 class AtomicWriteTest(unittest.TestCase):
+    def test_project_path_is_published_immediately_for_live_page_editing(self):
+        worker=object.__new__(Worker);worker.store=Mock();worker.job={'id':'book','project':'saved.ScanTailor'}
+        worker.data={'jobs':[worker.job]};worker._last_publish=10;worker.session_state='running'
+        with patch('scantailor_ocr_unified.native_worker.time.monotonic',return_value=10.1):
+            worker.save();worker.store.publish.assert_not_called()
+            worker.save(force=True);worker.store.publish.assert_called_once_with(worker.data)
     def test_memory_pressure_streams_checkpoint_without_losing_existing_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'queue.json';write_json(path,{'pages':240})

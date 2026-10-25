@@ -227,7 +227,7 @@ class Worker:
         if getattr(self,'store',None):
             self.store.save(self.data,dirty_jobs=None if force or not self.job else {self.job['id']})
             now=time.monotonic()
-            if now-getattr(self,'_last_publish',0)>=1 or self.session_state!='running':
+            if force or now-getattr(self,'_last_publish',0)>=1 or self.session_state!='running':
                 try:self.store.publish(self.data);self._last_publish=now
                 except PermissionError:pass
             return
@@ -420,7 +420,7 @@ class Worker:
             folder=folder/'revisions'/token;folder.mkdir(parents=True,exist_ok=True)
         project=folder/'kitap.ScanTailor';out=folder/'out';out.mkdir(exist_ok=True)
         initializing=not project.exists() or job.get('preparing',False)
-        job.update(project=str(project),work=str(folder));self.save()
+        job.update(project=str(project),work=str(folder));self.save(force=True)
         if not project.exists():
             if job.get('source_project'):
                 clone_project(job['source_project'],project,out)
