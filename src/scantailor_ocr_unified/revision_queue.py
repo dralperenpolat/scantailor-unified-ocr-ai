@@ -63,6 +63,8 @@ def accept_revisions(data,queue_path,save):
 def revision_export_options(request,job):
     """Preserve the editor's full page canvas instead of cropping its margins again."""
     if not job.get('edit_request_id'):return request
+    if request.get('mode')=='prepare' and job.get('edit_completed_id')!=job['edit_request_id']:
+        request={**request,'mode':'export'}
     allowed={'appearance','paper','margin_mm','target_x_mm','content_fit','language','ocr_engine','ocr_device','paddle_language','tess_quality','ocr_timing','output_finish','page_cleanup'}
     options={k:v for k,v in job.get('edit_export_options',{}).items() if k in allowed}
     if options:request={**request,**options}

@@ -72,6 +72,44 @@ class RevisionsTest(unittest.TestCase):
         self.assertEqual(worker.run(),0)
         self.assertEqual(seen,[('edited-book','a4_text'),('edited-book','a4'),('next','a4_text')])
         self.assertEqual(worker.request['paper'],'a4_text');self.assertEqual(worker.settings['paper'],'a4_text')
+    def test_pdf_revision_exports_during_prepare_and_next_book_keeps_prepare_mode(self):
+        worker=self.worker();worker.request['mode']='prepare';worker.native=Mock();seen=[]
+        original=copy.deepcopy(worker.request)
+        self.request(export_options={'ocr_timing':'after'})
+        worker.export.side_effect=lambda *args:seen.append((worker.job['id'],worker.request['mode'],worker.request['ocr_timing']))
+        self.assertEqual(worker.run(),0)
+        self.assertEqual(seen,[('edited-book','export','after')])
+        worker.native.assert_called_once()
+        self.assertEqual(self.job['edit_completed_id'],'revision-1')
+        self.assertEqual(worker.request,original)
+        self.assertEqual(revision_export_options(original,self.job)['mode'],'prepare')
+    def test_prepare_runs_new_and_interrupted_projects_once(self):
+        source=self.root/'images';source.mkdir();(source/'1.png').write_bytes(b'fixture')
+        for interrupted in (False,True):
+            with self.subTest(interrupted=interrupted):
+                worker=self.worker();worker.request['mode']='prepare';worker.cli=Path('cli')
+                worker.data['jobs']=[self.job];self.job['folder']=str(source)
+                worker.prepare=lambda:Worker.prepare(worker)
+                def processed(args):
+                    Path(self.job['project']).write_text('<project/>')
+                worker.native=Mock(side_effect=processed)
+                if interrupted:self.job['preparing']=True
+                self.assertEqual(worker.run(),0)
+                worker.native.assert_called_once();self.assertNotIn('preparing',self.job)
+                worker.export.assert_not_called()
+    def test_prepare_resume_skips_completed_books_and_preserves_previous_error(self):
+        worker=self.worker();worker.request.update(mode='prepare',resume_at_job='next');worker.native=Mock()
+        self.job.update(status='Düzenlemeye hazır');self.job.pop('pdf')
+        failed={'id':'failed','title':'Previous error','status':'Hata','error':'Saved failure'}
+        worker.data['jobs'].insert(1,failed);before=copy.deepcopy(worker.data['jobs'][:2])
+        self.assertEqual(worker.run(),1)
+        worker.prepare.assert_called_once();worker.native.assert_called_once()
+        self.assertEqual(worker.data['jobs'][:2],before)
+    def test_prepare_resume_does_not_skip_waiting_books(self):
+        worker=self.worker();worker.request.update(mode='prepare',resume_at_job='next')
+        self.job.pop('pdf');self.job['status']='Bekliyor'
+        with self.assertRaisesRegex(ValueError,'tamamlanmamış'):worker.run()
+        worker.prepare.assert_not_called()
     def test_interrupted_revision_stays_pending_for_restart(self):
         self.request();worker=self.worker(True);worker.export.side_effect=Cancelled()
         self.assertEqual(worker.run(),2);self.assertNotIn('edit_completed_id',self.job)

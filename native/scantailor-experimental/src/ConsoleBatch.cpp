@@ -315,12 +315,18 @@ ConsoleBatch::process()
         endFilterIdx = ef;
     }
 
+    bool resumeOk=true;
+    int resumePage=qEnvironmentVariableIsSet("STOU_RESUME_PAGE")
+        ? qEnvironmentVariableIntValue("STOU_RESUME_PAGE",&resumeOk) : 0;
+    if(!resumeOk || resumePage<0)throw std::runtime_error("Invalid resume page");
     for (int j=startFilterIdx; j<=endFilterIdx; j++)
     {
         if (cli.isVerbose())
             std::cout << "Filter: " << (j+1) << "\n";
 
         PageSequence page_sequence = m_ptrPages->toPageSequence(PAGE_VIEW);
+        unsigned firstPage=j==startFilterIdx ? unsigned(resumePage) : 0;
+        if(firstPage>page_sequence.numPages())throw std::runtime_error("Resume page out of range");
         setupFilter(j, page_sequence.selectAll());
         if(j==m_ptrStages->pageLayoutFilterIdx()&&qEnvironmentVariableIsSet("STOU_CONTENT_REVIEW"))contentReview();
         // Earlier passes establish geometry and the book-wide layout first.
@@ -329,7 +335,7 @@ ConsoleBatch::process()
         int output_workers = qBound(1, qEnvironmentVariableIntValue("STOU_OUTPUT_WORKERS"), 4);
         if (j == m_ptrStages->outputFilterIdx() && output_workers > 1)
         {
-            for (unsigned first = 0; first < page_sequence.numPages(); first += output_workers)
+            for (unsigned first = firstPage; first < page_sequence.numPages(); first += output_workers)
             {
                 unifiedCheckpoint();
                 unsigned end = std::min<unsigned>(page_sequence.numPages(), first + output_workers);
@@ -357,7 +363,7 @@ ConsoleBatch::process()
             }
             continue;
         }
-        for (unsigned i=0; i<page_sequence.numPages(); i++)
+        for (unsigned i=firstPage; i<page_sequence.numPages(); i++)
         {
             unifiedCheckpoint();
             PageInfo page = page_sequence.pageAt(i);

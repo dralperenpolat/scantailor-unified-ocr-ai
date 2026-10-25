@@ -59,6 +59,7 @@ jobs:
           export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
           export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9
           "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/cpu" --fast
+          "$STAGE/runtime/bin/python3" packaging/smoke_resume.py --root "$STAGE" --work "$QA/resume"
           if [ '${{ matrix.variant }}' = full ]; then
             "$STAGE/runtime/bin/python3" packaging/smoke_cpu.py --root "$STAGE" --work "$QA/ai" --ai
           fi

@@ -324,6 +324,13 @@ class Worker:
         native_control=self.control.with_name(self.control.name+'.native.json')
         last_control=self.effective_control_state();write_json(native_control,{'state':last_control})
         env=os.environ.copy();env.update(STOU_CONTROL_FILE=str(native_control),STOU_PROGRESS='1')
+        env.pop('STOU_RESUME_PAGE',None)
+        resume=self.request.get('resume_native')
+        if resume and not getattr(self,'_native_resumed',False) and resume.get('job_id')==self.job['id']:
+            from .native_resume import resume_native_args
+            args,page=resume_native_args(args,resume,self.job,self.request)
+            env['STOU_RESUME_PAGE']=str(page)
+            self._native_resumed=True
         from .telemetry import resources
         budget=resources(self.request.get('resource_profile','balanced'),self.request.get('threads',4))
         env['OMP_NUM_THREADS']=str(budget['threads']);env['OMP_THREAD_LIMIT']=env['OMP_NUM_THREADS']
@@ -404,6 +411,7 @@ class Worker:
                 self.emit('Geometri yedek yöntem',f'{fallback["page"]}. sayfa · eğiklik düzeltmesiyle yeniden deneniyor.')
                 self.save()
     def prepare(self):
+        self._prepared_in_pass=False
         job=self.job
         folder=Path(self.data['output_root'])/(safe_name(job['title'])+'_'+job['id'][:8]);folder.mkdir(parents=True,exist_ok=True)
         if job.get('revision_token'):
@@ -427,6 +435,7 @@ class Worker:
                     inputs=folder/'input-files.json';write_json(inputs,[str(p.resolve()) for p in files])
                     native_args=[*args,'--input-list='+str(inputs),out]
                 self.native_resilient(native_args,project)
+                self._prepared_in_pass=True
                 job.pop('preparing',None);self.save()
         elif job.get('preparing'):
             # Cancellation may leave an initial checkpoint before page splitting.
@@ -434,7 +443,8 @@ class Worker:
             # all subsequent manual edits without overriding their page settings.
             args=['--end-filter=5','--output-project='+str(project)]
             if job.get('split') in ('1','2'):args.append('--layout='+job['split'])
-            self.native_resilient([*args,project,out],project);job.pop('preparing',None);self.save()
+            self.native_resilient([*args,project,out],project);self._prepared_in_pass=True
+            job.pop('preparing',None);self.save()
         else:
             # A prepared project's manual adjustments always take precedence.
             self.emit('Proje açıldı','Kaydedilmiş sayfa ve geometri ayarları korunuyor.')
@@ -839,7 +849,14 @@ class Worker:
         resume=self.request.get('resume_at_job')
         if resume and not self.request.get('revision_only'):
             start=next(i for i,j in enumerate(jobs) if j['id']==resume)
-            if any(not j.get('pdf') or j.get('error') for j in jobs[:start]):
+            preceding=jobs[:start]
+            if self.request.get('mode')=='prepare':
+                complete=lambda j: bool(j.get('error') or j.get('pdf') or
+                    (j.get('status')=='Düzenlemeye hazır' and j.get('project') and Path(j['project']).is_file()))
+                errors=sum(bool(j.get('error')) for j in preceding)
+            else:
+                complete=lambda j: bool(j.get('pdf') and not j.get('error'))
+            if any(not complete(j) for j in preceding):
                 raise ValueError('Devam noktasından önce tamamlanmamış kitap var.')
             jobs=jobs[start:]
         pending_edits=[j for j in self.data['jobs'] if j.get('edit_request_id') and j.get('edit_completed_id')!=j['edit_request_id']]
@@ -894,7 +911,8 @@ class Worker:
                 folder,project,out=self.prepare()
                 before={str(p):file_hash(p) for p in source_paths(project)}
                 if self.request['mode']=='prepare':
-                    self.native(['--end-filter=5','--output-project='+str(project),project,out])
+                    if not getattr(self,'_prepared_in_pass',False):
+                        self.native(['--end-filter=5','--output-project='+str(project),project,out])
                     self.emit('Düzenlemeye hazır','Bölme, geometri, içerik ve kenarlar Experimental içinde düzenlenebilir.')
                 else:
                     self.export(folder,project,out)

@@ -74,6 +74,8 @@ jobs:
           $env:HTTP_PROXY='http://127.0.0.1:9'; $env:HTTPS_PROXY=$env:HTTP_PROXY; $env:ALL_PROXY=$env:HTTP_PROXY
           & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\cpu" --fast
           if ($LASTEXITCODE) { throw 'Fast CPU test failed' }
+          & "$stage\runtime\python.exe" packaging/smoke_resume.py --root $stage --work "$qa\resume"
+          if ($LASTEXITCODE) { throw 'Preparation resume test failed' }
           if ('${{ matrix.variant }}' -eq 'full') {
             & "$stage\runtime\python.exe" packaging/smoke_cpu.py --root $stage --work "$qa\ai" --ai
             if ($LASTEXITCODE) { throw 'CPU AI test failed' }
