@@ -133,7 +133,8 @@ CacheDrivenTask::process(
                                 ((params->getParamsSource().photo()) ? params->getParamsSource().fov() : 0.0),
                                 params->getParamsDewarping().depthPerception(),
                                 params->getParamsDewarping().correctCurves(),
-                                params->getParamsDewarping().correctAngle()
+                                params->getParamsDewarping().correctAngle(),
+                                params->getParamsDewarping().distortionModel().topCurve().legacyPrecision()||params->getParamsDewarping().distortionModel().bottomCurve().legacyPrecision()
                             );
             break;
         }

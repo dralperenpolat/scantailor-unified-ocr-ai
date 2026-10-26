@@ -10,7 +10,7 @@
 [Setup]
 AppId={{B1C80F8C-0C43-463A-B351-093BC6E10C43}
 AppName=ScanTailor OCR Unified
-AppVersion=0.6.5
+AppVersion=0.6.6
 AppPublisher=Alperen Polat and ScanTailor contributors
 AppPublisherURL=https://alperenpolat.net
 DefaultDirName={localappdata}\Programs\scantailor-ocr-unified
@@ -20,7 +20,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir={#ReleaseDir}
-OutputBaseFilename=scantailor-ocr-unified-0.6.5-windows-x64-{#Variant}-setup
+OutputBaseFilename=scantailor-ocr-unified-0.6.6-windows-x64-{#Variant}-setup
 Compression=lzma2/fast
 SolidCompression=yes
 LZMANumBlockThreads=2

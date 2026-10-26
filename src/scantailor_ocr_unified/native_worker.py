@@ -50,6 +50,7 @@ def use_rotation_after_timeout(project,event):
     node=deskew.find(f"page[@id='{page.get('id')}']")
     params=node.find('params') if node is not None else None
     if params is not None:
+        if params.get('unifiedForceCurves')=='1':return None
         kind=params.get('distortionType')
         active=params.find({'warp':'warp','perspective':'perspective'}.get(kind,'rotation'))
         if kind not in ('warp','perspective') or active is not None and active.get('mode')=='manual':return None

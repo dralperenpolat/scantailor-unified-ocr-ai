@@ -60,7 +60,8 @@ std::shared_ptr<AbstractImageTransform> transform(Sample const& s,deskew::Params
         params.getParamsSource().photo()?params.getParamsSource().fov():0.,
         params.distortionType()==deskew::DistortionType::WARP?warp.depthPerception():DepthPerception(),
         params.distortionType()==deskew::DistortionType::WARP?warp.correctCurves():DepthPerception(),
-        params.distortionType()==deskew::DistortionType::WARP?warp.correctAngle():DepthPerception());
+        params.distortionType()==deskew::DistortionType::WARP?warp.correctAngle():DepthPerception(),
+        params.distortionType()==deskew::DistortionType::WARP&&(warp.distortionModel().topCurve().legacyPrecision()||warp.distortionModel().bottomCurve().legacyPrecision()));
 }
 void savePreview(QImage const& source,AbstractImageTransform const& input,QString const& path,
                  std::shared_ptr<AcceleratableOperations> const& ops){
@@ -105,6 +106,7 @@ struct Process {
 };
 }
 QString state(deskew::Params const& params){QDomDocument doc;auto el=params.toXml(doc,"params");el.removeAttribute("unifiedWarning");el.removeAttribute("unifiedGeometry");el.firstChildElement("warp").removeAttribute("unifiedDetection");doc.appendChild(el);return doc.toString(-1);}
+std::shared_ptr<AbstractImageTransform> currentTransform(Sample const& sample,deskew::Params const& params){return transform(sample,params);}
 std::vector<Sample> collect(ProjectPages const& pages,StageSequence& stages){
     std::vector<Sample> samples;auto seq=pages.toPageSequence(PAGE_VIEW);
     for(size_t i=0;i<seq.numPages();++i){
@@ -124,7 +126,7 @@ std::vector<Sample> collect(ProjectPages const& pages,StageSequence& stages){
 }
 void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QString const& root,
     QString const& device,bool useAi,QString const& directory,std::function<bool()> const& cancelled,
-    std::function<void(Result)> const& completed){
+    std::function<void(Result)> const& completed,bool renderPreviews){
     QString aiUnavailable;QDir().mkpath(directory);Process process;Status status(cancelled);auto ops=std::make_shared<NonAcceleratedOperations>();
     for(int index:indices){
         if(cancelled())break;
@@ -132,10 +134,10 @@ void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QStr
         auto const& s=samples[index];Result out;out.index=index;QElapsedTimer timer;timer.start();
         try{
             QImage source=ImageLoader::load(s.page.imageId());if(source.isNull())throw std::runtime_error("Kaynak fotoğraf okunamadı.");
-            out.source=directory+QString("/%1-source.jpg").arg(index);savePreview(source,s.transform,out.source,ops);
+            if(renderPreviews){out.source=directory+QString("/%1-source.jpg").arg(index);savePreview(source,s.transform,out.source,ops);}
             std::shared_ptr<AbstractImageTransform> current;
             try{current=transform(s,s.params);}catch(std::exception const&){current=std::make_shared<AffineImageTransform>(s.transform);}
-            out.current=directory+QString("/%1-current.jpg").arg(index);savePreview(source,*current,out.current,ops);
+            if(renderPreviews){out.current=directory+QString("/%1-current.jpg").arg(index);savePreview(source,*current,out.current,ops);}
             std::vector<deskew::UnifiedDewarpCandidate> extra;
             QString aiError=aiUnavailable;
             QString tracePath=qEnvironmentVariableIsSet("STOU_GEOMETRY_PROFILE")?directory+QString("/%1-lines.json").arg(index):QString();
@@ -183,8 +185,9 @@ void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QStr
                 // that passed all geometric checks is still reviewable by hand,
                 // but is never a bulk recommendation.
                 if(candidate.model.isValid()&&candidate.source.startsWith("UVDoc")&&candidate.metrics.reason.startsWith(unified_i18n::text("kenarı doğrulayacak yeterli satır yok"))){c.accepted=true;c.reason=unified_i18n::text("Az metin: yalnız görsel incelemeyle tek sayfaya uygulanabilir; toplu önerilmez.");}
-                if(c.accepted){c.path=directory+QString("/%1-candidate-%2.jpg").arg(index).arg(out.candidates.size());
-                    try{savePreview(source,*transform(s,params),c.path,ops);}catch(std::exception const& e){c.accepted=false;c.reason=unified_i18n::text(e.what());c.path.clear();}}
+                if(c.accepted){
+                    try{auto candidateTransform=transform(s,params);if(renderPreviews){c.path=directory+QString("/%1-candidate-%2.jpg").arg(index).arg(out.candidates.size());savePreview(source,*candidateTransform,c.path,ops);}}
+                    catch(std::exception const& e){c.accepted=false;c.reason=unified_i18n::text(e.what());c.path.clear();}}
                 out.candidates.push_back(std::move(c));
             }
             deskew::UnifiedGeometryMetrics existingMetrics;

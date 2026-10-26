@@ -33,6 +33,7 @@ Params::Params(Dependencies const& deps)
 Params::Params(QDomElement const& deskew_el)
     : unifiedWarning(deskew_el.attribute("unifiedWarning"))
     , unifiedGeometry(deskew_el.attribute("unifiedGeometry"))
+    , unifiedForceCurves(deskew_el.attribute("unifiedForceCurves")=="1")
     , m_distortionType(deskew_el.attribute("distortionType"))
     , m_paramsDewarping(deskew_el.namedItem("warp").toElement())
     , m_paramsPerspective(deskew_el.namedItem("perspective").toElement())
@@ -97,6 +98,7 @@ Params::toXml(QDomDocument& doc, QString const& name) const
     el.setAttribute("distortionType", m_distortionType.toString());
     if(!unifiedWarning.isEmpty())el.setAttribute("unifiedWarning",unifiedWarning);
     if(!unifiedGeometry.isEmpty())el.setAttribute("unifiedGeometry",unifiedGeometry);
+    if(unifiedForceCurves)el.setAttribute("unifiedForceCurves","1");
     el.appendChild(m_paramsDewarping.toXml(doc, "warp"));
     el.appendChild(m_paramsPerspective.toXml(doc, "perspective"));
     el.appendChild(m_paramsRotation.toXml(doc, "rotation"));
@@ -111,6 +113,7 @@ Params::takeManualSettingsFrom(Params const& other)
     // These settings are specified manually even in automatic mode,
     // so we want to preserve them after a dependency mismatch.
     m_distortionType = other.distortionType();
+    unifiedForceCurves=other.unifiedForceCurves;
     m_paramsDewarping.setDepthPerception(other.getParamsDewarping().depthPerception());
 }
 

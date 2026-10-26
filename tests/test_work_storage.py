@@ -35,6 +35,24 @@ class WorkingDiskTest(unittest.TestCase):
         self.assertEqual(job,before);self.assertEqual(list(self.output.iterdir()),[])
         self.assertTrue(source.is_file())
 
+    def test_cleanup_after_delivery_uses_verified_pdf_on_other_disk(self):
+        import json
+        from scantailor_ocr_unified.work_cleanup import reclaim
+        folder=self.work/'book';folder.mkdir();out=folder/'out';out.mkdir()
+        source=folder/'book.pdf';source.write_bytes(b'verified PDF')
+        project=folder/'book.ScanTailor';project.write_text('saved manual settings')
+        image=out/'page.tif';image.write_bytes(b'reproducible image')
+        Path(str(project)+'.outputs.json').write_text(json.dumps({'pages':[str(image)]}))
+        job={'pdf':str(source),'pdf_hash':file_hash(source),'project':str(project),
+             'verification':{'all_pages_render_identical':True},'pages':[]}
+        publish_book(job,folder,self.output)
+        final=Path(job['pdf']);original=final.read_bytes();final.write_bytes(b'changed')
+        with self.assertRaises(ValueError):reclaim(folder,self.work,job)
+        self.assertTrue(image.is_file())
+        final.write_bytes(original)
+        self.assertEqual(reclaim(folder,self.work,job)['files'],1)
+        self.assertTrue(source.is_file() and final.is_file() and project.is_file())
+
     def test_work_disk_migration_keeps_relative_sources_and_manual_params(self):
         original=self.output/'saved';original.mkdir();(original/'scan.png').write_bytes(b'original')
         project=original/'book.ScanTailor'

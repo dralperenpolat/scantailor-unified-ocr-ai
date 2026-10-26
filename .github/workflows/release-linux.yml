@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
-      VERSION: '0.6.5'
+      VERSION: '0.6.6'
       QT_QPA_PLATFORM: offscreen
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -43,7 +43,7 @@ jobs:
       - name: Compile the application and native UI tests
         run: |
           bash packaging/build-linux.sh
-          cmake --build native/release-linux --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test -j2
+          cmake --build native/release-linux --target unified-review-state-test unified-stage-tools-test unified-i18n-test unified-compression-test unified-fast-geometry-test unified-project-cache-test -j2
       - name: Stage and verify the installed package
         timeout-minutes: 15
         shell: bash
@@ -66,6 +66,7 @@ jobs:
           fi
           "$STAGE/runtime/bin/python3" packaging/smoke_pdf_import.py --root "$STAGE" --work "$QA/pdf"
           native/release-linux/unified-fast-geometry-test
+          native/release-linux/unified-project-cache-test
           native/release-linux/unified-review-state-test
           native/release-linux/unified-stage-tools-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
           STOU_TEST_WORKFLOW=1 native/release-linux/unified-i18n-test "$QA/ui" "$STAGE" "$QA/pdf/Türkçe PDF deneme.pdf"
@@ -103,7 +104,7 @@ jobs:
           sbom-path: release/sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: release-linux-0.6.5-${{ matrix.variant }}
+          name: release-linux-0.6.6-${{ matrix.variant }}
           path: release/
           compression-level: 0
           retention-days: 3

@@ -172,10 +172,13 @@ MainWindow::MainWindow()
     m_editBar=new QWidget;auto editLayout=new QVBoxLayout(m_editBar);editLayout->setContentsMargins(4,2,4,2);editLayout->setSpacing(2);
     m_editLabel=new QLabel;m_editLabel->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);editLayout->addWidget(m_editLabel);
     auto actions=new QHBoxLayout;editLayout->addLayout(actions);
-    auto publishEdit=new QPushButton(unified_i18n::text("Kaydet ve PDF'yi güncelle"));publishEdit->setObjectName("publishQueueEdit");actions->addWidget(publishEdit);
+    auto back=new QPushButton(unified_i18n::text("← Toplu koşuya dön"));back->setObjectName("returnToQueue");actions->addWidget(back);
+    connect(back,&QPushButton::clicked,this,&MainWindow::returnToQueue);
+    auto saveEdit=new QPushButton(unified_i18n::text("Kaydet"));saveEdit->setObjectName("saveQueueEdit");actions->addWidget(saveEdit);
+    connect(saveEdit,&QPushButton::clicked,this,&MainWindow::saveQueueEdit);
+    auto publishEdit=new QPushButton(unified_i18n::text("PDF/OCR oluştur veya güncelle"));publishEdit->setObjectName("publishQueueEdit");actions->addWidget(publishEdit);
     connect(publishEdit,&QPushButton::clicked,this,&MainWindow::publishQueueEdit);
-    auto showPdf=new QPushButton(unified_i18n::text("PDF'ye dön"));actions->addWidget(showPdf);actions->addStretch();
-    connect(showPdf,&QPushButton::clicked,this,[this]{m_unified->previewBook(m_editBinding.value("job_id").toString(),m_editBinding.value("page").toInt());});
+    actions->addStretch();
     m_keepEditMargins=new QCheckBox(unified_i18n::text("PDF'de projenin kenarlarını koru"));m_keepEditMargins->setChecked(true);editLayout->addWidget(m_keepEditMargins);
     m_keepEditMargins->setToolTip(unified_i18n::text("Açık: düzenlediğiniz sayfanın tamamı kenarlarıyla A4'e sığar. Kapalı: PDF / OCR ayarlarındaki otomatik içerik doldurma uygulanır."));
     connect(m_keepEditMargins,&QCheckBox::toggled,[this](bool checked){if(!m_editBinding.isEmpty())m_editBinding.insert("preserve_margins",checked);});
@@ -1704,6 +1707,7 @@ MainWindow::debugToggled(bool const enabled)
 void
 MainWindow::saveProjectTriggered()
 {
+    if(!m_editBinding.isEmpty()){saveQueueEdit();return;}
     if (m_projectFile.isEmpty())
     {
         saveProjectAsTriggered();
@@ -2192,7 +2196,7 @@ MainWindow::updateWindowTitle()
         project_name = QFileInfo(m_projectFile).baseName();
     }
     QString const version(unified_i18n::text(VERSION));
-    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.5 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
+    setWindowTitle(tr("%2 - scantailor-ocr-unified 0.6.6 · Experimental %3 [%1bit]").arg(sizeof(void*)*8).arg(project_name, version));
     if(m_unified)m_unified->setEditorContext(isProjectLoaded()?m_editBinding.value("title").toString(project_name):QString(),m_projectFile);
 }
 
@@ -2745,6 +2749,7 @@ void MainWindow::openQueuePage(QJsonObject const& target,int stage){
     }catch(std::exception const& e){QMessageBox::warning(this,unified_i18n::text("Düzenleme"),unified_i18n::text(e.what()));}
 }
 void MainWindow::selectQueueEditPage(QJsonObject const& target,int stage){
+    m_editBinding.insert("return_tab",target.value("return_tab").toInt());
     auto pages=m_ptrPages->toPageSequence(PAGE_VIEW);PageId selected;
     for(size_t i=0;i<pages.numPages();++i){auto id=pages.pageAt(i).id();
         if(QFileInfo(id.imageId().filePath()).absoluteFilePath()==QFileInfo(target.value("source").toString()).absoluteFilePath()&&id.imageId().page()==target.value("image_page").toInt()&&id.subPageAsString()==target.value("subpage").toString()){selected=id;break;}
@@ -2789,6 +2794,18 @@ void MainWindow::publishQueueEdit(){
     if(!saveProjectWithFeedback(snapshot))return;
     if(m_unified->submitRevision(m_editBinding,snapshot))QMainWindow::statusBar()->showMessage(unified_i18n::text("Düzeltme kaydedildi. Yeni PDF sıraya alındı; önceki PDF saklanıyor."),12000);
 }
+void MainWindow::saveQueueEdit(){
+    if(m_editBinding.isEmpty()||!isProjectLoaded()||isBatchProcessingInProgress())return;
+    if(!saveProjectWithFeedback(m_projectFile))return;
+    QString snapshot=m_unified->revisionSnapshotPath();
+    if(!saveProjectWithFeedback(snapshot))return;
+    if(m_unified->saveEdit(m_editBinding,snapshot)){updateWindowTitle();QMainWindow::statusBar()->showMessage(unified_i18n::text("Düzenlemeler kaydedildi. PDF/OCR başlatılmadı."),12000);}
+}
+void MainWindow::returnToQueue(){
+    if(isBatchProcessingInProgress())return;
+    int tab=m_editBinding.value("return_tab").toInt();
+    showWorkflowTools();m_unified->showToolsTab(tab);
+}
 void MainWindow::reviewAiContent(){
     filterList->selectStep("ai_content");
 }
@@ -2800,7 +2817,7 @@ UnifiedAiReviewDialog* MainWindow::ensureAiContentReview(bool show){
     QString root=qEnvironmentVariable("STOU_ROOT");if(root.isEmpty()){QDir d(QCoreApplication::applicationDirPath());for(int i=0;i<5;++i){if(d.exists("local-tools.json")){root=d.path();break;}d.cdUp();}}
     QString identity=m_editBinding.value("job_id").toString(m_projectFile.isEmpty()?m_outFileNameGen.outDir():m_projectFile);
     auto dialog=new UnifiedAiReviewDialog(std::move(samples),m_ptrThumbSequence->selectionLeader().id(),root,int(m_ptrPages->toPageSequence(PAGE_VIEW).numPages()),this,identity);
-    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.5"));
+    dialog->setWindowTitle(QFileInfo(m_projectFile).completeBaseName()+unified_i18n::text(" · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.6"));
     dialog->navigate=[this,stages](PageId const& page){if(m_ptrStages==stages){returnToProjectView();filterList->selectFilter(3);goToPage(page);}};
     syncWorkflowCache();m_workflowCache->own(dialog->directory(),"review");
     dialog->reprocess=[this](auto const& pages){requeueAiPages(false,pages);};

@@ -532,7 +532,7 @@ Task::processWarpDistortion(
         int detectedLines=0;
         {
             auto selection=unifiedSelectAutoDewarp(gray_orig_image_factory(),orig_image_transform,
-                params.getParamsDewarping(),params.getParamsSource().photo()?params.getParamsSource().fov():0.,accel_ops,status,m_ptrDbg.get());
+                params.getParamsDewarping(),params.getParamsSource().photo()?params.getParamsSource().fov():0.,accel_ops,status,m_ptrDbg.get(),{},{},params.unifiedForceCurves);
             distortion_model=selection.model;comparisonReport=selection.report;detectedLines=selection.lineCount;
             if(selection.depth>=0){
                 params.getParamsDewarping().setDepthPerception(DepthPerception(selection.depth));
@@ -544,6 +544,13 @@ Task::processWarpDistortion(
 
         if (!distortion_model.isValid())
         {
+            if(params.unifiedForceCurves){
+                params.unifiedWarning=unified_i18n::text("Zorla eğri: uygun model bulunamadı. Eğri modu korundu; üst ve alt çizgileri elle düzenleyin.");
+                params.unifiedGeometry=comparisonReport;
+                m_ptrSettings->setPageParams(m_pageId,params);
+                if(editing)return editorResult();
+                throw std::runtime_error("Zorla eğri: uygun model bulunamadı; bu sayfanın üst ve alt çizgilerini elle düzenleyin.");
+            }
             if(editing){
                 params.unifiedWarning=unified_i18n::text("Otomatik eğri bulunamadı. Noktaları elle sürükleyebilirsiniz; düzenleme ekranı açık tutuldu.");
                 params.unifiedGeometry=comparisonReport+(detectedLines<4?unified_i18n::text("\nBu sayfada eğriliği doğrulayacak yeterli metin satırı yok."):unified_i18n::text("\nGüvenilir eğri bulunamadı; elle düzenleme açık."));
@@ -623,13 +630,17 @@ Task::processWarpDistortion(
                 ((params.getParamsSource().photo()) ? params.getParamsSource().fov() : 0.0),
                 params.getParamsDewarping().depthPerception(),
                 params.getParamsDewarping().correctCurves(),
-                params.getParamsDewarping().correctAngle()
+                params.getParamsDewarping().correctAngle(),model.topCurve().legacyPrecision()||model.bottomCurve().legacyPrecision()
         );
         unifiedMeasureGrid(metrics,dewarping_transform->transformedCropArea(),dewarping_transform->backwardMapper());
     }
     params.unifiedGeometry=comparisonReport+"\n"+metrics.summary();
     params.unifiedWarning=metrics.reason;
     if(!metrics.reason.isEmpty() && params.getParamsDewarping().mode()==MODE_AUTO) {
+        if(params.unifiedForceCurves){
+            m_ptrSettings->setPageParams(m_pageId,params);
+            throw std::runtime_error("Zorla eğri: model doğrulanamadı; bu sayfanın üst ve alt çizgilerini elle düzenleyin.");
+        }
         params.unifiedWarning+=unified_i18n::text("; güvenli eğiklik düzeltmesine geçildi. Kontrol edin.");
         params.setDistortionType(DistortionType::ROTATION);
         m_ptrSettings->setPageParams(m_pageId,params);

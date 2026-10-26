@@ -5,7 +5,7 @@ import argparse,hashlib,json,re,shutil,zipfile
 def main():
     p=argparse.ArgumentParser();p.add_argument('--destination',required=True);a=p.parse_args()
     root=Path(__file__).resolve().parents[1];dest=Path(a.destination).resolve();dest.mkdir(parents=True,exist_ok=True)
-    tree=dest/'scantailor-unified-ocr-ai-0.6.5-source';tree.mkdir(exist_ok=True)
+    tree=dest/'scantailor-unified-ocr-ai-0.6.6-source';tree.mkdir(exist_ok=True)
     files=[]
     for name in ('README.md','README.tr.md','LICENSE','THIRD_PARTY_NOTICES.md','pyproject.toml','.gitignore'):
         files.append(root/name)
@@ -15,7 +15,7 @@ def main():
     # Pure/synthetic regression tests. Local book integrations stay local.
     for name in ('test_work_storage.py','test_install_state.py','test_adaptive_compression.py','test_pdf_tools.py','test_release_runtime.py','test_native_launcher.py','test_workflow_stages.py','test_workflow_storage.py','test_workflow_finalize.py','test_paddle_memory_profile.py','test_native_execution.py','test_memory_budget.py','test_mesh_geometry.py','test_ocr_cache.py','test_pdf_optimize.py','test_pdf_layout.py','test_queue_lock.py','test_revision_queue.py','test_worker_atomic_write.py','test_native_watchdog.py','test_geometry_timeout_fallback.py','test_workspace.py','test_quality_workflow.py'):
         files.append(root/'tests'/name)
-    for name in ('native_fast_geometry.cpp','native_geometry_pilot.cpp','native_compression.cpp','native_review_state.cpp','native_stage_tools.cpp','native_i18n.cpp','native_workflow.h'):
+    for name in ('native_project_cache.cpp','native_geometry_retry.cpp','native_fast_geometry.cpp','native_geometry_pilot.cpp','native_compression.cpp','native_review_state.cpp','native_stage_tools.cpp','native_i18n.cpp','native_workflow.h'):
         files.append(root/'tests'/name)
     for name in ('geometry_words_pilot.py','geometry_uvdoc_pilot.py'):
         files.append(root/'tests'/name)
@@ -30,7 +30,7 @@ def main():
         if not target.exists() or target.read_bytes()!=payload:target.write_bytes(payload)
         checksums[relative.as_posix()]=hashlib.sha256(payload).hexdigest()
     (tree/'SOURCE-SHA256.json').write_text(json.dumps(checksums,indent=2),'utf8')
-    archive=dest/'scantailor-unified-ocr-ai-0.6.5-source.zip'
+    archive=dest/'scantailor-unified-ocr-ai-0.6.6-source.zip'
     with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         for relative in (*checksums, 'SOURCE-SHA256.json'):
             source=tree/relative

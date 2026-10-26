@@ -122,7 +122,7 @@ DewarpingImageTransform::DewarpingImageTransform(
     double const& fov,
     DepthPerception const& depth_perception,
     DepthPerception const& curve_correct,
-    DepthPerception const& curve_angle)
+    DepthPerception const& curve_angle,bool legacy_curve_precision)
     : m_origSize(orig_size)
     , m_topPolyline(top_curve)
     , m_bottomPolyline(bottom_curve)
@@ -139,6 +139,7 @@ DewarpingImageTransform::DewarpingImageTransform(
     , m_intrinsicScaleY(1.0)
     , m_userScaleX(1.0)
     , m_userScaleY(1.0)
+    , m_legacyCurvePrecision(legacy_curve_precision)
 {
     // These two lines don't depend on each other and therefore can go in any order.
     m_origCropArea = constrainCropArea(orig_crop_area);

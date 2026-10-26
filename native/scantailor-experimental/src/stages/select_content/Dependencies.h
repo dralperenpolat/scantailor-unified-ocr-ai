@@ -47,6 +47,7 @@ public:
     ~Dependencies();
 
     bool matches(Dependencies const& other) const;
+    bool currentAlgorithm() const { return m_transformFingerprint.endsWith(":unified-content-v2"); }
 
     QDomElement toXml(QDomDocument& doc, QString const& name) const;
 private:

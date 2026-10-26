@@ -20,6 +20,7 @@
 #include "Thumbnail.h"
 #include "IncompleteThumbnail.h"
 #include "Settings.h"
+#include "UnifiedSavedContent.h"
 #include "PageInfo.h"
 #include "PageId.h"
 #include "filter_dc/AbstractFilterDataCollector.h"
@@ -56,7 +57,8 @@ CacheDrivenTask::process(PageInfo const& page_info,
     // adjustment (Task::process uses the same rule). It can be mapped through
     // the current transform without discarding the user's reference or hiding
     // its thumbnail until the entire output stage has been run again.
-    if (!params.get() || (params->mode() == MODE_AUTO && !params->dependencies().matches(deps)))
+    if (!params.get() || (params->mode() == MODE_AUTO && !params->dependencies().matches(deps) &&
+                          !unifiedSavedContentMatches(*params,*full_size_image_transform)))
     {
 
         if (ThumbnailCollector* thumb_col = dynamic_cast<ThumbnailCollector*>(collector))

@@ -270,6 +270,14 @@ IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_stage_tools.cpp")
     SET_TARGET_PROPERTIES(unified-stage-tools-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 ENDIF()
 IF(EXISTS "${CMAKE_SOURCE_DIR}/../../tests/native_review_state.cpp")
+    ADD_EXECUTABLE(unified-geometry-retry EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_geometry_retry.cpp")
+    TARGET_LINK_LIBRARIES(unified-geometry-retry
+        "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})
+    SET_TARGET_PROPERTIES(unified-geometry-retry PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ADD_EXECUTABLE(unified-project-cache-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_project_cache.cpp")
+    TARGET_LINK_LIBRARIES(unified-project-cache-test
+        "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})
+    SET_TARGET_PROPERTIES(unified-project-cache-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
     ADD_EXECUTABLE(unified-fast-geometry-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/../../tests/native_fast_geometry.cpp")
     TARGET_LINK_LIBRARIES(unified-fast-geometry-test
         "$<LINK_GROUP:RESCAN,acceleration,page_layout,output,fix_orientation,page_split,deskew,select_content,stcore,dewarping,zones,interaction,imageproc,math,foundation>" ${EXTRA_LIBS})

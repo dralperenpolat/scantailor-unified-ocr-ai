@@ -65,7 +65,8 @@ Curve::Curve(XSpline const& xspline)
 
 Curve::Curve(QDomElement const& el)
     :	m_xspline(deserializeXSpline(el.namedItem("xspline").toElement())),
-      m_polyline(deserializePolyline(el.namedItem("polyline").toElement()))
+      m_polyline(deserializePolyline(el.namedItem("polyline").toElement())),
+      m_legacyPrecision(el.attribute("legacy-precision")=="1"||!el.firstChildElement("polyline").hasAttribute("float64"))
 {
 }
 
@@ -78,6 +79,7 @@ Curve::toXml(QDomDocument& doc, QString const& name) const
     }
 
     QDomElement el(doc.createElement(name));
+    if(m_legacyPrecision)el.setAttribute("legacy-precision","1");
     el.appendChild(serializeXSpline(m_xspline, doc, "xspline"));
     el.appendChild(serializePolyline(m_polyline, doc, "polyline"));
     return el;
@@ -103,20 +105,26 @@ Curve::matches(Curve const& other) const
 std::vector<QPointF>
 Curve::deserializePolyline(QDomElement const& el)
 {
-    QByteArray ba(QByteArray::fromBase64(el.text().trimmed().toLatin1()));
+    bool const doubles=el.hasAttribute("float64");
+    QByteArray ba(QByteArray::fromBase64((doubles?el.attribute("float64"):el.text().trimmed()).toLatin1()));
     QDataStream strm(&ba, IODeviceReadOnly);
     strm.setVersion(QDataStream::Qt_4_4);
     strm.setByteOrder(QDataStream::LittleEndian);
 
-    unsigned const num_points = ba.size() / 8;
+    // Old projects used two floats per point. New curves retain the doubles
+    // used by the geometry fingerprint, so reopening doesn't invalidate every
+    // downstream content box merely because the project was saved.
+    unsigned const num_points = ba.size() / (doubles ? 16 : 8);
     std::vector<QPointF> points;
     points.reserve(num_points);
 
     for (unsigned i = 0; i < num_points; ++i)
     {
-        float x = 0, y = 0;
-        strm >> x >> y;
-        points.push_back(QPointF(x, y));
+        if(doubles) {
+            double x=0,y=0;strm>>x>>y;points.emplace_back(x,y);
+        } else {
+            float x=0,y=0;strm>>x>>y;points.emplace_back(x,y);
+        }
     }
 
     return points;
@@ -136,13 +144,20 @@ Curve::serializePolyline(
     QDataStream strm(&ba, IODeviceWriteOnly);
     strm.setVersion(QDataStream::Qt_4_4);
     strm.setByteOrder(QDataStream::LittleEndian);
+    QByteArray precise;
+    precise.reserve(16*polyline.size());
+    QDataStream exact(&precise,IODeviceWriteOnly);
+    exact.setVersion(QDataStream::Qt_4_4);exact.setByteOrder(QDataStream::LittleEndian);
 
     BOOST_FOREACH(QPointF const& pt, polyline)
     {
-        strm << (float)pt.x() << (float)pt.y();
+        // Keep the old text payload readable by previous ScanTailor versions.
+        strm << float(pt.x()) << float(pt.y());
+        exact << double(pt.x()) << double(pt.y());
     }
 
     QDomElement el(doc.createElement(name));
+    el.setAttribute("float64",QString::fromLatin1(precise.toBase64()));
     el.appendChild(doc.createTextNode(QString::fromLatin1(ba.toBase64())));
 
     return el;

@@ -88,9 +88,9 @@ inline void unifiedMeasureTextCoverage(UnifiedGeometryMetrics& m,
     double x1=std::min(top.back().x(),bottom.back().x());
     int tested=0,inside=0;
     for(auto const& p:glyphs){
-        if(p.x()<x0||p.x()>x1)continue;
         ++tested;
-        if(p.y()>=unifiedYAt(top,p.x())-padding && p.y()<=unifiedYAt(bottom,p.x())+padding)++inside;
+        if(p.x()>=x0-padding && p.x()<=x1+padding &&
+           p.y()>=unifiedYAt(top,p.x())-padding && p.y()<=unifiedYAt(bottom,p.x())+padding)++inside;
     }
     if(tested<150)return;
     m.textCoverage=double(inside)/tested;

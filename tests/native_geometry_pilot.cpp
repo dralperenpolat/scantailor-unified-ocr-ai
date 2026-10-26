@@ -4,18 +4,36 @@
 #include "XmlUnmarshaller.h"
 #include "TiffMetadataLoader.h"
 #include "FastImageMetadataLoader.h"
+#include "ProjectReader.h"
+#include "ProjectPages.h"
+#include "StageSequence.h"
+#include "PageSelectionAccessor.h"
+#include "PageSelectionProvider.h"
+#include "CommandLine.h"
 #include <QApplication>
 #include <QImage>
 #include <iostream>
 #include <set>
 int main(int argc,char** argv){
     QApplication app(argc,argv);TiffMetadataLoader::registerMyself();FastImageMetadataLoader::registerMyself();
+    CommandLine::set(CommandLine(QStringList{},true));
     if(argc<4)return 2;auto saved=unified_review::load(QString::fromLocal8Bit(argv[1]));
     QString output=QString::fromLocal8Bit(argv[2]),root=QString::fromLocal8Bit(argv[3]);QDir().mkpath(output);
     QMap<QString,QJsonObject> latest;for(auto value:saved.value("rows").toArray()){auto row=value.toObject();latest[row.value("key").toString()]=row;}
     std::vector<unified_geometry::Sample> samples;std::vector<int> ids;QJsonArray result;int ordinal=0;
     std::set<int> selected={9,31,44,74,100,152,170,190};
     auto requested=qEnvironmentVariable("STOU_PILOT_PAGES");if(!requested.isEmpty()){selected.clear();for(auto n:requested.split(','))selected.insert(n.toInt());}
+    if(QString::fromLocal8Bit(argv[1]).endsWith(".ScanTailor",Qt::CaseInsensitive)) {
+        QFile file(QString::fromLocal8Bit(argv[1]));QDomDocument doc;
+        if(!file.open(QIODevice::ReadOnly)||!doc.setContent(&file))return 5;
+        ProjectReader reader(doc,file.fileName());
+        StageSequence stages(reader.pages(),PageSelectionAccessor(IntrusivePtr<PageSelectionProvider>{}));
+        reader.readFilterSettings(stages.filters());
+        for(auto const& sample:unified_geometry::collect(*reader.pages(),stages)) {
+            if(!selected.count(sample.ordinal))continue;
+            ids.push_back(int(samples.size()));samples.push_back(sample);
+        }
+    }
     for(auto it=latest.begin();it!=latest.end();++it){++ordinal;if(!selected.count(ordinal))continue;
         auto row=it.value();auto key=it.key().split('|');if(key.size()!=3)return 3;QImage image(key[0]);if(image.isNull())return 4;
         auto element=unified_review::element(row.value("params").toString());deskew::Params params(element);

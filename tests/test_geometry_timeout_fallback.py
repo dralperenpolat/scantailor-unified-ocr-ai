@@ -35,5 +35,13 @@ class GeometryTimeoutFallback(unittest.TestCase):
             self.assertIsNone(use_rotation_after_timeout(self.project,{**self.event,**changes}))
             self.assertEqual(self.project.read_bytes(),before)
 
+    def test_forced_curves_never_silently_fall_back_to_rotation(self):
+        tree=ET.parse(self.project);stage=tree.getroot().find('./filters/deskew')
+        params=ET.SubElement(ET.SubElement(stage,'page',id='4'),'params',distortionType='warp',unifiedForceCurves='1')
+        ET.SubElement(params,'warp',mode='auto');tree.write(self.project,encoding='utf-8')
+        before=self.project.read_bytes()
+        self.assertIsNone(use_rotation_after_timeout(self.project,self.event))
+        self.assertEqual(self.project.read_bytes(),before)
+
 
 if __name__=='__main__':unittest.main(verbosity=2)

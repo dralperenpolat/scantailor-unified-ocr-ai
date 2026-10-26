@@ -204,6 +204,8 @@ private:
     void openQueuePage(QJsonObject const& target,int stage);
     void selectQueueEditPage(QJsonObject const& target,int stage);
     void publishQueueEdit();
+    void saveQueueEdit();
+    void returnToQueue();
     void reviewBookContent();
     void reviewAiContent();
     void reviewGeometry();

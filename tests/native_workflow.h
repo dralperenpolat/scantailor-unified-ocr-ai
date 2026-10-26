@@ -5,6 +5,8 @@
 #include "PageSequence.h"
 #include "UnifiedWorkflow.h"
 #include "UnifiedProjectCache.h"
+#include "UnifiedSavedEdits.h"
+#include "stages/deskew/Settings.h"
 #include "UnifiedContentReview.h"
 #include "UnifiedQueuePreview.h"
 #include "ProcessingTaskQueue.h"
@@ -116,6 +118,8 @@ public:
             check(window.m_unifiedViewStack->currentWidget()==window.m_editorHost&&window.filterOptions->isEnabled(),"queue preview gives way to enabled editor controls");
             check(window.scrollArea->parentWidget()->isVisible(),"native stage options are visible");
             if(stage==2){
+                auto force=window.m_ptrStages->deskewFilter()->optionsWidget()->findChild<QCheckBox*>("unifiedForceCurves");
+                check(force&&force->isVisible()&&force->isEnabled(),"force curves stays visible outside the replaced comparison group");
                 auto angle=window.m_ptrStages->deskewFilter()->optionsWidget()->findChild<QDoubleSpinBox*>("angleSpinBox");
                 check(angle&&angle->isEnabled(),"geometry angle control is enabled");auto before=window.workflowFingerprint();angle->setValue(angle->value()+.25);
                 check(window.workflowFingerprint()!=before,"geometry control changes this page's saved settings");
@@ -129,6 +133,17 @@ public:
             if(!captures.isEmpty())check(window.grab().save(captures+QString("/queue-edit-stage-%1.png").arg(stage)),"queue edit screenshot");
         }
         check(read(sourceProject)==sourceBytes&&read(panel->queuePath())==queueBytes,"page navigation and manual edits preserve worker project and queue files");
+        window.m_ptrStages->deskewFilter()->optionsWidget()->findChild<QCheckBox*>("unifiedForceCurves")->setChecked(true);
+        wait([&]{return window.m_ptrInteractiveQueue->allProcessed();});
+        auto forced=window.m_ptrStages->deskewFilter()->getSettings()->getPageParams(selected);
+        check(forced&&forced->unifiedForceCurves&&forced->distortionType()==deskew::DistortionType::WARP,"forcing curves keeps the selected page in curve mode");
+        auto save=window.findChild<QPushButton*>("saveQueueEdit");auto back=window.findChild<QPushButton*>("returnToQueue");
+        check(save&&back,"independent Save and Back actions exist");save->click();
+        check(QDir(panel->queuePath()+".edits").entryList({"*.request.json"},QDir::Files).isEmpty(),"Save alone never submits a PDF job");
+        auto saved=unified_saved_edits::read(unified_saved_edits::path(panel->queuePath(),"running-book"));
+        check(saved.value("active").toBool()&&QFileInfo::exists(saved.value("snapshot").toString()),"Save retains an immutable pending edit for a later explicit PDF run");
+        back->click();check(window.m_unifiedViewStack->currentWidget()==window.m_workflowTools,"Back returns to the queue screen");
+        check(window.m_projectFile==editable&&window.m_ptrThumbSequence->selectionLeader().id()==selected,"Back keeps the editor and selected page");
         for(auto step:{"pdf","ocr"}){
             panel->showSelection("running-book",inputs[1]);wait([&]{return window.m_unifiedViewStack->currentWidget()==window.m_queuePreview;});
             window.filterList->selectStep(step);
@@ -140,6 +155,12 @@ public:
         check(requests.size()==1,"PDF action creates one durable queue revision");
         auto request=QJsonDocument::fromJson(read(panel->queuePath()+".edits/"+requests.first())).object();
         check(request.value("job_id")=="running-book"&&QFileInfo::exists(request.value("snapshot").toString()),"PDF revision targets only the selected book's saved edit snapshot");
+        check(!unified_saved_edits::read(unified_saved_edits::path(panel->queuePath(),"running-book")).value("active").toBool(),"explicit PDF supersedes the older saved draft");
+        auto laterQueue=folder+"/save-for-later.json";auto laterBinding=window.m_editBinding;laterBinding.insert("queue",laterQueue);
+        unified_saved_edits::remember(laterQueue,laterBinding,saved.value("snapshot").toString());
+        check(!QDir(laterQueue+".edits").exists(),"saving a draft alone creates no export inbox");
+        check(unified_saved_edits::enqueue(laterQueue,{{"ocr_timing","none"}})==1,"a later explicit batch export takes the saved edit");
+        check(unified_saved_edits::enqueue(laterQueue,{})==0,"the same saved edit is not exported twice");
         check(read(sourceProject)==sourceBytes&&read(panel->queuePath())==queueBytes,"PDF update submission preserves the worker's source and queue checkpoint");
         ready.insert("edit_completed_id","published-revision");writeQueue({other,ready});
         panel->m_monitorQueueRead=0;panel->pollExternal();

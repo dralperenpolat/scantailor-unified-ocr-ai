@@ -184,6 +184,27 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
     result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,1));
     result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,3));
     result.candidates.push_back(unifiedFitTextSheet(text.horizontalCurves(),bounds,transform,5));
+    // Indented contents entries have different line lengths. Their left and
+    // right margin fits can converge inside the text, giving a wide upper
+    // curve and a very short lower one. Compare a common text-supported span
+    // as an alternative; keep the perspective model as a competing candidate.
+    std::vector<double> starts,ends;
+    for(auto const& line:text.horizontalCurves())if(line.size()>=4) {
+        starts.push_back(transform.transform().map(line.front()).x());
+        ends.push_back(transform.transform().map(line.back()).x());
+    }
+    if(starts.size()>=8) {
+        auto paper=transform.transformedCropArea().boundingRect();
+        double x0=percentile(starts,.02),x1=percentile(ends,.98),pad=(x1-x0)*.025;
+        x0=std::max(paper.left(),x0-pad);x1=std::min(paper.right(),x1+pad);
+        std::pair<QLineF,QLineF> parallel={inverse.map(QLineF(x0,paper.top(),x0,paper.bottom())),
+            inverse.map(QLineF(x1,paper.top(),x1,paper.bottom()))};
+        for(int degree:{1,3,5}) {
+            auto candidate=unifiedFitTextSheet(text.horizontalCurves(),parallel,transform,degree);
+            candidate.source=unified_i18n::text("Dengeli sınırlar · ")+candidate.source;
+            result.candidates.push_back(std::move(candidate));
+        }
+    }
     // Keep the existing mixed model on exact ties, avoiding arbitrary changes.
     for(auto const& entry:std::vector<std::pair<QString,DistortionModelBuilder const*>>{
         {unified_i18n::text("Birleşik"),&mixed},{unified_i18n::text("Metin"),&text},{unified_i18n::text("Kenar"),&edges}}){
@@ -220,7 +241,7 @@ UnifiedDewarpSelection unifiedSelectAutoDewarp(GrayImage const& image,
                         // unconstrained page aspect ratio becomes implausible.
                         if(text.horizontalCurves().size()<8 || !unifiedFinite(trial.lineError))trial.metrics.reason=unified_i18n::text("kenarı doğrulayacak yeterli satır yok; elle kontrol gerekli");
                         else if(unifiedFinite(baseline) && trial.lineError>baseline*1.15+.5)trial.metrics.reason=unified_i18n::text("metin satırları mevcut görüntüden daha fazla bozuluyor");
-                        else trial.score=trial.lineError+1.5*std::log(std::max(1.,trial.metrics.localStretch))+.5*std::log(std::max(1.,trial.metrics.areaRatio))+4*(1-trial.metrics.textCoverage);
+                        else trial.score=trial.lineError+1.5*std::log(std::max(1.,trial.metrics.localStretch))+.5*std::log(std::max(1.,trial.metrics.areaRatio))+.75*std::log(std::max(1.,trial.metrics.lengthRatio))+4*(1-trial.metrics.textCoverage);
                     }
                     if(first||(trial.accepted()&&(!best.accepted()||trial.score<best.score))){best=trial;first=false;}
                 }

@@ -31,9 +31,10 @@ struct Result {
     std::vector<Candidate> candidates;
 };
 std::vector<Sample> collect(ProjectPages const& pages,StageSequence& stages);
+std::shared_ptr<imageproc::AbstractImageTransform> currentTransform(Sample const& sample,deskew::Params const& params);
 void run(std::vector<Sample> const& samples,std::vector<int> const& indices,QString const& root,
     QString const& device,bool useAi,QString const& directory,std::function<bool()> const& cancelled,
-    std::function<void(Result)> const& completed);
+    std::function<void(Result)> const& completed,bool renderPreviews=true);
 bool apply(Sample const& sample,Candidate const& candidate,StageSequence& stages,bool allowManual);
 bool matchesCurrent(Sample const& sample,StageSequence& stages,Candidate const* applied = nullptr);
 bool undo(Sample const& sample,Candidate const& candidate,StageSequence& stages);

@@ -61,7 +61,8 @@ public:
         double const& fov,
         DepthPerception const& depth_perception,
         DepthPerception const& curve_correct,
-        DepthPerception const& curve_angle);
+        DepthPerception const& curve_angle,bool legacy_curve_precision=false);
+    bool legacyCurvePrecision() const { return m_legacyCurvePrecision; }
 
     virtual ~DewarpingImageTransform();
 
@@ -147,6 +148,7 @@ private:
      */
     double m_userScaleX;
     double m_userScaleY;
+    bool m_legacyCurvePrecision;
 };
 
 } // namespace dewarping

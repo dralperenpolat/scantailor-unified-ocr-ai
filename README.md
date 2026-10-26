@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.5
+# ScanTailor OCR Unified · 0.6.6
 
 **English** | [Türkçe](README.tr.md)
+
+Version 0.6.6 compares balanced upper/lower curve candidates on pages with uneven line lengths, including contents pages. **Force curved-line correction** tries additional strengths and keeps curve mode for manual review when no valid result is found. Saved content boxes no longer need unnecessary recomputation on reopening. In queue book editing, **Save** and Ctrl+S save edits only; **Create or update PDF/OCR** is a separate action. **Back to batch queue** retains the open book and page. Cleanup now recognizes verified PDFs in a separate delivery folder.
 
 Version 0.6.5 bounds full-project checkpoint work for large books. Pause, cancellation and stage completion save settings and their resume cursor together. Projects and intermediates can use a separate fast working disk; completed PDFs are copied and verified in the chosen output folder. AI review uses a separate validated CUDA geometry runtime when installed. After an abrupt process interruption, pages since the last durable checkpoint may need to be processed again.
 

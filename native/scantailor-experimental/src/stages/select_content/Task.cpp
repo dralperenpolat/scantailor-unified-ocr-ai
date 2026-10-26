@@ -23,6 +23,7 @@
 #include "AutoManualMode.h"
 #include "Dependencies.h"
 #include "Params.h"
+#include "UnifiedSavedContent.h"
 #include "Settings.h"
 #include "TaskStatus.h"
 #include "ContentBoxFinder.h"
@@ -112,8 +113,11 @@ Task::process(
     std::unique_ptr<Params> params(m_ptrSettings->getPageParams(m_pageId));
     if (params.get() && !params->dependencies().matches(deps))
     {
+        if(unifiedSavedContentMatches(*params,*orig_image_transform)){
+            params->setDependencies(deps);m_ptrSettings->setPageParams(m_pageId,*params);
+        }
         // Dependency mismatch.
-        if (params->mode() == MODE_AUTO)
+        else if (params->mode() == MODE_AUTO)
         {
             params.reset();
         }

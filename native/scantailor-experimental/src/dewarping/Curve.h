@@ -47,6 +47,7 @@ public:
     bool isValid() const;
 
     bool matches(Curve const& other) const;
+    bool legacyPrecision() const { return m_legacyPrecision; }
 
     XSpline const& xspline() const
     {
@@ -78,6 +79,7 @@ private:
 
     XSpline m_xspline;
     std::vector<QPointF> m_polyline;
+    bool m_legacyPrecision=false;
 };
 
 } // namespace dewarping

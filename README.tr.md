@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.5
+# ScanTailor OCR Unified · 0.6.6
 
 [English](README.md) | **Türkçe**
+
+0.6.6, içindekiler gibi farklı uzunlukta satırlar içeren sayfalarda dengeli üst/alt eğri adaylarını karşılaştırır. **Eğri düzeltmeyi zorla**, ek eğri güçlerini dener ve sonuç doğrulanamazsa elle kontrol için eğri modunu korur. Kaydedilen içerik kutuları yeniden açılışta gereksiz yere hesaplanmaz. Kitap düzenlerken **Kaydet** ve Ctrl+S yalnız değişiklikleri kaydeder; **PDF/OCR oluştur veya güncelle** ayrı işlemdir. **Toplu koşuya dön**, açık kitabı ve sayfayı korur. Ayrı teslim klasörüne yazılan doğrulanmış PDF'lerdeki temizlik hatası giderildi.
 
 0.6.5, büyük kitaplarda proje kaydını aralıklı yapar; duraklatma, iptal ve aşama sonunda ayarlarla devam noktası birlikte kaydedilir. Proje ve ara dosyalar hızlı bir çalışma diskinde, doğrulanmış PDF kopyaları seçilen çıktı klasöründe tutulabilir. Ayrı ve doğrulanmış CUDA geometri ortamı varsa AI incelemesi onu kullanır. Ani süreç kesilmesinde son kayıttan sonraki birkaç sayfanın yeniden işlenmesi gerekebilir.
 

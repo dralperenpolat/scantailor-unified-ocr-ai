@@ -59,6 +59,21 @@ OptionsWidget::OptionsWidget(
     auto note=new QLabel(unified_i18n::text("Tek sayfa / kitap analizi · toplu uygulama. Elle düzenlenen eğriler korunur."));note->setWordWrap(true);reviewLayout->addWidget(note);
     if(auto box=qobject_cast<QVBoxLayout*>(layout()))box->insertWidget(0,reviewGroup);
     connect(reviewButton,&QPushButton::clicked,this,&OptionsWidget::geometryReviewRequested);
+    auto force=new QCheckBox(unified_i18n::text("Eğri düzeltmeyi zorla"));force->setObjectName("unifiedForceCurves");
+    force->setToolTip(unified_i18n::text("Dengeli çizgi çiftlerini ve daha fazla eğri gücünü dene. Uygun eğri bulunamazsa döndürmeye geçme; elle kontrol için eğri modunu koru. Apply to… ile kapsamı seçebilirsiniz."));
+    // MainWindow replaces the old comparison group with its stage toolbar.
+    // Keep this native geometry choice outside that hidden group.
+    ui.deskewOptionsVerticalLayout->insertWidget(1,force);force->setEnabled(false);
+    connect(force,&QCheckBox::toggled,this,[this](bool checked){
+        if(m_ignoreSignalsFromUiControls)return;
+        m_pageParams.unifiedForceCurves=checked;
+        if(checked){
+            bool manual=m_pageParams.distortionType()==DistortionType::WARP&&m_pageParams.mode()==MODE_MANUAL;
+            m_pageParams.setDistortionType(DistortionType::WARP);
+            if(!manual)m_pageParams.getParamsDewarping().invalidate();
+        }
+        m_ptrSettings->setPageParams(m_pageId,m_pageParams);emit reloadRequested();
+    });
 
     // Rotation angle UI.
     ui.angleSpinBox->setSuffix(QChar(0x00B0)); // the degree symbol
@@ -301,6 +316,8 @@ OptionsWidget::distortionTypeAppliedTo(std::set<PageId> const& pages)
 
     m_ptrSettings->setDistortionType(pages, m_pageParams.distortionType());
 
+    for(auto const& id:pages){auto params=m_ptrSettings->getPageParams(id);if(params){if(m_pageParams.unifiedForceCurves&&!params->unifiedForceCurves&&params->mode()==MODE_AUTO)params->getParamsDewarping().invalidate();params->unifiedForceCurves=m_pageParams.unifiedForceCurves;m_ptrSettings->setPageParams(id,*params);}}
+
     BOOST_FOREACH(PageId const& page_id, pages)
     {
         emit invalidateThumbnail(page_id);
@@ -316,6 +333,8 @@ OptionsWidget::distortionTypeAppliedToAllPages(std::set<PageId> const& pages)
     }
 
     m_ptrSettings->setDistortionType(pages, m_pageParams.distortionType());
+
+    for(auto const& id:pages){auto params=m_ptrSettings->getPageParams(id);if(params){if(m_pageParams.unifiedForceCurves&&!params->unifiedForceCurves&&params->mode()==MODE_AUTO)params->getParamsDewarping().invalidate();params->unifiedForceCurves=m_pageParams.unifiedForceCurves;m_ptrSettings->setPageParams(id,*params);}}
 
     emit invalidateAllThumbnails();
 }
@@ -441,6 +460,7 @@ OptionsWidget::preUpdateUI(PageId const& page_id, DistortionType const& distorti
     ScopedIncDec<int> guard(m_ignoreSignalsFromUiControls);
 
     m_pageId = page_id;
+    findChild<QCheckBox*>("unifiedForceCurves")->setEnabled(false);
     m_pageParams.setDistortionType(distortion_type);
 
     setupUiForDistortionType(distortion_type);
@@ -459,6 +479,7 @@ OptionsWidget::postUpdateUI(Params const& page_params)
     if(!metrics){metrics=new QLabel(this);metrics->setObjectName("unifiedGeometryMetrics");metrics->setWordWrap(true);layout()->addWidget(metrics);}
     metrics->setText(page_params.unifiedGeometry);metrics->setVisible(!page_params.unifiedGeometry.isEmpty());
     m_pageParams = page_params;
+    auto force=findChild<QCheckBox*>("unifiedForceCurves");force->setChecked(page_params.unifiedForceCurves);force->setEnabled(true);
     ui.autoBtn->setEnabled(true);
     ui.manualBtn->setEnabled(true);
     updateModeIndication(page_params.mode());

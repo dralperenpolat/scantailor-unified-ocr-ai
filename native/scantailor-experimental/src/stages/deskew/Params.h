@@ -40,6 +40,7 @@ class Params
 public:
     QString unifiedWarning;
     QString unifiedGeometry;
+    bool unifiedForceCurves=false;
     Params(Dependencies const& deps);
 
     Params(QDomElement const& deskew_el);

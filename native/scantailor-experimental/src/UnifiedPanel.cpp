@@ -8,6 +8,7 @@
 #include "UnifiedWheelGuard.h"
 #include "UnifiedQueueSelection.h"
 #include "UnifiedQueueEditing.h"
+#include "UnifiedSavedEdits.h"
 #include "UnifiedPdfToolsDialog.h"
 #include "UnifiedWorkspaceDialog.h"
 #include "UnifiedStartupDialog.h"
@@ -437,6 +438,7 @@ void UnifiedPanel::editPreview(int stage,QString const& workflowStep){
             m_status->setText(message);emit editFeedback(message);return;
         }
         if(!workflowStep.isEmpty())target.insert("workflow_step",workflowStep);
+        if(auto tabs=findChild<QTabWidget*>("unifiedToolTabs"))target.insert("return_tab",tabs->currentIndex());
         emit editRequested(target,stage);return;
     }
 }
@@ -472,6 +474,7 @@ bool UnifiedPanel::submitRevision(QJsonObject const& binding,QString const& snap
     if(!file.open(QIODevice::WriteOnly)||file.write(QJsonDocument(request).toJson())<0||!file.commit()){
         m_status->setText(trU("Düzeltme isteği kaydedilemedi. Düzenleme projesi korunuyor."));return false;
     }
+    try{unified_saved_edits::acknowledge(m_queuePath,binding.value("job_id").toString());}catch(std::exception const& e){m_status->setText(trU(e.what()));}
     m_revisionJob=binding.value("job_id").toString();m_revisionToken=id;m_revisionStatus->show();
     m_revisionStatus->setText(binding.value("title").toString()+trU(" · Düzenleme kaydedildi. PDF güncellemesi öncelikli sırada; eski PDF korunuyor."));
     if(busy()){
@@ -480,6 +483,13 @@ bool UnifiedPanel::submitRevision(QJsonObject const& binding,QString const& snap
         m_status->setText(trU("PDF düzeltmesi kaydedildi; çalışan sayfanın kaydından sonra öncelikli işlenecek. Duraklatılmış ana kuyruk beklemeyi sürdürür."));
     }else start(false,true);
     return true;
+}
+bool UnifiedPanel::saveEdit(QJsonObject const& binding,QString const& snapshot){
+    try{
+        unified_saved_edits::remember(m_queuePath,binding,snapshot);
+        m_status->setText(binding.value("title").toString()+trU(" · Düzenlemeler kaydedildi. PDF/OCR başlatılmadı."));
+        return true;
+    }catch(std::exception const& e){m_status->setText(trU(e.what()));return false;}
 }
 void UnifiedPanel::addProject(QString const& title,QString const& path,QJsonArray const& outputs){
     for(auto value:m_jobs)if(value.toObject().value("source_project").toString()==path)return;
@@ -514,6 +524,11 @@ void UnifiedPanel::start(bool prepare,bool revisionsOnly){
     if(!prepare&&ocrTiming()!="none"){QString error=m_ocr->validation();if(!error.isEmpty()){m_status->setText(error);return;}}
     if(busy()||(editorProcessing&&editorProcessing())||m_jobs.isEmpty())return;
     if(!m_monitorRequest.isEmpty())loadQueue();
+    if(!prepare&&!revisionsOnly){
+        auto options=pdfLayoutOptions();auto ocr=m_ocr->options();for(auto i=ocr.begin();i!=ocr.end();++i)options.insert(i.key(),i.value());
+        options.insert("appearance",appearance());options.insert("page_cleanup",cleanupEnabled());options.insert("ocr_timing",ocrTiming());options.insert("output_finish",outputFinish());
+        try{unified_saved_edits::enqueue(m_queuePath,options);}catch(std::exception const& e){m_status->setText(trU(e.what()));return;}
+    }
     applyResources();if(!revisionsOnly)saveQueue();m_paused=false;control("run");
     QJsonObject request{{"queue",m_queuePath},{"control",m_controlPath},{"root",m_root},{"cli",unified_runtime::cli()},{"mode",prepare?"prepare":"export"},{"appearance",m_appearance->currentData().toString()},{"paper",m_paper->currentData().toString()},{"threads",m_threads->value()},{"delay_ms",m_delay->value()},{"auto_warp",m_autoWarp->isChecked()}};
     auto ocr=m_ocr->options();for(auto i=ocr.begin();i!=ocr.end();++i)request.insert(i.key(),i.value());

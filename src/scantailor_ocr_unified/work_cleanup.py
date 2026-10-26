@@ -8,7 +8,9 @@ def reclaim(folder,output_root,job):
     if folder==root or not folder.is_relative_to(root):raise ValueError('Çalışma yolu çıktı kökü dışında.')
     if not job.get('verification',{}).get('all_pages_render_identical'):return {'bytes':0,'files':0}
     final=Path(job['pdf']).resolve()
-    if final.parent!=folder or not final.is_file():raise ValueError('Doğrulanmış son PDF bulunamadı.')
+    delivery=Path(job.get('delivery_folder',folder)).resolve()
+    if final.parent not in (folder,delivery) or not final.is_file():raise ValueError('Doğrulanmış son PDF bulunamadı.')
+    if Path(job['project']).resolve().parent!=folder:raise ValueError('Proje çalışma kitabı dışında; ara dosyalar korundu.')
     with final.open('rb') as stream:
         if hashlib.file_digest(stream,'sha256').hexdigest()!=job.get('pdf_hash'):raise ValueError('PDF değişmiş; ara dosyalar korundu.')
     targets=[];out=(folder/'out').resolve()

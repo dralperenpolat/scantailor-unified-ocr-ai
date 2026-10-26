@@ -65,6 +65,7 @@ public:
     QString editCopy(QJsonObject const& target) const;
     QString revisionSnapshotPath() const;
     bool submitRevision(QJsonObject const& binding, QString const& snapshot);
+    bool saveEdit(QJsonObject const& binding, QString const& snapshot);
     void previewBook(QString const& id, int page=0);
 signals:
     void toolsRequested();

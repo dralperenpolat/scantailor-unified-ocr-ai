@@ -14,6 +14,7 @@
 #include <QPainter>
 #include <QFontMetricsF>
 #include <QFontInfo>
+#include <QFontDatabase>
 #include <QDir>
 #include <iostream>
 #include <stdexcept>
@@ -28,14 +29,16 @@ void check(bool value, char const* reason) { if(!value) throw std::runtime_error
 
 int main(int argc,char** argv) {
     QApplication app(argc,argv);
+    QFontDatabase::addApplicationFont(QDir(qEnvironmentVariable("WINDIR")).filePath("Fonts/arial.ttf"));
     auto ops=std::make_shared<NonAcceleratedOperations>(); Status status;
     std::list<std::vector<QPointF>> slantedMargins;
     for(int i=0;i<10;++i)slantedMargins.push_back({QPointF(i*40,i*50),QPointF(i*40+500,i*50)});
     auto invalidBounds=dewarping::detectVerticalBounds(slantedMargins,10.);
     check(invalidBounds.first.isNull()&&invalidBounds.second.isNull(),"near-horizontal text margins passed the vertical angle limit");
     QDir().mkpath(argc>1?argv[1]:".");
-    for(int scenario=0;scenario<4;++scenario) {
+    for(int scenario=0;scenario<5;++scenario) {
         bool const columns=scenario==3;
+        bool const contents=scenario==4;
         QImage flat(1100,1500,QImage::Format_RGB32);flat.fill(Qt::white);
         QPainter painter(&flat);QFont font(qEnvironmentVariable("STOU_GEOMETRY_TEST_FONT","Arial"));font.setPixelSize(16);painter.setFont(font);painter.setPen(Qt::black);
         QString const lineText=columns?"Document text with separate columns, 123":"Document baseline with consistent type size, margins and punctuation, 123. A sample line of text.";
@@ -47,11 +50,14 @@ int main(int argc,char** argv) {
             return QPointF(x,y+bend);
         };
         for(int row=0;row<38;++row) for(int column=0;column<(columns?2:1);++column) {
-            double y=150+row*31,x0=columns?90+column*500:90;
+            double y=150+row*31,x0=contents?280+(row%4)*18:(columns?90+column*500:90);
+            QString text=contents?QString("Contents entry with nested headings and uneven lengths").left(30+row%4*6):lineText;
+            double width=QFontMetricsF(font).horizontalAdvance(text);
             // Ground truth covers the text actually drawn. Font substitution on
             // Linux can change its width; blank margins contain no text baseline.
-            double x1=std::min(double(flat.width()-1),x0+textWidth);
-            painter.drawText(QPointF(x0,y),lineText);
+            double x1=std::min(double(flat.width()-1),x0+width);
+            painter.drawText(QPointF(x0,y),text);
+            if(contents)painter.drawText(QPointF(900,y),QString::number(row+10));
             std::vector<QPointF> line;
             for(int i=0;i<=40;++i) line.push_back(sourcePoint(x0+(x1-x0)*i/40.,y));
             truth.push_back(std::move(line));

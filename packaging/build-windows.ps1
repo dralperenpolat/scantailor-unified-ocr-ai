@@ -1,4 +1,4 @@
-param([string]$Prefix = "$PSScriptRoot/../.build-tools/msys64/ucrt64", [int]$Jobs = 2, [string]$BuildDir = "$PSScriptRoot/../native/release065")
+param([string]$Prefix = "$PSScriptRoot/../.build-tools/msys64/ucrt64", [int]$Jobs = 2, [string]$BuildDir = "$PSScriptRoot/../native/release066")
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath "$PSScriptRoot/..").Path
 $Prefix = (Resolve-Path -LiteralPath $Prefix).Path

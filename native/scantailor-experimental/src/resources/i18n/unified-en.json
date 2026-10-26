@@ -1068,5 +1068,16 @@
   " · Yapay zekâ ile içerik ve sayfa düzeni · 0.6.2": " · AI content and page layout · 0.6.2",
   "Proje ve ara dosyalar · boşsa PDF klasörü": "Project and intermediate files · blank uses the PDF folder",
   "OCR geçici klasörü · boşsa sistem": "OCR temporary folder · blank uses the system default",
-  "Geometri · hızlı satır modeli / AI · 0.6.5": "Geometry · fast line model / AI · 0.6.5"
+  "Geometri · hızlı satır modeli / AI · 0.6.6": "Geometry · fast line model / AI · 0.6.6",
+  "← Toplu koşuya dön": "← Back to batch queue",
+  "PDF/OCR oluştur veya güncelle": "Create or update PDF/OCR",
+  "Düzenlemeler kaydedildi. PDF/OCR başlatılmadı.": "Edits saved. PDF/OCR was not started.",
+  " · Düzenlemeler kaydedildi. PDF/OCR başlatılmadı.": " · Edits saved. PDF/OCR was not started.",
+  "Eğri düzeltmeyi zorla": "Force curved-line correction",
+  "Dengeli çizgi çiftlerini ve daha fazla eğri gücünü dene. Uygun eğri bulunamazsa döndürmeye geçme; elle kontrol için eğri modunu koru. Apply to… ile kapsamı seçebilirsiniz.": "Try balanced line pairs and additional curve strengths. If no valid curve is found, keep curve mode for manual review. Choose the page scope with Apply to….",
+  "Zorla eğri: uygun model bulunamadı. Eğri modu korundu; üst ve alt çizgileri elle düzenleyin.": "Forced curves: no valid model was found. Curve mode was kept; adjust the upper and lower lines manually.",
+  "Kaydedilen düzenleme bağlantısı yazılamadı.": "Could not save the draft link.",
+  "Kaydedilen düzenleme okunamadı.": "Could not read the saved draft.",
+  "Düzenleme başka bir kuyruğa ait.": "This draft belongs to another queue.",
+  "Kaydedilen düzenleme değişmiş; kitabı yeniden kaydedin.": "The saved draft has changed; save the book again."
 }
