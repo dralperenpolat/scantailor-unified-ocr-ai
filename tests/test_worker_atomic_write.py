@@ -6,9 +6,24 @@ import tempfile
 import unittest
 from unittest.mock import patch,Mock
 from scantailor_ocr_unified.native_worker import Worker,write_json,save_queue,load_queue
+from scantailor_ocr_unified.settings import atomic_json
 
 
 class AtomicWriteTest(unittest.TestCase):
+    def test_deep_ocr_receipt_stays_within_windows_path_limit(self):
+        # Reproduce the 195-character cache directory of a long book title
+        # with a saved-edit UUID. The old temporary receipt was 260 chars.
+        with tempfile.TemporaryDirectory() as folder:
+            parent=Path(folder)/('d'*(195-len(str(Path(folder)))-1))
+            parent.mkdir();path=parent/'page-ocr.verification.json'
+            for writer in (atomic_json,write_json):
+                with self.subTest(writer=writer.__name__):
+                    writer(path,{'page':1,'text':'Düzenlenmiş kitap'})
+                    self.assertEqual(json.loads(path.read_text('utf8')),{'page':1,'text':'Düzenlenmiş kitap'})
+                    writer(path,{'page':2})
+                    self.assertEqual(json.loads(path.read_text('utf8')),{'page':2})
+                    self.assertEqual(list(parent.iterdir()),[path])
+
     def test_project_path_is_published_immediately_for_live_page_editing(self):
         worker=object.__new__(Worker);worker.store=Mock();worker.job={'id':'book','project':'saved.ScanTailor'}
         worker.data={'jobs':[worker.job]};worker._last_publish=10;worker.session_state='running'

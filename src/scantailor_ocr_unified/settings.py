@@ -28,7 +28,9 @@ PROFILES = {
 
 def atomic_json(path, value):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name('.'+path.name+'.'+uuid.uuid4().hex+'.tmp')
+    # A valid destination can exceed Windows MAX_PATH after appending its
+    # basename and a UUID. Keep the atomic sibling independent of that name.
+    temporary = path.with_name('.json-'+uuid.uuid4().hex+'.tmp')
     try:
         with temporary.open('x', encoding='utf8') as stream:
             json.dump(value, stream, ensure_ascii=False, indent=2)

@@ -68,7 +68,7 @@ def use_rotation_after_timeout(project,event):
 
 def write_json(path, data, *, retry_seconds=5, compact=False):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
+    temp=path.with_name('.json-'+uuid.uuid4().hex+'.tmp')
     try:
         try:
             # Fast path for frequent page checkpoints. Under memory pressure,
