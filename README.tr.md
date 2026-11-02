@@ -54,14 +54,15 @@ Tam paketler Türkçe, Almanca ve İngilizce Tesseract Fast ile Türkçe, Almanc
 
 İşlem sırası, ayrı çalıştırma düğmeleri ve süreleriyle **Aşamalar** bölümündedir:
 
-**0 Girdi → 1 Yön → 2 Bölme → 3 Geometri → 4 AI geometri → 5 İçerik → 6 AI içerik → 7 Kenarlar → 8 Çıktı → 9 Parmak/leke → 10 PDF → 11 OCR → 12 Önbellek temizliği.**
+**0 Girdi → 1 Yön → 2 Bölme → 3 Geometri → 4 AI geometri → 5 İçerik → 6 AI içerik → 7 Kenarlar → 8 Çıktı → 9 Parmak/leke → 10 PDF → 11 OCR → 12 PDF sıkıştırma → 13 Önbellek temizliği.**
 
 1. **0 Girdi:** resim, klasör, üst klasör veya PDF seçin. Üst klasör ayrı kitapları kuyruğa ekler; bu ekrandan seçilen PDF doğrudan düzenlemeye açılır.
 2. Normal geometri ve içerik ayarlarını kontrol edin. AI aşamasının ▶ düğmesi seçili kapsamı optimize eder ve uygun iyileştirmeleri uygular. Yalnız karşılaştırma için **Hazırla**, tek aday için **Uygula** kullanın. Başlangıçta AI desteğini kapatabilirsiniz. Normal ve AI ekranları aynı sayfa ayarını kullanır; ikisinde de elle düzeltme yapılabilir.
 3. **8 Çıktı:** görünümü belirleyin. **9 Parmak/leke:** bu sayfa, seçili sayfalar veya kitap için temizlik önerisini hazırlayıp inceleyin ve uygulayın.
 4. **10 PDF:** görünür **PDF çıktı klasörü / Gözat** alanından kayıt yerini seçin. Kâğıt, sığdırma, kenar ve yazı boyutunu ayarlayın. Yazı eşitleme OCR başlatmadan görüntüden ölçülür.
 5. **11 OCR:** son PDF’ye aranabilir metin ekleyin. GPU olmayan cihazlar için CPU Hızlı / Tesseract Fast kullanılabilir.
-6. **12 Önbellek temizliği:** kategori boyutlarını, saklama seçimlerini ve temizlik zamanını görün. **Ayarlar** ve düğme görselleri içeren aranabilir **Yardım** Türkçe/İngilizcedir.
+6. **12 PDF sıkıştırma:** sıkıştırma düzeyini ve çıktı konumunu seçip **Başlat** düğmesine basın.
+7. **13 Önbellek temizliği:** kategori boyutlarını, saklama seçimlerini ve temizlik zamanını görün. **Ayarlar** ve düğme görselleri içeren aranabilir **Yardım** Türkçe/İngilizcedir.
 
 Önce birkaç örnek sayfayı kontrol edin. Normal aşama ▶ düğmeleri kitabı seçili filtreye kadar işler. AI ▶ seçilen kapsamı optimize eder; Hazırla yalnız karşılaştırma yapar, Uygula seçili adayı kaydeder. Çıktı, temizlik, PDF ve OCR ayrı çalışır.
 
@@ -99,7 +100,7 @@ AI modelleri UVDoc, PaddleOCR ve PP-DocLayout tabanlıdır. Tüm ScanTailor çat
 
 Kaynak fotoğraflar değiştirilmez. Kitap projeleri, önbellekler ve PDF'ler seçilen çalışma/çıktı konumunda tutulur. Ek dil, inceleme ve ayar dosyaları Windows'ta `%LOCALAPPDATA%\scantailor-ocr-unified`, Linux'ta `${XDG_DATA_HOME:-~/.local/share}/scantailor-ocr-unified` altındadır. Programın kaldırılması bu kullanıcı dosyalarını silmez.
 
-**12 Önbellek temizliği** kategori boyutlarını ve silme sonucunu gösterir. Kaynak kopyaları, ara TIFF’ler, OCR metin önbelleği ve önizlemeler için saklama seçilebilir. Temizlik elle, başarılı PDF sonrasında, başarılı OCR sonrasında veya proje kapanırken yapılır. Seçimler projede ve yeni projelerin varsayılanlarında saklanır.
+**13 Önbellek temizliği** kategori boyutlarını ve silme sonucunu gösterir. Kaynak kopyaları, ara TIFF’ler, OCR metin önbelleği ve önizlemeler için saklama seçilebilir. Temizlik elle, başarılı PDF sonrasında, başarılı OCR sonrasında veya proje kapanırken yapılır. Seçimler projede ve yeni projelerin varsayılanlarında saklanır.
 
 Varsayılan açık **kaydetmeden kapatılan yeni projeyi temizle** seçeneği, geçici girdi kopyalarını, OCR önbelleğini ve analiz dosyalarını kaldırır. Görünür Çıktı TIFF’leri, kaynak kitaplar ve nihai PDF’ler korunur. Kaydet/İptal bunu tetiklemez. Kayıtlı projenin gerekli girdileri ve onaylı düzeltmeleri tutulur. Ara TIFF’leri silmek için doğrulanmış PDF gerekir; sonradan yalnız bir sayfa düzeltilince diğer sayfalar bu PDF’den alınır. Yalnız sahipliği kayıtlı dosyalar temizlenir; başka klasörler ve modeller dahil değildir.
 

@@ -56,14 +56,15 @@ OCR language is selected separately under **OCR engine / Language packs**. Choos
 
 The full sequence is displayed in **Stages**, with a separate play button and elapsed time for each operation:
 
-**0 Input → 1 Orientation → 2 Split → 3 Geometry → 4 AI geometry → 5 Content → 6 AI content → 7 Margins → 8 Output → 9 Fingers/stains → 10 PDF → 11 OCR → 12 Cache cleanup.**
+**0 Input → 1 Orientation → 2 Split → 3 Geometry → 4 AI geometry → 5 Content → 6 AI content → 7 Margins → 8 Output → 9 Fingers/stains → 10 PDF → 11 OCR → 12 PDF compression → 13 Cache cleanup.**
 
 1. At **0 Input**, choose images, one folder, a parent folder or a PDF. A parent folder adds separate queue books. PDF import from this screen opens an editable book directly.
 2. Check the normal geometry and content stages. The AI stage play button optimizes the selected scope and applies suitable improvements. Use **Prepare** for comparison only and **Apply** for one candidate. AI support can be disabled at startup. Normal and AI screens share the same page settings and allow manual corrections.
 3. At **8 Output**, set the visible page appearance. At **9 Fingers/stains**, prepare, inspect and apply edge-cleanup proposals for this page, selected pages or the book.
 4. At **10 PDF**, choose the **PDF output folder** with Browse, paper size, fitting, margins and text size. Matching text size measures the image without starting OCR.
 5. At **11 OCR**, add searchable text to the finished PDF. CPU Fast / Tesseract Fast is available for devices without a GPU.
-6. At **12 Cache cleanup**, inspect category sizes, retention choices and cleanup timing. **Settings** and the illustrated, searchable **Help** are available in English and Turkish.
+6. At **12 PDF compression**, choose the compression level and output location, then click **Start**.
+7. At **13 Cache cleanup**, inspect category sizes, retention choices and cleanup timing. **Settings** and the illustrated, searchable **Help** are available in English and Turkish.
 
 Start with a few representative pages before applying settings to a whole book. Each normal-stage play processes the book through that filter. AI play optimizes the selected scope; **Prepare** leaves saved settings unchanged for review. Output, cleanup, PDF and OCR have separate actions.
 
@@ -99,7 +100,7 @@ Geometry correction, background cleanup and thresholding deliberately change the
 
 Source photographs are not modified. Projects, caches and PDFs are kept in the selected work/output location. Additional languages, review data and settings are stored under `%LOCALAPPDATA%\scantailor-ocr-unified` on Windows and `${XDG_DATA_HOME:-~/.local/share}/scantailor-ocr-unified` on Linux. Uninstalling the app does not delete these user files.
 
-**12 Cache cleanup** shows actual file sizes and the effect of deleting each category. Keep input copies, intermediate TIFFs, OCR text cache and previews independently. Choose manual cleanup, after successful PDF export, after successful OCR, or on project close. The policy is saved per project and as defaults for new projects.
+**13 Cache cleanup** shows actual file sizes and the effect of deleting each category. Keep input copies, intermediate TIFFs, OCR text cache and previews independently. Choose manual cleanup, after successful PDF export, after successful OCR, or on project close. The policy is saved per project and as defaults for new projects.
 
 The enabled-by-default **discard unsaved project** rule removes temporary input copies, OCR cache and analysis files when a new project is closed without saving. Visible Output TIFFs, original books and final PDFs remain. Save/Cancel does not trigger this rule. Saved projects retain required input images and approved corrections. Intermediate TIFF removal requires a verified final PDF; unchanged pages can still be copied from it without rebuilding the entire book. Only registered, owned files are eligible; external folders and models are excluded.
 
