@@ -6,7 +6,7 @@ from PIL import Image
 from .pdf_bitonal_review import reasons
 
 
-def encode(image, threshold, analysis, quality, checkpoint, *, guarded=True):
+def encode(image, threshold, analysis, quality, checkpoint, *, guarded=True, max_bytes=None):
     checkpoint()
     if guarded:
         reason = next(reasons(image, threshold, analysis, checkpoint), None)
@@ -31,7 +31,13 @@ def encode(image, threshold, analysis, quality, checkpoint, *, guarded=True):
         candidate.close()
         return None, {'reason': 'quality_limit', **metrics}
     stream = io.BytesIO()
-    candidate.save(stream, format='PNG', optimize=True)
+    # MuPDF decodes this transport PNG and creates its own PDF Flate stream.
+    # Exhaustive PNG optimization therefore adds time without shrinking the
+    # final PDF. Keep the old compact encoding only at the admission boundary.
+    candidate.save(stream, format='PNG', compress_level=3)
+    if max_bytes is not None and stream.tell() >= max_bytes:
+        stream = io.BytesIO()
+        candidate.save(stream, format='PNG', optimize=True)
     candidate.close()
     return stream.getvalue(), {
         'kind': 'text', 'width': image.width, 'height': image.height,

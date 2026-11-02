@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import fitz
 import numpy as np
@@ -114,6 +115,36 @@ class BitonalCompression(unittest.TestCase):
         result = compress(self.pdf([plain, faint, faint], shared=False), self.root / 'review.pdf', 'mono_all')
         self.assertEqual([p['page'] for p in result['review_pages']], [2, 3])
         self.assertTrue(all('faint_marks' in p['reasons'] for p in result['review_pages']))
+
+    def test_fast_transport_retains_final_pdf_image_stream_and_ocr(self):
+        source = self.pdf([self.text_image()])
+        save = Image.Image.save
+        def exhaustive(image, *args, **kwargs):
+            if kwargs.get('format') == 'PNG' and image.mode == '1':
+                kwargs['optimize'] = True
+            return save(image, *args, **kwargs)
+        with patch.object(Image.Image, 'save', exhaustive):
+            baseline = compress(source, self.root / 'baseline.pdf', 'mono_all')
+        fast = compress(source, self.root / 'fast.pdf', 'mono_all')
+        with fitz.open(baseline['pdf']) as before, fitz.open(fast['pdf']) as after:
+            a, b = before[0].get_images()[0][0], after[0].get_images()[0][0]
+            self.assertEqual(before.xref_stream_raw(a), after.xref_stream_raw(b))
+            self.assertEqual(before[0].get_text('words'), after[0].get_text('words'))
+        self.assertEqual(baseline['review_pages'], fast['review_pages'])
+
+    def test_transport_falls_back_at_original_stream_size_boundary(self):
+        from scantailor_ocr_unified.pdf_bitonal import encode
+        from scantailor_ocr_unified.pdf_compression import _analysis, _image_quality
+        image = self.text_image()
+        binary = Image.fromarray(np.asarray(image) >= 180)
+        fast, compact = io.BytesIO(), io.BytesIO()
+        binary.save(fast, format='PNG', compress_level=3)
+        binary.save(compact, format='PNG', optimize=True)
+        boundary = (len(fast.getvalue()) + len(compact.getvalue())) // 2
+        self.assertLess(len(compact.getvalue()), boundary)
+        payload, _ = encode(image, 180, _analysis(image), _image_quality, lambda: None,
+                            guarded=False, max_bytes=boundary)
+        self.assertEqual(payload, compact.getvalue())
 
 
 if __name__ == '__main__':

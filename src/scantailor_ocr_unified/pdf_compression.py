@@ -228,17 +228,17 @@ def _attempt(source, destination, conf, selected, lossless, notify, checkpoint):
                 del pix
                 color_to_bitonal = conf.get('_bitonal') == 'all' and image.mode != 'L'
                 size = (max(value[0] for value in row['sizes']), max(value[1] for value in row['sizes']))
+                original_size = len(doc.xref_stream_raw(xref))
                 if conf.get('_bitonal'):
                     from .pdf_bitonal import encode
                     payload, detail = encode(image, conf['threshold'], _analysis(image), _image_quality, checkpoint,
-                                             guarded=conf['_bitonal'] != 'all')
+                                             guarded=conf['_bitonal'] != 'all', max_bytes=original_size)
                     if color_to_bitonal:
                         detail['pixels_changed'] = True
                 else:
                     payload, detail = _encode(image, size, conf, checkpoint)
                 image.close()
                 # Compare compressed streams, not an extracted PNG wrapper.
-                original_size = len(doc.xref_stream_raw(xref))
                 if payload and len(payload) < original_size:
                     retained = {key: doc.xref_get_key(xref, key) for key in
                                 ('ColorSpace', 'Interpolate', 'Intent', 'OC')}
