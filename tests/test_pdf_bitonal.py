@@ -95,12 +95,25 @@ class BitonalCompression(unittest.TestCase):
         result = compress(source, self.root / 'full.pdf', 'mono_all')
         self.assertFalse(result['lossless'])
         self.assertEqual(result['changed_pages'], [1])
+        self.assertEqual(result['review_pages'][0]['page'], 1)
+        self.assertIn('faint_marks', result['review_pages'][0]['reasons'])
+        self.assertIn('color_or_managed_image', result['review_pages'][0]['reasons'])
+        self.assertIn('gray_illustration_or_shading', result['review_pages'][0]['reasons'])
         with fitz.open(result['pdf']) as doc:
             pix = fitz.Pixmap(doc, doc[0].get_images()[0][0])
             actual = np.frombuffer(pix.samples,np.uint8).reshape(pix.height,pix.width)
             expected = np.where(np.asarray(image.convert('L')) >= 180,255,0).astype('uint8')
             self.assertTrue(np.array_equal(actual,expected))
             self.assertIn('OCR text',doc[0].get_text())
+
+    def test_review_uses_pdf_page_order_and_only_converted_pages(self):
+        plain = self.text_image().point(lambda value: 255 if value >= 180 else 0)
+        faint = self.text_image()
+        ImageDraw.Draw(faint).text((40, 1170), 'Faint original annotation',
+                                 font=ImageFont.load_default(size=20), fill=205)
+        result = compress(self.pdf([plain, faint, faint], shared=False), self.root / 'review.pdf', 'mono_all')
+        self.assertEqual([p['page'] for p in result['review_pages']], [2, 3])
+        self.assertTrue(all('faint_marks' in p['reasons'] for p in result['review_pages']))
 
 
 if __name__ == '__main__':

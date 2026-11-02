@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image
 
 from .pdf_integrity import file_digest, verify
+from .pdf_bitonal_review import REVIEW_VERSION, page_warnings
 
 PIPELINE_VERSION = 'adaptive-compression-067-2'
 PROFILES = ('lossless', 'balanced', 'small', 'target', 'custom', 'mono_text', 'mono_all')
@@ -388,6 +389,7 @@ def compress(source, destination, profile='balanced', notify=lambda event: None,
             'options': {k: v for k, v in conf.items() if k != 'password'},
             'target_bytes': target_bytes, 'target_met': target_met if target_bytes is not None else None,
             'attempts': attempts, 'images': changed, 'skipped_images': skipped,
+            'review_version': REVIEW_VERSION, 'review_pages': page_warnings(changed),
             'seconds': time.monotonic() - start,
             'note': ('Hedef boyut kalite sınırları içinde sağlanamadı; en küçük doğrulanmış sonuç kaydedildi.'
                      if target_bytes is not None and not target_met else
