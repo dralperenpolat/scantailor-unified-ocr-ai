@@ -1199,7 +1199,7 @@
   "tests/test_ocr_cache.py": "1cdbd4502138914302097c6079400355ca3d6bd524e5d9b48f36feba5503d07e",
   "tests/test_paddle_memory_profile.py": "5fd191a10517341cdfbdbb80c9bed849779bb7b9bbb8b3ff61f12dfd5bfeb28e",
   "tests/test_pdf_aspect.py": "ff1fbcb5bae401caf3a99a16bb1087641b410c820142df8b0abfabbd2bf29b62",
-  "tests/test_pdf_batch.py": "85d73e4dd86b5b6ed6d1d175ac71217c82e2a624f39d50912c1d7a6ac7e4a74e",
+  "tests/test_pdf_batch.py": "24e945c297ad8d0f9f23c7bb4dacf5f50d044b528f09cdd64f18d2b9094d61d3",
   "tests/test_pdf_bitonal.py": "da4b21c1e36cb2358a9081c8b4773d7f3747ddfd1fb178661bb4109fcdf3c7cd",
   "tests/test_pdf_layout.py": "93e93877e8b3b5ef9b4f5faad2b07192d5cf22a72dfd0ea43b4d635a5df4a05d",
   "tests/test_pdf_optimize.py": "d3c68862e9f60f50d51a3a8473e3f925348682894cc254a2cff54115ebcf1961",

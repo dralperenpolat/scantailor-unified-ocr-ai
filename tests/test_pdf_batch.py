@@ -17,7 +17,7 @@ class PdfFolderBatch(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root=Path(self.tmp.name)
+        self.root=Path(self.tmp.name).resolve()
         def cleanup_long_paths():
             target=self.root.resolve()
             assert target.is_relative_to(Path(tempfile.gettempdir()).resolve()) and target.name.startswith('tmp')
