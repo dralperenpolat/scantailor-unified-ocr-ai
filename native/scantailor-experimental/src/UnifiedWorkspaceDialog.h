@@ -3,6 +3,7 @@
 #include "UnifiedI18n.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedCompressionOptions.h"
+#include "UnifiedPdfBatchDialog.h"
 #include <QDialog>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -48,6 +49,8 @@ public:
         setObjectName("unifiedWorkspace");setAttribute(Qt::WA_DeleteOnClose);resize(1080,800);setWindowTitle(tr("Çalışma merkezi"));
         auto outer=new QVBoxLayout(this);auto tabs=new QTabWidget;outer->addWidget(tabs,1);
         settingsTab(tabs);reviewTab(tabs);pdfTab(tabs);corpusTab(tabs);
+        auto batchButton=new QPushButton(tr("Klasörle PDF, OCR ve sıkıştırma"));batchButton->setObjectName("workspacePdfBatch");outer->insertWidget(0,batchButton);
+        connect(batchButton,&QPushButton::clicked,this,[this]{auto dialog=new UnifiedPdfBatchDialog(m_root,this);dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->show();});
         m_status=new QLabel(tr("Hazır"));m_status->setObjectName("workspaceStatus");m_status->setWordWrap(true);m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);outer->addWidget(m_status);
         auto progressRow=new QHBoxLayout;outer->addLayout(progressRow);m_progress=new QProgressBar;m_progress->setObjectName("workspaceProgress");m_progress->setVisible(false);progressRow->addWidget(m_progress,1);
         m_cancel=new QPushButton(tr("İptal et"));m_cancel->setObjectName("workspaceCancel");m_cancel->setEnabled(false);progressRow->addWidget(m_cancel);connect(m_cancel,&QPushButton::clicked,this,[this]{cancelWork();});
@@ -227,7 +230,7 @@ private:
                 m_sizes->clear();image(m_sizeBefore,result.value("preview").toString());
                 for(auto value:result.value("profiles").toArray()){
                     auto row=value.toObject();auto id=row.value("profile").toString();
-                    auto title=id=="lossless"?tr("Kayıpsız"):id=="balanced"?tr("Dengeli"):tr("Küçük dosya");
+                    auto title=id=="lossless"?tr("Az sıkıştır · görüntüyü koru"):id=="mono_text"?tr("Gerektiğinde gri koru"):tr("Tam sıkıştır · siyah-beyaz");
                     auto item=new QTreeWidgetItem(m_sizes,{title,QString::number(row.value("after_bytes").toDouble()/1048576.,'f',2),
                         QString::number(row.value("saved_percent").toDouble(),'f',1)+"%",row.value("lossless").toBool()?tr("Kayıpsız"):tr("Görüntü değişir"),row.value("pdf").toString()});
                     item->setData(0,Qt::UserRole,row);

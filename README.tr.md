@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.6
+# ScanTailor OCR Unified · 0.6.7
 
 [English](README.md) | **Türkçe**
+
+0.6.7, OCR'dan sonra **12 · PDF sıkıştırma** aşamasını ekler; önbellek ve temizlik 13. aşamadır. PDF veya üst klasör seçimi, alt klasörleri koruyan ayna çıktı, eksik OCR'ın tamamlanması ve sonuç incelendikten sonra açıkça seçilen ana dosyayı değiştirme işlemi aynı ekrandadır. Tam sıkıştırma gri tonlarını kaldırır; kayıpsız değildir. PDF/OCR görüntü boyutlarının piksel yuvarlamasından kaynaklanan oran hatası da düzeltildi.
 
 0.6.6, içindekiler gibi farklı uzunlukta satırlar içeren sayfalarda dengeli üst/alt eğri adaylarını karşılaştırır. **Eğri düzeltmeyi zorla**, ek eğri güçlerini dener ve sonuç doğrulanamazsa elle kontrol için eğri modunu korur. Kaydedilen içerik kutuları yeniden açılışta gereksiz yere hesaplanmaz. Kitap düzenlerken **Kaydet** ve Ctrl+S yalnız değişiklikleri kaydeder; **PDF/OCR oluştur veya güncelle** ayrı işlemdir. **Toplu koşuya dön**, açık kitabı ve sayfayı korur. Ayrı teslim klasörüne yazılan doğrulanmış PDF'lerdeki temizlik hatası giderildi.
 
@@ -14,7 +16,15 @@ Kitap fotoğraflarını düzenleyip aranabilir PDF hazırlayan masaüstü uygula
 
 ## Sıkıştırma
 
-PDF / OCR ayarlarından **Kayıpsız, Dengeli, Küçük dosya, Hedef boyut veya Özel** seçin. Hedef boyut kalite sınırları içinde aranır; her PDF için sağlanamaz. Çıktı büyüyecekse kaynakla aynı içerikte bir kopya saklanır. Gelişmiş ayarlardaki yoğun kayıpsız işlem, mevcut Flate akışlarını yeniden sıkıştırır; önceden optimize edilmiş kitaplarda süre maliyeti kazançtan büyük olabilir.
+**12 · PDF sıkıştırma** bölümünde üç düzey vardır:
+
+- **Az sıkıştır · görüntüyü koru:** görüntü pikselleri ve OCR korunur; Flate akışları yeniden sıkıştırılır. Önceden optimize edilmiş dosyalardaki kazanç küçük olabilir.
+- **Gerektiğinde gri koru:** uygun metin görüntüleri siyah-beyaza çevrilir. Algoritmanın saptadığı soluk yazı, fotoğraf, renk ve gri alanlar korunur; örnek sayfaları kontrol edin.
+- **Tam sıkıştır · siyah-beyaz:** Antigravity yöntemiyle 180 eşiği uygulanır. Çözünürlük ve OCR korunur; gri ve renk bilgisi kaldırılır. Soluk harfler ve görseller etkilenebilir.
+
+**Başlat** seçili ayarı uygular. Metinsiz sayfalara önce OCR eklenir; mevcut OCR metni korunur. Üst klasör seçildiğinde alt klasörlerdeki PDF'ler de eklenir. Hedef klasör seçilirse klasör yapısı aynalanır; boşsa dosyanın yanına **- küçük** eklenir. Var olan çıktıların üzerine yazılmaz. Sonuçları inceledikten sonra **Seçilenleri ana dosyanın yerine geçir** kullanılabilir; arada değişen kaynaklar korunur. Yarım kalan işlemler **Önceki işlemler** listesinden sürdürülebilir.
+
+Gelişmiş PDF ayarlarında Dengeli, Küçük dosya, Hedef boyut ve Özel seçenekleri de bulunur. Hedef boyut kalite sınırları içinde aranır; her PDF için sağlanamaz.
 
 Çalışma merkezi → PDF ve dışa aktarma bölümünde mevcut PDF'leri, sayfa aralığını ve şifreyi seçebilir; üç profili örnek sayfalarda karşılaştırabilirsiniz. Küçük yazı koruması varsayılan olarak açıktır. JPEG ve griye dönüşüm görünümü değiştirebilir; tam PDF'yi inceleyin. Sayfa sayısı, metin konumları, yer imleri, açıklamalar ve görünüm doğrulanmadan yeni sıkıştırılmış dosya yayımlanmaz.
 

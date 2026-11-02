@@ -55,7 +55,7 @@ void StageListView::selectStep(QString const& id){
 int StageListView::groupForStep(QString const& id){
     if(id=="input")return 0;
     if(id=="cleanup")return 2;
-    if(id=="pdf"||id=="ocr")return 3;
+    if(id=="pdf"||id=="ocr"||id=="compression")return 3;
     if(id=="storage"||id=="settings"||id=="help")return 4;
     return 1;
 }
@@ -98,7 +98,7 @@ void StageListView::clearQueueProgress(){
     }
     updateVisibility();updateButtons();
 }
-void StageListView::updateButtons(){for(auto b:m_buttons)b->setEnabled(m_possible&&!m_running&&!m_queueView);}
+void StageListView::updateButtons(){for(auto it=m_buttons.begin();it!=m_buttons.end();++it)it.value()->setEnabled(!m_running&&(it.key()=="compression"||(m_possible&&!m_queueView)));}
 void StageListView::setBatchProcessingPossible(bool possible){m_possible=possible;updateButtons();}
 void StageListView::setBatchProcessingInProgress(bool running){
     if(running==m_running)return;

@@ -150,6 +150,21 @@ def export(project_path, destination, notify=print):
     return retry(attempt,attempts=2,notify=notify)
 
 
+def same_aspect_with_pixel_rounding(first, second):
+    """Independent thumbnails may round either dimension by one pixel.
+
+    Compare the possible aspect intervals instead of a fixed ratio tolerance,
+    which rejected legitimate small landscape scans. This permits at most
+    raster rounding, not a crop or geometric transformation.
+    """
+    aw, ah = first
+    bw, bh = second
+    if min(aw, ah, bw, bh) <= 1:
+        return first == second
+    return max((aw - .5) / (ah + .5), (bw - .5) / (bh + .5)) <= min(
+        (aw + .5) / (ah - .5), (bw + .5) / (bh - .5))
+
+
 def _export(project_path, destination, notify, work):
     project_path=Path(project_path).resolve();destination=Path(destination).resolve()
     if destination.exists(): raise FileExistsError(destination)
@@ -179,7 +194,7 @@ def _export(project_path, destination, notify, work):
             binary=im.mode=='1'
             vw,vh=im.size
         with Image.open(recognition) as im:
-            if abs(im.width/im.height-vw/vh)>0.0008:
+            if not same_aspect_with_pixel_rounding(im.size, (vw, vh)):
                 raise ValueError('Display and OCR copies have different aspect ratios; coordinate mapping is required')
             # Large intermediates need not be recognized at the display resolution.
             # The immutable display image is never downsampled.

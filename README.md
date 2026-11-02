@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.6
+# ScanTailor OCR Unified · 0.6.7
 
 **English** | [Türkçe](README.tr.md)
+
+Version 0.6.7 adds **12 · PDF compression** after OCR; cache cleanup moves to stage 13. The same screen supports individual PDFs, recursive folders, mirrored output, missing OCR and explicit replacement after reviewing results. Full compression removes gray tones and is not lossless. A PDF/OCR aspect-ratio rejection caused by independent pixel rounding is also fixed.
 
 Version 0.6.6 compares balanced upper/lower curve candidates on pages with uneven line lengths, including contents pages. **Force curved-line correction** tries additional strengths and keeps curve mode for manual review when no valid result is found. Saved content boxes no longer need unnecessary recomputation on reopening. In queue book editing, **Save** and Ctrl+S save edits only; **Create or update PDF/OCR** is a separate action. **Back to batch queue** retains the open book and page. Cleanup now recognizes verified PDFs in a separate delivery folder.
 
@@ -16,7 +18,15 @@ The repository is named **scantailor-unified-ocr-ai**; the application is called
 
 ## Compression
 
-Choose **Lossless, Balanced, Small file, Target size or Custom** in PDF / OCR settings. Target size respects quality limits and cannot always be reached. If compression would increase file size, an identical source copy is retained. Deep lossless repacking is optional: recompressing existing Flate streams can cost substantial time for a small saving on an already optimized book.
+**12 · PDF compression** offers three levels:
+
+- **Light compression · preserve image:** preserves image pixels and OCR, including Flate repacking. Already optimized files may offer little additional saving.
+- **Preserve gray where needed:** converts suitable text images to black and white while retaining detected faint text, photos, color and gray areas. Inspect sample pages.
+- **Full compression · black and white:** applies the Antigravity threshold of 180. Resolution and OCR remain; gray and color information is removed. Faint lettering and pictures can be affected.
+
+**Start** applies the selected setting, adding OCR to pages without text first. Existing OCR is preserved. Parent folders include PDFs in subfolders. A selected output folder mirrors the source hierarchy; leaving it blank adds **- küçük** beside each PDF. Existing outputs are never overwritten. After reviewing results, **Replace originals with selected results** removes the extra result copy; sources changed since processing are protected. **Previous batches** resumes incomplete work.
+
+Advanced PDF settings also retain Balanced, Small file, Target size and Custom. Target size respects quality limits and cannot always be reached.
 
 Workspace → PDF and export offers page ranges, passwords and three-profile sample comparisons. Small-text protection is enabled by default. JPEG and grayscale conversion may alter appearance; inspect the full PDF. New compressed files are published only after page count, text positions, navigation, annotations and appearance checks.
 

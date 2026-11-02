@@ -132,7 +132,7 @@ public:
     explicit UnifiedProjectCache(QWidget* parent=nullptr):QWidget(parent) {
         using unified_workflow::text;
         setObjectName("workflowCache");auto layout=new QVBoxLayout(this);
-        auto heading=new QLabel(text("12 · Önbellek ve son temizlik","12 · Cache and final cleanup"));layout->addWidget(heading);
+        auto heading=new QLabel(text("13 · Önbellek ve son temizlik","13 · Cache and final cleanup"));layout->addWidget(heading);
         auto description=new QLabel(text("Seçime göre temizle, Sakla işareti kaldırılan kategorileri temizler; kaynakları, PDF’leri ve gerekli proje dosyalarını korur. Yalnız OCR’lı PDF’yi bırak düğmesi ise kitabı tamamlayıp bu projeye ait ara dosyaları ve eski PDF sürümlerini kaldırır.","Clean selected categories removes unchecked categories and preserves sources, PDFs and required project files. Keep only searchable PDF finishes the book and removes this project's intermediate files and older PDF versions."));description->setWordWrap(true);layout->addWidget(description);
         m_when=new QComboBox;m_when->setObjectName("workflowCacheWhen");
         m_when->addItem(text("Yalnız ben Temizle’ye basınca","Only when I click Clean"),"manual");

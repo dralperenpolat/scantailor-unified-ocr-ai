@@ -81,6 +81,17 @@ def dispatch(request, notify=lambda event: None):
         return compress(request['source'],request['destination'],request.get('profile','balanced'),notify,
                         options=request.get('compression_options'),pages=request.get('pages',''),
                         cancelled=lambda: bool(request.get('cancel_file')) and Path(request['cancel_file']).exists())
+    if action in ('pdf-batch-create','pdf-batch-inspect','pdf-batch-run','pdf-batch-replace'):
+        from . import pdf_batch
+        conf={**settings.load(root),**request,'root':root}
+        if action=='pdf-batch-create':
+            base=conf.get('pdf_batch_root') or str(data_root(root)/'projects/PdfBatches')
+            return pdf_batch.create(request['inputs'],base,request.get('mirror_root',''),request.get('profile','mono_text'),notify,
+                cancelled=lambda:bool(request.get('cancel_file')) and Path(request['cancel_file']).exists())
+        if action=='pdf-batch-inspect':return pdf_batch.inspect(request['batch'])
+        if action=='pdf-batch-replace':return pdf_batch.replace_sources(request['batch'],request['ids'],notify)
+        return pdf_batch.run(request['batch'],conf,notify,
+            cancelled=lambda:bool(request.get('cancel_file')) and Path(request['cancel_file']).exists())
     if action=='pdfa':
         from .archive_pdf import convert_pdfa
         return convert_pdfa(request['source'],request['destination'],{**settings.load(root),'root':root})

@@ -16,6 +16,7 @@ inline QString unifiedQueueWorkflowStep(QString const& stage){
         {"Beyaz kenarlar ölçülüyor","margins"}
     };
     if(native.contains(stage))return native.value(stage);
+    if(stage.contains("sıkıştır",Qt::CaseInsensitive)||stage.startsWith("Compression")||stage=="PDF küçültülüyor")return "compression";
     if(stage.contains("OCR"))return "ocr";
     if(stage.contains("PDF"))return "pdf";
     if(stage.startsWith("Geometri"))return "geometry";
@@ -27,6 +28,7 @@ inline QHash<QString,QString> unifiedQueueWorkflowStatuses(QJsonObject const& jo
     if(!job.value("visual_pdf").toString().isEmpty()||!job.value("pdf").toString().isEmpty())statuses.insert("pdf",QString::fromUtf8("✓"));
     auto verification=job.value("verification").toObject();
     if(!job.value("pdf").toString().isEmpty()&&verification.contains("ocr_timing")&&verification.value("ocr_timing").toString()!="none")statuses.insert("ocr",QString::fromUtf8("✓"));
+    if(!job.value("compressed").toObject().isEmpty())statuses.insert("compression",QString::fromUtf8("✓"));
     auto active=unifiedQueueWorkflowStep(job.value("status").toString());
     if(!active.isEmpty()){
         auto live=job.value("live_progress").toObject();

@@ -5,6 +5,7 @@
 #include "PageSequence.h"
 #include "UnifiedWorkflow.h"
 #include "UnifiedProjectCache.h"
+#include "UnifiedPdfBatchDialog.h"
 #include "UnifiedSavedEdits.h"
 #include "stages/deskew/Settings.h"
 #include "UnifiedContentReview.h"
@@ -23,6 +24,7 @@
 #include <QProcess>
 #include <QStackedWidget>
 #include <QListWidget>
+#include <QTemporaryFile>
 
 class UnifiedWorkflowTest {
     template<class Condition> static void wait(Condition done,int limit=90000){
@@ -32,6 +34,23 @@ class UnifiedWorkflowTest {
         QApplication::processEvents();
     }
 public:
+    static void compressionStage(QString const& captures){
+        MainWindow window;window.resize(1366,820);window.show();
+        auto list=window.filterList;window.findChild<QCheckBox*>("workflowShowAllStages")->setChecked(true);
+        check(unified_workflow::row("compression")==12&&unified_workflow::row("storage")==13,"compression precedes final cleanup");
+        list->selectStep("compression");QApplication::processEvents();
+        check(window.m_unifiedViewStack->currentWidget()==window.m_workflowCompression,"compression is embedded in the main workflow");
+        check(window.m_workflowCompression->findChild<QComboBox*>("pdfBatchProfile")->count()==3,"workflow offers three compression levels");
+        auto play=list->findChild<QToolButton*>("stagePlay_compression");check(play&&play->isEnabled(),"compression opens without an image project");play->click();
+        check(window.m_workflowCompression->findChild<QLabel*>("pdfBatchStatus")->text().contains(QString::fromUtf8("Önce bir PDF")),"empty compression gives actionable feedback");
+        QTemporaryFile oldPdf;check(oldPdf.open(),"old book PDF fixture");window.m_workflowPdf=oldPdf.fileName();
+        window.m_unified->m_jobs=QJsonArray{QJsonObject{{"id","not-ready"},{"title","Waiting book"}}};window.m_unified->m_previewJob="not-ready";
+        window.m_unifiedViewStack->setCurrentWidget(window.m_queuePreview);window.selectWorkflowRow(unified_workflow::row("compression"));
+        check(window.m_workflowCompression->findChild<QPlainTextEdit*>("pdfBatchInputs")->toPlainText().isEmpty(),"unready queue book never uses another book's PDF");
+        if(!captures.isEmpty())check(window.grab().save(captures+"/workflow-compression-tr.png"),"compression workflow screenshot");
+        list->selectStep("storage");check(window.m_unifiedViewStack->currentWidget()==window.m_workflowCache,"cleanup remains accessible after compression");window.m_closing=true;
+        std::cout<<"PASS compression stage order, navigation and controls"<<std::endl;
+    }
     static void queueMonitoring(QString const& folder){
         MainWindow window;auto panel=window.m_unified;
         QProcess worker;worker.start(unified_runtime::python(unified_runtime::root()),{"-u","-c","import sys; sys.stdin.read()"});
@@ -221,8 +240,8 @@ public:
         list->selectRow(unified_workflow::row("content"));all->setChecked(false);
         check(!list->isRowHidden(unified_workflow::row("content")),"collapsing after a direct row selection retains the current stage");
         all->setChecked(true);
-        check(list->model()->rowCount()==15,"all ordered stages, settings and help are visible");
-        for(int row=0;row<15;++row){
+        check(list->model()->rowCount()==16,"all ordered stages, settings and help are visible");
+        for(int row=0;row<16;++row){
             auto step=unified_workflow::steps().at(row);
             check(list->stepId(row)==step.id,"workflow identity remains separate from engine index");
             if(step.playable){auto b=list->findChild<QToolButton*>("stagePlay_"+step.id);check(b&&!b->icon().isNull(),"every operation has its own visible play icon");}

@@ -877,6 +877,11 @@ class Worker:
     def run(self):
         errors=0
         jobs=list(self.data['jobs'])
+        selected=self.request.get('only_jobs')
+        if selected is not None:
+            if not isinstance(selected,list) or not selected or not set(selected)<=set(j['id'] for j in jobs):
+                raise ValueError('Yeniden denenecek kitap listesi geçersiz.')
+            jobs=[j for j in jobs if j['id'] in selected]
         resume=self.request.get('resume_at_job')
         if resume and not self.request.get('revision_only'):
             start=next(i for i,j in enumerate(jobs) if j['id']==resume)
@@ -908,6 +913,8 @@ class Worker:
             for error in revision_errors:self.emit('Düzeltme isteği hatası',error)
             if revised:
                 jobs=[j for j in self.data['jobs'] if j['id'] in revised]+[j for j in jobs if j['id'] not in revised]
+            if selected is not None:
+                jobs=[j for j in jobs if j['id'] in selected]
             if not jobs:break
             job=jobs.pop(0)
             self.job=job
@@ -991,6 +998,25 @@ class Worker:
             finally:
                 self.request,self.settings=original_request,original_settings
                 self.save()
+        if (self.request.get('single_pdf_delivery') or (self.request.get('compression_options') or {}).get('single_pdf_delivery')) and self.request.get('mode')=='export' and not errors:
+            from .final_delivery import finalize_data
+            self.job=None
+            try:
+                self.data['final_delivery']=finalize_data(self.data,self.store,
+                    self.request.get('final_compression_profile',self.request.get('compression_profile','lossless')),
+                    self.request.get('final_compression_options',self.request.get('compression_options')),
+                    notify=lambda e:self.emit(e.get('stage','Son PDF hazırlanıyor'),
+                        f"{e.get('book','')} {e.get('page','')}/{e.get('total','')}"),checkpoint=self.checkpoint)
+            except (Cancelled,RevisionPending):
+                self.session_state='stopped'
+                self.emit('Son PDF işlemi durduruldu','Doğrulanmış PDF dosyaları ve devam kayıtları korundu.')
+                self.save(force=True);return 2
+            except Exception as exc:
+                self.session_state='stopped'
+                self.data['final_delivery']={'state':'error','error':str(exc)}
+                self.emit('Son PDF işlemi tamamlanamadı',str(exc))
+                self.save(force=True);return 1
+            self.save(force=True)
         self.session_state='finished';self.job=None;self.emit('Kuyruk tamamlandı',f'{len(self.data["jobs"])} kitap · {errors} hata')
         return 1 if errors else 0
 

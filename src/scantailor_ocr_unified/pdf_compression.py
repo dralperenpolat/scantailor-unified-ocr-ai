@@ -18,8 +18,8 @@ from PIL import Image
 
 from .pdf_integrity import file_digest, verify
 
-PIPELINE_VERSION = 'adaptive-compression-060-3'
-PROFILES = ('lossless', 'balanced', 'small', 'target', 'custom')
+PIPELINE_VERSION = 'adaptive-compression-067-2'
+PROFILES = ('lossless', 'balanced', 'small', 'target', 'custom', 'mono_text', 'mono_all')
 
 
 class CompressionCancelled(Exception):
@@ -41,15 +41,16 @@ def configuration(profile, options=None):
         raise ValueError('Bilinmeyen sıkıştırma profili.')
     options = dict(options or {})
     allowed = {'dpi', 'jpeg_quality', 'min_dpi', 'min_quality', 'target_mib',
-               'color', 'protect_text', 'password', 'recompress_flate'}
+               'color', 'protect_text', 'password', 'recompress_flate', 'threshold', 'single_pdf_delivery'}
     if set(options) - allowed:
         raise ValueError('Bilinmeyen sıkıştırma ayarı: ' + ', '.join(sorted(set(options) - allowed)))
     default_dpi, default_quality = (220, 84) if profile == 'small' else (300, 92)
     conf = {'dpi': default_dpi, 'jpeg_quality': default_quality, 'min_dpi': 150,
             'min_quality': 72, 'target_mib': 25.0, 'color': 'preserve', 'protect_text': True, 'recompress_flate': False,
-            **options}
+            'threshold': 180, 'single_pdf_delivery': False, **options}
     for key, lower, upper in (('dpi', 72, 2400), ('min_dpi', 72, 2400),
-                              ('jpeg_quality', 40, 100), ('min_quality', 40, 100)):
+                              ('jpeg_quality', 40, 100), ('min_quality', 40, 100),
+                              ('threshold', 100, 230)):
         number = float(conf[key])
         if not math.isfinite(number) or int(number) != number or not lower <= number <= upper:
             raise ValueError(f'Geçersiz sıkıştırma ayarı: {key}')
@@ -58,18 +59,21 @@ def configuration(profile, options=None):
     if not math.isfinite(target) or not 0 < target <= 1_000_000:
         raise ValueError('Hedef dosya boyutu sıfırdan büyük olmalı.')
     conf['target_mib'] = target
-    if conf['color'] not in ('preserve', 'gray') or not all(isinstance(conf[key], bool) for key in ('protect_text', 'recompress_flate')):
+    if conf['color'] not in ('preserve', 'gray') or not all(isinstance(conf[key], bool) for key in ('protect_text', 'recompress_flate', 'single_pdf_delivery')):
         raise ValueError('Geçersiz renk veya küçük yazı koruma ayarı.')
     if profile == 'target' and (conf['min_dpi'] > conf['dpi'] or conf['min_quality'] > conf['jpeg_quality']):
         raise ValueError('Alt kalite sınırı başlangıç ayarından büyük olamaz.')
     if profile == 'lossless' and conf['color'] != 'preserve':
         raise ValueError('Griye dönüşüm kayıpsız sıkıştırma değildir.')
+    if profile in ('mono_text', 'mono_all') and (conf['color'] != 'preserve' or not conf['protect_text']):
+        raise ValueError('Siyah-beyaz metin profilinde renk ve küçük yazı koruması açık kalmalı.')
     return conf
 
 
 def options_signature(profile, options=None):
     conf = configuration(profile, options)
     conf.pop('password', None)
+    conf.pop('single_pdf_delivery', None)
     return hashlib.sha256(json.dumps([PIPELINE_VERSION, profile, conf], sort_keys=True).encode()).hexdigest()
 
 
@@ -205,6 +209,8 @@ def _attempt(source, destination, conf, selected, lossless, notify, checkpoint):
                     reason = 'binary_or_special_image'
                 elif not row['sizes'] or width * height < 16_384:
                     reason = 'small_or_unused_image'
+                elif conf.get('_bitonal') == 'guarded' and row['info'][5] not in ('DeviceGray', 'ICCBased'):
+                    reason = 'color_or_managed_image'
                 elif row['info'][5] not in ('DeviceGray', 'DeviceRGB', 'ICCBased'):
                     reason = 'managed_or_special_color'
                 elif doc.xref_get_key(xref, 'Decode')[0] != 'null':
@@ -219,8 +225,16 @@ def _attempt(source, destination, conf, selected, lossless, notify, checkpoint):
                     continue
                 image = Image.frombytes('RGB' if pix.n == 3 else 'L', (width, height), pix.samples)
                 del pix
+                color_to_bitonal = conf.get('_bitonal') == 'all' and image.mode != 'L'
                 size = (max(value[0] for value in row['sizes']), max(value[1] for value in row['sizes']))
-                payload, detail = _encode(image, size, conf, checkpoint)
+                if conf.get('_bitonal'):
+                    from .pdf_bitonal import encode
+                    payload, detail = encode(image, conf['threshold'], _analysis(image), _image_quality, checkpoint,
+                                             guarded=conf['_bitonal'] != 'all')
+                    if color_to_bitonal:
+                        detail['pixels_changed'] = True
+                else:
+                    payload, detail = _encode(image, size, conf, checkpoint)
                 image.close()
                 # Compare compressed streams, not an extracted PNG wrapper.
                 original_size = len(doc.xref_stream_raw(xref))
@@ -231,9 +245,10 @@ def _attempt(source, destination, conf, selected, lossless, notify, checkpoint):
                     # JPEG stores the source channel samples; retain the ICC
                     # interpretation and optional-content membership as well.
                     for key, (kind, value) in retained.items():
-                        if kind != 'null' and (key != 'ColorSpace' or conf['color'] == 'preserve'):
+                        if kind != 'null' and (key != 'ColorSpace' or conf['color'] == 'preserve' and not color_to_bitonal):
                             doc.xref_set_key(xref, key, value)
-                    changed_pages.update(row['users'])
+                    if detail.get('pixels_changed', True):
+                        changed_pages.update(row['users'])
                     changed.append({'pages': sorted(p + 1 for p in row['users']), **detail})
                 else:
                     skipped.append({'pages': sorted(p + 1 for p in row['users']),
@@ -312,7 +327,8 @@ def compress(source, destination, profile='balanced', notify=lambda event: None,
     attempts, all_skipped = [], []
     with tempfile.TemporaryDirectory(prefix='.stou-compress-', dir=destination.parent) as folder:
         work = Path(folder)
-        plans = [(conf, True)] if profile in ('lossless', 'target') else [(conf, False)]
+        plans = [(conf, True)] if profile in ('lossless', 'target') else [({**conf, '_bitonal':
+            'guarded' if profile == 'mono_text' else 'all' if profile == 'mono_all' else ''}, False)]
         if profile == 'target':
             for fraction in (0., .34, .67, 1.):
                 plans.append(({**conf,
@@ -327,13 +343,15 @@ def compress(source, destination, profile='balanced', notify=lambda event: None,
             details = _attempt(source, candidate, attempt_conf, selected, lossless, notify, checkpoint)
             all_skipped.extend(details[2])
             candidate_size = candidate.stat().st_size
-            attempts.append({'dpi': None if lossless else attempt_conf['dpi'],
-                             'jpeg_quality': None if lossless else attempt_conf['jpeg_quality'],
+            attempts.append({'dpi': None if lossless or profile in ('mono_text','mono_all') else attempt_conf['dpi'],
+                             'jpeg_quality': None if lossless or profile in ('mono_text','mono_all') else attempt_conf['jpeg_quality'],
                              'bytes': candidate_size, 'images_changed': len(details[0])})
             if candidate_size < best_size:
                 # A smaller but invalid candidate cannot replace a verified one.
                 validation = verify(source, candidate, details[1], notify, checkpoint,
-                                    conf.get('password', ''), conf['color'] == 'gray')
+                                    conf.get('password', ''), conf['color'] == 'gray',
+                                    render_error_limit=1.0 if profile == 'mono_all' else .15,
+                                    preserve_image_dimensions=profile in ('mono_text','mono_all'))
                 if best != source:
                     best.unlink()
                 best, best_size, best_details = candidate, candidate_size, details
@@ -373,6 +391,8 @@ def compress(source, destination, profile='balanced', notify=lambda event: None,
             'seconds': time.monotonic() - start,
             'note': ('Hedef boyut kalite sınırları içinde sağlanamadı; en küçük doğrulanmış sonuç kaydedildi.'
                      if target_bytes is not None and not target_met else
+                     'Metin görüntülerindeki gri tonlar kaldırıldı; çözünürlük ve OCR metni korundu.'
+                     if changed_pages and profile in ('mono_text','mono_all') else
                      'Görüntü değişir; küçük yazılar ve renkler önizlemede kontrol edilmeli.'
                      if changed_pages else 'Görüntü pikselleri ve PDF metni korundu.')}
 
@@ -398,10 +418,11 @@ def preview(source, destination, pages='1-3', notify=lambda event: None, *,
             out.save(sample)
             out[0].get_pixmap(dpi=150, alpha=False).save(destination / 'sample.png')
     reports = []
-    for profile in ('lossless', 'balanced', 'small'):
+    for profile in ('lossless', 'mono_text', 'mono_all'):
         target = destination / (profile + '.pdf')
         # Compare named presets, not three copies of the custom settings.
-        report = compress(sample, target, profile, notify, cancelled=cancelled)
+        report = compress(sample, target, profile, notify, cancelled=cancelled,
+                          options={'recompress_flate': True} if profile == 'lossless' else {})
         with fitz.open(target) as doc:
             doc[0].get_pixmap(dpi=150, alpha=False).save(destination / (profile + '.png'))
         report.update(preview=str(destination / (profile + '.png')))

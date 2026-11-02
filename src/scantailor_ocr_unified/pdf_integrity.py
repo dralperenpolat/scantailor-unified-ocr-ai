@@ -101,7 +101,8 @@ def compare_render(before, after, dpi, checkpoint=lambda: None, gray=False):
 
 
 def verify(source, candidate, changed_pages=(), notify=lambda event: None,
-           checkpoint=lambda: None, password='', gray=False):
+           checkpoint=lambda: None, password='', gray=False, *, render_error_limit=.15,
+           preserve_image_dimensions=False):
     changed_pages = set(changed_pages)
     rows = []
     with fitz.open(source) as before, fitz.open(candidate) as after:
@@ -119,10 +120,12 @@ def verify(source, candidate, changed_pages=(), notify=lambda event: None,
             lossless = index not in changed_pages
             if image_state(a, lossless) != image_state(b, lossless):
                 raise ValueError(f'Sıkıştırmada görüntü yerleşimi veya korunan pikseller değişti: {index + 1}')
+            if preserve_image_dimensions and [(r['width'],r['height']) for r in a.get_image_info()] != [(r['width'],r['height']) for r in b.get_image_info()]:
+                raise ValueError(f'Siyah-beyaz dönüşümde görüntü çözünürlüğü değişti: {index + 1}')
             metrics = compare_render(a, b, 150 if lossless else 300, checkpoint, gray and not lossless)
             if lossless and not metrics['identical']:
                 raise ValueError(f'Kayıpsız sayfanın görünümü değişti: {index + 1}')
-            if not lossless and metrics['max_tile_mean_absolute_error'] > .15:
+            if not lossless and metrics['max_tile_mean_absolute_error'] > render_error_limit:
                 raise ValueError(f'Sıkıştırılmış sayfa görünümü kalite sınırını aşıyor: {index + 1}')
             rows.append({'page': index + 1, 'lossless': lossless, **metrics})
             notify({'stage': 'PDF bütünlüğü doğrulanıyor', 'page': index + 1, 'total': len(before)})

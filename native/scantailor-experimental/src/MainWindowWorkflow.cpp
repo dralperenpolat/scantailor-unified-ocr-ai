@@ -4,6 +4,7 @@
 #include "UnifiedQueueWorkflow.h"
 #include "UnifiedWorkflowHelp.h"
 #include "UnifiedProjectCache.h"
+#include "UnifiedPdfBatchDialog.h"
 #include "UnifiedRuntime.h"
 #include "UnifiedPanel.h"
 #include "UnifiedStageReviewBar.h"
@@ -115,7 +116,7 @@ void MainWindow::initWorkflow(){
     m_unifiedViewStack->addWidget(m_workflowTools);
     m_workflowInput=new QWidget;auto input=new QVBoxLayout(m_workflowInput);input->setAlignment(Qt::AlignTop);
     auto heading=note(text("0 · Girdi — kitabı buradan başlatın","0 · Input — start your book here"),input);auto font=heading->font();font.setPointSize(font.pointSize()+3);font.setBold(true);heading->setFont(font);
-    note(text("Resim veya PDF → yön → bölme → geometri → isteğe bağlı AI → içerik → kenarlar → Çıktı → temizlik → PDF → OCR → önbellek temizliği. Kaynaklar korunur.","Images or PDF → orientation → split → geometry → optional AI → content → margins → Output → cleanup → PDF → OCR → cache cleanup. Sources are preserved."),input);
+    note(text("Resim veya PDF → yön → bölme → geometri → isteğe bağlı AI → içerik → kenarlar → Çıktı → temizlik → PDF → OCR → PDF sıkıştırma → önbellek temizliği.","Images or PDF → orientation → split → geometry → optional AI → content → margins → Output → cleanup → PDF → OCR → PDF compression → cache cleanup."),input);
     auto ai=new QCheckBox(text("Yapay zekâ desteği istiyorum · AI geometri ve AI içerik aşamalarını göster","Use AI assistance · show AI geometry and AI content stages"));ai->setObjectName("workflowAiEnabled");input->addWidget(ai);
     ai->setChecked(QSettings().value("unified/ai_enabled",false).toBool());filterList->setAiEnabled(ai->isChecked());
     connect(ai,&QCheckBox::toggled,this,[this](bool enabled){QSettings().setValue("unified/ai_enabled",enabled);filterList->setAiEnabled(enabled);});
@@ -137,8 +138,12 @@ void MainWindow::initWorkflow(){
     inputButton(text("Başlangıç ayarları","Startup settings"),"workflowInputSetup",[this]{m_unified->openStartupSettings();refreshWorkflowState();});
     auto paths=note({},input);paths->setObjectName("workflowPaths");
     m_unifiedViewStack->addWidget(m_workflowInput);
+    m_workflowCompression=new UnifiedPdfBatchDialog(unified_runtime::root(),m_unifiedViewStack);m_workflowCompression->setWindowFlags(Qt::Widget);
+    m_workflowCompression->stageStatus=[this](QString const& value){filterList->setStepStatus("compression",value);};
+    auto compressionHeading=new QLabel(text("12 · PDF sıkıştırma","12 · PDF compression"));compressionHeading->setObjectName("workflowCompressionTitle");
+    qobject_cast<QVBoxLayout*>(m_workflowCompression->layout())->insertWidget(0,compressionHeading);m_unifiedViewStack->addWidget(m_workflowCompression);
     m_workflowCache=new UnifiedProjectCache;m_unifiedViewStack->addWidget(m_workflowCache);
-    m_workflowCache->busy=[this]{return isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning)||(m_unified&&m_unified->busy());};
+    m_workflowCache->busy=[this]{return m_workflowCompression->busy()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning)||(m_unified&&m_unified->busy());};
     m_workflowCache->cleanRequested=[this]{runWorkflowStep("storage");};
     m_workflowCache->finishRequested=[this]{finalizeWorkflowProject();};
     connect(m_workflowCache->findChild<QPushButton*>("workflowFinishOpen"),&QPushButton::clicked,this,[this]{findChild<QPushButton*>("workflowOpenPdf")->click();});
@@ -237,8 +242,16 @@ bool MainWindow::selectWorkflowRow(int row){
             "Processing continues. Wait for completion or use Stop before changing stages."),8000);
         return false;
     }
-    if(m_unifiedViewStack->currentWidget()==m_queuePreview&&id!="input"&&id!="settings"&&id!="help"){
+    if(m_unifiedViewStack->currentWidget()==m_queuePreview&&id!="input"&&id!="settings"&&id!="help"&&id!="compression"){
         m_unified->editPreview(qMax(0,filterList->filterForRow(row)),id);return false;
+    }
+    if(id=="compression"){
+        bool queueBook=m_unifiedViewStack->currentWidget()==m_queuePreview;
+        auto job=queueBook?m_unified->previewJob():m_editBinding;
+        auto pdf=queueBook?job.value("pdf").toString():m_workflowPdf;
+        if(!queueBook&&!QFileInfo::exists(pdf))pdf=job.value("pdf").toString();
+        if(!QFileInfo::exists(pdf))pdf=job.value("reading_pdf").toString();
+        m_workflowCompression->setCurrentPdf(QFileInfo::exists(pdf)?pdf:QString(),job.value("title").toString());
     }
     filterList->clearQueueProgress();
     m_workflowStep=id;m_unified->setWorkflowContext(id);
@@ -251,6 +264,7 @@ bool MainWindow::selectWorkflowRow(int row){
     if(id=="input")m_unifiedViewStack->setCurrentWidget(m_workflowInput);
     else if(id=="help")m_unifiedViewStack->setCurrentWidget(m_workflowHelp);
     else if(id=="cleanup"){m_unifiedViewStack->setCurrentWidget(m_workflowCleanup);refreshCleanupPages();}
+    else if(id=="compression")m_unifiedViewStack->setCurrentWidget(m_workflowCompression);
     else if(id=="storage"){m_unifiedViewStack->setCurrentWidget(m_workflowCache);syncWorkflowCache(true);}
     else {
         m_unifiedViewStack->setCurrentWidget(m_workflowTools);
@@ -366,6 +380,11 @@ void MainWindow::refreshWorkflowState(){
     }else filterList->clearQueueProgress();
 }
 void MainWindow::runWorkflowStep(QString const& id){
+    if(id=="compression"){
+        if(isBatchProcessingInProgress()||m_workflowCompression->busy())return;
+        filterList->selectStep(id);if(m_unifiedViewStack->currentWidget()!=m_workflowCompression)selectWorkflowRow(unified_workflow::row(id));
+        m_workflowCompression->start();return;
+    }
     if(id.startsWith("ai_")&&!QSettings().value("unified/ai_enabled",false).toBool())return;
     if((id=="pdf"||id=="ocr")&&!m_editBinding.isEmpty()){
         if(!isProjectLoaded()||m_aiGeometryRunning||m_aiContentRunning||m_workflowCache->cleaning()||isBatchProcessingInProgress()||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
@@ -487,6 +506,7 @@ void MainWindow::startWorkflowProcess(QString const& mode){
     process->start(unified_runtime::python(root),{"-u","-m","scantailor_ocr_unified.workflow_stages",requestPath});refreshWorkflowState();
 }
 void MainWindow::finalizeWorkflowProject(){
+    if(m_workflowCompression->busy())return;
     if(!isProjectLoaded()||m_unified->busy()||isBatchProcessingInProgress()||m_aiGeometryRunning||m_aiContentRunning||(m_workflowProcess&&m_workflowProcess->state()!=QProcess::NotRunning))return;
     bool complete=!m_workflowLastPages.isEmpty();for(auto value:m_workflowLastPages)complete&=value.toObject().value("has_ocr").toBool();
     if(!complete||!QFileInfo::exists(m_workflowPdf)||workflowFingerprint()!=m_workflowPdfStamp){m_workflowCache->showProgress({{"page",0},{"total",1}},text("Önce güncel ayarlarla OCR’ı tamamlayın. Hiçbir dosya silinmedi.","Complete OCR with current settings first. No files were removed."));return;}

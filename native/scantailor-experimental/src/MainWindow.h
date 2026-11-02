@@ -25,6 +25,7 @@
 #include <QElapsedTimer>
 class UnifiedPanel;
 class UnifiedProjectCache;
+class UnifiedPdfBatchDialog;
 class UnifiedQueuePreview;
 class UnifiedQueueThumbnails;
 class UnifiedStageReviewBar;
@@ -172,6 +173,7 @@ private:
     void requeueAiPages(bool geometry,std::set<PageId> const& pages);
     std::set<PageId> m_aiRequeueTargets;
     UnifiedProjectCache* m_workflowCache=nullptr;
+    UnifiedPdfBatchDialog* m_workflowCompression=nullptr;
     QByteArray workflowFingerprint() const;
     QJsonArray workflowPages() const;
     QJsonArray m_workflowLastPages;
