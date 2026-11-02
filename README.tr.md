@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.7
+# ScanTailor OCR Unified · 0.6.8
 
 [English](README.md) | **Türkçe**
+
+0.6.8, siyah-beyaz görüntü kodlamasını çıktı piksellerini değiştirmeden hızlandırır. Tam sıkıştırmada gri, renkli veya soluk içerik bulunan sayfalar kontrol için işaretlenir. Windows dosya kilitleri sırasında kuyruk ve ilerleme kaydı yeniden denenir. Kaynak paketi, incelenmiş içerik alanlarını yerel projelere aktaran ayrı yardımcıyı da içerir; uygulamaya Terra hizmeti veya otomatik bulut yüklemesi eklenmez.
 
 0.6.7, OCR'dan sonra **12 · PDF sıkıştırma** aşamasını ekler; önbellek ve temizlik 13. aşamadır. PDF veya üst klasör seçimi, alt klasörleri koruyan ayna çıktı, eksik OCR'ın tamamlanması ve sonuç incelendikten sonra açıkça seçilen ana dosyayı değiştirme işlemi aynı ekrandadır. Tam sıkıştırma gri tonlarını kaldırır; kayıpsız değildir. PDF/OCR görüntü boyutlarının piksel yuvarlamasından kaynaklanan oran hatası da düzeltildi.
 

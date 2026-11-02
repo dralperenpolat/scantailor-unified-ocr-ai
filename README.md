@@ -1,6 +1,8 @@
-# ScanTailor OCR Unified · 0.6.7
+# ScanTailor OCR Unified · 0.6.8
 
 **English** | [Türkçe](README.tr.md)
+
+Version 0.6.8 speeds up binary-image encoding without changing the encoded pixels. Full compression flags pages with gray, color or faint content for review. Windows file-lock retries protect queue and progress updates. The source package includes the isolated helper used to exchange reviewed content areas with native projects; this does not add a Terra service or automatic cloud upload to the application.
 
 Version 0.6.7 adds **12 · PDF compression** after OCR; cache cleanup moves to stage 13. The same screen supports individual PDFs, recursive folders, mirrored output, missing OCR and explicit replacement after reviewing results. Full compression removes gray tones and is not lossless. A PDF/OCR aspect-ratio rejection caused by independent pixel rounding is also fixed.
 
