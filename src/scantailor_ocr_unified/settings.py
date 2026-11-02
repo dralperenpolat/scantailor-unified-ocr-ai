@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import os
+import time
 from pathlib import Path
 import uuid
 from .runtime_layout import data_root
@@ -35,7 +36,17 @@ def atomic_json(path, value):
         with temporary.open('x', encoding='utf8') as stream:
             json.dump(value, stream, ensure_ascii=False, indent=2)
             stream.flush(); os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        # A concurrent Windows status reader briefly denies file replacement.
+        # Keep the complete old value visible while the handle is released.
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.025)
     finally:
         temporary.unlink(missing_ok=True)
 

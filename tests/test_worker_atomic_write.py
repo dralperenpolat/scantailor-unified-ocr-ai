@@ -10,6 +10,30 @@ from scantailor_ocr_unified.settings import atomic_json
 
 
 class AtomicWriteTest(unittest.TestCase):
+    def test_status_reader_lock_retries_without_truncating_previous_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'status.json';atomic_json(path,{'page':3})
+            replace=os.replace;calls=[]
+            def locked(source,destination):
+                self.assertEqual(json.loads(path.read_text()),{'page':3})
+                calls.append(1)
+                if len(calls)<3:raise PermissionError('reader open')
+                replace(source,destination)
+            with patch('scantailor_ocr_unified.settings.os.replace',side_effect=locked):
+                atomic_json(path,{'page':4})
+            self.assertEqual(len(calls),3)
+            self.assertEqual(json.loads(path.read_text()),{'page':4})
+            self.assertEqual(list(Path(folder).iterdir()),[path])
+
+    def test_persistent_status_lock_retains_old_state_and_cleans_temporary(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'status.json';atomic_json(path,{'page':3})
+            with patch('scantailor_ocr_unified.settings.os.replace',side_effect=PermissionError('locked')), \
+                 patch('scantailor_ocr_unified.settings.time.monotonic',side_effect=[0,6]):
+                with self.assertRaises(PermissionError):atomic_json(path,{'page':4})
+            self.assertEqual(json.loads(path.read_text()),{'page':3})
+            self.assertEqual(list(Path(folder).iterdir()),[path])
+
     def test_deep_ocr_receipt_stays_within_windows_path_limit(self):
         # Reproduce the 195-character cache directory of a long book title
         # with a saved-edit UUID. The old temporary receipt was 260 chars.
