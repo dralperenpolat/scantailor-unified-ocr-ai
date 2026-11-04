@@ -6,6 +6,11 @@ from pathlib import Path
 def emit(value):print('STOUOCR '+json.dumps(value,ensure_ascii=False),flush=True)
 def device_name(value):return 'gpu:0' if value.startswith('gpu') else 'cpu'
 
+def execution_devices(requested, force_cpu=False):
+    # Move execution without downgrading a saved GPU recognition profile or
+    # invalidating already prepared page images and completed OCR receipts.
+    return ('cpu' if force_cpu and requested.startswith('gpu') else requested), requested
+
 def detector_profile(device, available):
     # The server detector at 2048 px exceeds 4 GB on the Linux CPU wheel.
     # Limit only the recognition copy; visible PDF pixels are unaffected.
@@ -48,12 +53,14 @@ def main():
         try:
             request=json.loads(raw)
             if request.get('action')=='quit':return 0
-            device=request.get('device','cpu');lang=request.get('language','de');version=request.get('version','PP-OCRv5');key=(device,lang,version)
+            requested_device=request.get('device','cpu')
+            device,profile_device=execution_devices(requested_device,os.environ.get('STOU_PADDLE_FORCE_CPU')=='1')
+            lang=request.get('language','de');version=request.get('version','PP-OCRv5');key=(device,profile_device,lang,version)
             if key not in engines:
                 engines.clear()
                 gc.collect()
                 from scantailor_ocr_unified.memory_budget import available_bytes
-                detector_name,recognizer_name,detector_limit=model_profile(version,lang,device,available_bytes())
+                detector_name,recognizer_name,detector_limit=model_profile(version,lang,profile_device,available_bytes())
                 check(device)
                 from paddleocr import PaddleOCR
                 local={}
@@ -82,7 +89,7 @@ def main():
                     else:
                         points=polys[i];box=[float(points[:,0].min()),float(points[:,1].min()),float(points[:,0].max()),float(points[:,1].max())]
                     lines.append({'text':text,'score':float(scores[i]),'box':box})
-            emit({'ok':True,'lines':lines,'device':device_name(device),'language':lang,'version':version,'detector':detector_name,'recognizer':recognizer_name or 'library_default','detector_limit':detector_limit,'seconds':round(time.monotonic()-start,3)})
+            emit({'ok':True,'lines':lines,'device':device_name(device),'requested_device':requested_device,'cpu_fallback':device!=requested_device,'language':lang,'version':version,'detector':detector_name,'recognizer':recognizer_name or 'library_default','detector_limit':detector_limit,'seconds':round(time.monotonic()-start,3)})
         except Exception as exc:
             traceback.print_exc(file=sys.stderr);emit({'ok':False,'error':str(exc)})
     return 0
