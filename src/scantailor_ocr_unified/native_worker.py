@@ -914,7 +914,11 @@ class Worker:
             if revised:
                 jobs=[j for j in self.data['jobs'] if j['id'] in revised]+[j for j in jobs if j['id'] not in revised]
             if selected is not None:
-                jobs=[j for j in jobs if j['id'] in selected]
+                # A saved editor revision is an explicit new request, including
+                # one accepted before a restart. Keep it ahead of the selected
+                # retry without admitting unrelated or completed revisions.
+                jobs=[j for j in jobs if j['id'] in selected or
+                      (j.get('edit_request_id') and j.get('edit_completed_id')!=j['edit_request_id'])]
             if not jobs:break
             job=jobs.pop(0)
             self.job=job

@@ -72,6 +72,26 @@ class RevisionsTest(unittest.TestCase):
         self.assertEqual(worker.run(),0)
         self.assertEqual(seen,[('edited-book','a4_text'),('edited-book','a4'),('next','a4_text')])
         self.assertEqual(worker.request['paper'],'a4_text');self.assertEqual(worker.settings['paper'],'a4_text')
+    def test_explicit_revision_outside_selected_retry_runs_before_selected_book(self):
+        worker=self.worker();worker.request['only_jobs']=['next'];seen=[]
+        untouched={'id':'unselected','title':'Unselected book','status':'Already complete'}
+        worker.data['jobs'].append(untouched);before=copy.deepcopy(untouched)
+        self.request();worker.export.side_effect=lambda *args:seen.append(worker.job['id'])
+        self.assertEqual(worker.run(),0)
+        self.assertEqual(seen,['edited-book','next'])
+        self.assertEqual(self.job['edit_completed_id'],'revision-1')
+        self.assertEqual(untouched,before)
+        self.assertEqual(worker.request['only_jobs'],['next'])
+        self.assertEqual(self.old.read_bytes(),b'previous edition')
+    def test_accepted_revision_outside_selected_retry_resumes_once(self):
+        self.request();accept_revisions(self.data,self.queue,self.save)
+        worker=self.worker();worker.request['only_jobs']=['next'];seen=[]
+        worker.export.side_effect=lambda *args:seen.append(worker.job['id'])
+        self.assertEqual(worker.run(),0)
+        self.assertEqual(seen,['edited-book','next'])
+        seen.clear()
+        self.assertEqual(worker.run(),0)
+        self.assertEqual(seen,['next'])
     def test_pdf_revision_exports_during_prepare_and_next_book_keeps_prepare_mode(self):
         worker=self.worker();worker.request['mode']='prepare';worker.native=Mock();seen=[]
         original=copy.deepcopy(worker.request)
