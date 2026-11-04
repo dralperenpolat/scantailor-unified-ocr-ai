@@ -29,6 +29,7 @@
 #include <QElapsedTimer>
 #include <QImageReader>
 #include <QSet>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -88,6 +89,47 @@ int main(int argc,char** argv){
             }
             saveNew(directory+"/manifest.json",QJsonDocument(QJsonObject{{"schema",1},{"project",project},
                 {"project_sha256",hash(projectData)},{"seconds",timer.elapsed()/1000.},{"pages",rows}}).toJson());
+        }else if(action=="map"){
+            // Read-only mapping for reviewed margin zones. Coordinates in a
+            // preview must go through the saved nonlinear image transform;
+            // an affine guess would put a fill zone in the wrong source area.
+            auto manifestData=read(spec.value("manifest").toString());
+            auto manifest=QJsonDocument::fromJson(manifestData).object();
+            if(manifest.value("project_sha256").toString()!=hash(projectData)
+                ||spec.value("manifest_sha256").toString()!=hash(manifestData))throw std::runtime_error("Stale or mismatched mapping");
+            QMap<int,QJsonObject> rows;QSet<int> seen;QJsonArray mapped;
+            for(auto v:manifest.value("pages").toArray()){auto m=v.toObject();int n=m.value("page").toInt();
+                if(rows.contains(n))throw std::runtime_error("Duplicate manifest page");
+                rows.insert(n,m);}
+            for(auto v:spec.value("pages").toArray()){
+                auto d=v.toObject();int n=d.value("page").toInt();
+                if(seen.contains(n)||!rows.contains(n))throw std::runtime_error("Duplicate or unknown mapping page");
+                seen.insert(n);
+                auto it=std::find_if(samples.begin(),samples.end(),[n](unified_content::Sample const& s){return s.ordinal==n;});
+                if(it==samples.end())throw std::runtime_error("Unknown project page");
+                auto const& s=*it;auto m=rows[n];QFileInfo info(s.page.imageId().filePath());
+                if(m.value("file").toString()!=s.page.imageId().filePath()||m.value("subpage").toString()!=s.page.id().subPageAsString()
+                    ||m.value("transform").toString()!=s.transform->fingerprint()||qint64(m.value("source_size").toDouble())!=info.size()
+                    ||qint64(m.value("source_mtime").toDouble())!=info.lastModified().toMSecsSinceEpoch())throw std::runtime_error("Source or transform changed");
+                double scale=m.value("scale").toDouble();auto origin=m.value("pixel_origin").toArray();
+                if(!std::isfinite(scale)||scale<=0||origin.size()!=2)throw std::runtime_error("Invalid preview mapping");
+                auto backward=s.transform->backwardMapper();auto forward=s.transform->forwardMapper();QJsonArray points;double error=0;
+                auto input=d.value("points").toArray();if(input.isEmpty()||input.size()>10000)throw std::runtime_error("Invalid point count");
+                for(auto p:input){auto a=p.toArray();if(a.size()!=2||!a[0].isDouble()||!a[1].isDouble())throw std::runtime_error("Invalid point");
+                    double x=a[0].toDouble(),y=a[1].toDouble();
+                    if(!std::isfinite(x)||!std::isfinite(y)||x<0||y<0||x>m.value("width").toInt()||y>m.value("height").toInt())throw std::runtime_error("Point outside preview");
+                    QPointF native((x+origin[0].toDouble())/scale,(y+origin[1].toDouble())/scale);
+                    auto original=backward(native);auto check=forward(original)-native;
+                    double residual=std::hypot(check.x(),check.y())*scale;
+                    if(!std::isfinite(original.x())||!std::isfinite(original.y())||!std::isfinite(residual)||residual>.05)throw std::runtime_error("Unstable inverse mapping");
+                    error=std::max(error,residual);points.append(QJsonArray{original.x(),original.y()});
+                }
+                mapped.append(QJsonObject{{"page",n},{"points",points},{"roundtrip_max_px",error}});
+            }
+            if(mapped.isEmpty())throw std::runtime_error("No mapping pages");
+            saveNew(spec.value("output").toString(),QJsonDocument(QJsonObject{{"schema",1},{"project_sha256",hash(projectData)},
+                {"manifest_sha256",hash(manifestData)},{"pages",mapped}}).toJson());
+            std::cout<<"mapped "<<mapped.size()<<" pages read-only"<<std::endl;
         }else if(action=="apply"){
             auto manifestData=read(spec.value("manifest").toString());auto manifest=QJsonDocument::fromJson(manifestData).object();
             auto decisions=QJsonDocument::fromJson(read(spec.value("decisions").toString())).object();
@@ -135,7 +177,7 @@ int main(int argc,char** argv){
             ProjectWriter writer(reader.pages(),SelectedPage(first.id(),PAGE_VIEW),names);
             saveNew(output,writer.toXml(stages.filters(),QFileInfo(output).absolutePath()).toByteArray());
             std::cout<<"applied "<<edits.size()<<" of "<<samples.size()<<" in "<<timer.elapsed()/1000.<<" seconds"<<std::endl;
-        }else throw std::runtime_error("Expected export or apply");
+        }else throw std::runtime_error("Expected export, apply or map");
         return 0;
     }catch(std::exception const& e){std::cerr<<e.what()<<std::endl;return 1;}
 }
