@@ -57,7 +57,8 @@ def integrity(pages, expected=None):
 def page_structure(page):
     """Conservative geometry ordering; retains all boxes and marks inferred roles."""
     rows=[];heights=[]
-    for block in page.get_text('dict')['blocks']:
+    # Image blocks are unused here; decoding each scan dominates text export.
+    for block in page.get_text('dict', flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES)['blocks']:
         for line in block.get('lines',[]):
             text=''.join(span['text'] for span in line['spans']).strip()
             if not text:continue
