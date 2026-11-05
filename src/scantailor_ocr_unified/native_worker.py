@@ -982,6 +982,7 @@ class Worker:
             except Exception as exc:
                 from .memory_budget import is_memory_failure
                 from .recovery import classify
+                from .ocr_backend import PaddleProcessError
                 if classify(exc)=='disk':
                     self._space_checked=0;self._space_pressure=False
                     job['resource_retry']=True;jobs.insert(0,job)
@@ -998,6 +999,12 @@ class Worker:
                     self.emit('Bellek için durdu','Bellek yetersiz kaldı; tamamlanan sayfalar korundu. Bellek boşalınca PDF oluştur / devam et ile bu kitaptan sürdürülebilir.')
                     job['error']=str(exc) or type(exc).__name__
                     return 3
+                if isinstance(exc,PaddleProcessError):
+                    self.session_state='stopped'
+                    job['resource_retry']=True
+                    job['error']=str(exc)
+                    self.emit('OCR motoru durdu','OCR motoru yeniden başlatılmasına rağmen yanıt veremedi; tamamlanan sayfalar korundu, sonraki kitaplara geçilmedi.')
+                    return 4
                 errors+=1;self.emit('Hata',str(exc));job['error']=str(exc)
             finally:
                 self.request,self.settings=original_request,original_settings
